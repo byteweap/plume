@@ -1,0 +1,143 @@
+.tree-connection,
+.tree-node,
+.tree-level {
+  min-width: 0;
+}
+
+.tree-level {
+  position: relative;
+  margin-left: 11px;
+  padding-left: 9px;
+}
+
+.tree-level::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: #d9dfda;
+  content: "";
+}
+
+.tree-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0 7px 0 4px;
+  color: #526058;
+  background: transparent;
+  font-size: 11px;
+  text-align: left;
+}
+
+.tree-toggle-row {
+  cursor: pointer;
+}
+
+.tree-toggle-row:hover {
+  color: #263029;
+  background: #e8ece9;
+}
+
+.tree-row-muted {
+  color: #9a6a69;
+  cursor: default;
+}
+
+.tree-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-row small {
+  margin-left: auto;
+  color: #929b94;
+  font-size: 9px;
+}
+
+.tree-chevron {
+  flex: 0 0 auto;
+  transition: transform 120ms ease;
+}
+
+.tree-chevron-expanded {
+  transform: rotate(90deg);
+}
+
+.tree-leaf-row {
+  height: 25px;
+  padding-left: 23px;
+  color: #626e66;
+}
+
+.tree-leaf-bullet {
+  width: 4px;
+  height: 4px;
+  flex: 0 0 4px;
+  border-radius: 50%;
+  background: #9aa49d;
+}
+
+.tree-message,
+.tree-error {
+  margin: 3px 5px;
+  color: #7d8780;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.tree-message {
+  display: flex;
+  min-height: 27px;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+}
+
+.tree-error {
+  display: flex;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 5px;
+  border-left: 2px solid #bd4a48;
+  padding: 5px 7px;
+  color: #9b3e3d;
+  background: #fff3f2;
+}
+
+.tree-error button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tree-level::before {
+    background: #343b36;
+  }
+
+  .tree-toggle-row:hover {
+    color: #e5e9e6;
+    background: #2a302b;
+  }
+
+  .tree-error {
+    color: #efb0ae;
+    background: #3a2222;
+  }
+}

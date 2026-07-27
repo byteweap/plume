@@ -1,0 +1,253 @@
+.dialog-backdrop {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(25 31 27 / 34%);
+  backdrop-filter: blur(2px);
+}
+
+.connection-dialog {
+  width: min(640px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid #cdd4cf;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgb(25 35 29 / 20%);
+}
+
+.dialog-header {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e0e5e1;
+  padding: 10px 14px 10px 18px;
+}
+
+.dialog-title-group {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.dialog-icon {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c9d8ce;
+  border-radius: 7px;
+  color: #2f6d52;
+  background: #f0f7f2;
+}
+
+.dialog-title-group h2 {
+  margin: 0;
+  color: #263029;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.dialog-title-group p {
+  margin: 2px 0 0;
+  color: #7b857e;
+  font-size: 11px;
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px;
+}
+
+.dialog-body fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.dialog-body legend {
+  width: 100%;
+  margin-bottom: 10px;
+  color: #4e5951;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 13px 14px;
+}
+
+.form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.field-label {
+  color: #3f4942;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #cbd2cd;
+  border-radius: 5px;
+  padding: 0 9px;
+  color: #202823;
+  background: #ffffff;
+  font-size: 12px;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  border-color: #6d9e84;
+  box-shadow: 0 0 0 2px rgb(47 109 82 / 10%);
+}
+
+.form-field input:disabled {
+  color: #929a94;
+  background: #f3f5f3;
+}
+
+.field-error,
+.field-hint {
+  min-height: 14px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.field-error {
+  color: #b13e3c;
+}
+
+.field-hint {
+  color: #7b857e;
+}
+
+.password-input {
+  position: relative;
+}
+
+.password-input input {
+  padding-right: 36px;
+}
+
+.password-input .icon-button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-left: 3px solid;
+  border-radius: 3px;
+  padding: 9px 11px;
+  font-size: 11px;
+}
+
+.connection-status strong {
+  font-size: 11px;
+}
+
+.connection-status-error {
+  border-color: #bb4745;
+  color: #8c302f;
+  background: #fff3f2;
+}
+
+.connection-status-success {
+  border-color: #3b8a64;
+  color: #286749;
+  background: #f0f8f3;
+}
+
+.dialog-footer {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #e0e5e1;
+  padding: 10px 14px 10px 18px;
+  background: #f8faf8;
+}
+
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-height: 680px) {
+  .dialog-backdrop {
+    align-items: flex-start;
+    padding-top: 16px;
+  }
+
+  .connection-dialog {
+    max-height: calc(100vh - 32px);
+  }
+
+  .dialog-body {
+    gap: 14px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .connection-dialog,
+  .form-field input,
+  .form-field select {
+    color: #e5e9e6;
+    background: #222723;
+  }
+
+  .connection-dialog,
+  .dialog-header,
+  .dialog-footer {
+    border-color: #3a423c;
+  }
+
+  .dialog-footer,
+  .form-field input:disabled {
+    background: #1a1e1b;
+  }
+
+  .dialog-title-group h2,
+  .field-label {
+    color: #e5e9e6;
+  }
+
+  .connection-status-error {
+    color: #f0b7b5;
+    background: #3a2222;
+  }
+
+  .connection-status-success {
+    color: #a9d8bb;
+    background: #1e3528;
+  }
+}

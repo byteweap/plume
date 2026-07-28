@@ -165,7 +165,9 @@ pub async fn get_database_collections(
            (SELECT count(*) FROM pg_catalog.pg_event_trigger),
            (SELECT count(*) FROM pg_catalog.pg_extension),
            (SELECT count(*) FROM pg_catalog.pg_foreign_data_wrapper),
-           (SELECT count(*) FROM pg_catalog.pg_language),
+           (SELECT count(*)
+              FROM pg_catalog.pg_language language_definition
+             WHERE language_definition.lanispl),
            (SELECT count(*) FROM pg_catalog.pg_publication),
            (SELECT count(*) FROM pg_catalog.pg_namespace
               WHERE nspname NOT LIKE 'pg\\_%' ESCAPE '\\' AND nspname <> 'information_schema'),
@@ -214,7 +216,10 @@ pub async fn get_database_collection(
             "SELECT fdwname FROM pg_catalog.pg_foreign_data_wrapper ORDER BY fdwname"
         }
         DatabaseCollectionKind::Languages => {
-            "SELECT lanname FROM pg_catalog.pg_language ORDER BY lanname"
+            "SELECT lanname
+               FROM pg_catalog.pg_language
+              WHERE lanispl
+              ORDER BY lanname"
         }
         DatabaseCollectionKind::Publications => {
             "SELECT pubname FROM pg_catalog.pg_publication ORDER BY pubname"
@@ -466,6 +471,21 @@ mod tests {
                     ["information_schema", "pg_catalog"]
                 );
                 assert!(!catalogs.iter().any(|catalog| catalog.name == "pg_toast"));
+
+                let languages =
+                    get_database_collection(&client, DatabaseCollectionKind::Languages).await?;
+                let language_count = collections
+                    .iter()
+                    .find(|collection| {
+                        matches!(collection.kind, DatabaseCollectionKind::Languages)
+                    })
+                    .expect("languages collection should be present")
+                    .count;
+                assert_eq!(language_count, languages.len() as i64);
+                assert!(languages.iter().any(|language| language.name == "plpgsql"));
+                assert!(languages.iter().all(|language| {
+                    !matches!(language.name.as_str(), "c" | "internal" | "sql")
+                }));
 
                 let ansi_collections = get_catalog_collections(&client, "information_schema")
                     .await?;

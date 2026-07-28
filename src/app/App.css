@@ -189,8 +189,7 @@
 }
 
 .sidebar-search:focus-within {
-  border-color: #6b9b82;
-  box-shadow: 0 0 0 2px rgb(47 109 82 / 9%);
+  border-color: #aeb7b0;
 }
 
 .sidebar-search input {
@@ -201,6 +200,10 @@
   color: #283029;
   background: transparent;
   font-size: 12px;
+}
+
+.sidebar-search input:focus-visible {
+  outline: 0;
 }
 
 .connection-tree {

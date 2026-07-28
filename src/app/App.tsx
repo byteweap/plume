@@ -9,13 +9,13 @@ import {
 import {
   Braces,
   Database,
-  Feather,
   FileText,
   Globe2,
   Plus,
   Search,
   Table2,
 } from "lucide-react";
+import plumeMark from "../assets/plume-mark.svg";
 import { ConnectionDialog } from "../features/connections/ConnectionDialog";
 import type {
   ConnectedDatabaseResult,
@@ -148,7 +148,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">
-            <Feather size={18} strokeWidth={1.8} />
+            <img src={plumeMark} alt="" />
           </span>
           <strong>Plume</strong>
           <span className="brand-divider" />

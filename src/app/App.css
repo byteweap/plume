@@ -30,20 +30,24 @@
 
 .brand-mark {
   display: inline-flex;
-  width: 26px;
-  height: 26px;
+  width: 27px;
+  height: 27px;
   align-items: center;
   justify-content: center;
-  border: 1px solid #b8c9be;
-  border-radius: 6px;
-  color: #2f6d52;
-  background: #eff6f1;
+  flex: 0 0 27px;
+}
+
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .brand strong {
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  font-weight: 600;
+  color: #173e30;
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .brand-divider {
@@ -452,6 +456,7 @@
   }
 
   .sidebar-search input,
+  .brand strong,
   .welcome-workspace h1,
   .connection-overview h1,
   .tab-active {

@@ -140,4 +140,108 @@ describe("ConnectionTreeItem", () => {
     expect(await screen.findByText("No visible objects")).toBeVisible();
     expect(getDatabaseCollectionItems).not.toHaveBeenCalled();
   });
+
+  it("loads the pgAdmin catalog hierarchy lazily", async () => {
+    vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
+      databases: [
+        {
+          name: "postgres",
+          owner: "root",
+          allowConnections: true,
+        },
+      ],
+      roles: [],
+      tablespaces: [],
+    });
+    vi.spyOn(databaseTreeApi, "getDatabaseTree").mockResolvedValue([
+      { kind: "catalogs", count: 2 },
+    ]);
+    vi.spyOn(databaseTreeApi, "getDatabaseCollectionItems").mockResolvedValue([
+      { name: "information_schema" },
+      { name: "pg_catalog" },
+    ]);
+    const getCatalogTree = vi
+      .spyOn(databaseTreeApi, "getCatalogTree")
+      .mockImplementation((_sessionId, _database, catalog) =>
+        Promise.resolve(
+          catalog === "information_schema"
+            ? [{ kind: "catalog-objects", count: 69 }]
+            : [
+                { kind: "aggregates", count: 68 },
+                { kind: "collations", count: 3 },
+                { kind: "domains", count: 5 },
+                { kind: "fts-configurations", count: 29 },
+                { kind: "fts-dictionaries", count: 29 },
+                { kind: "fts-parsers", count: 1 },
+                { kind: "fts-templates", count: 5 },
+                { kind: "foreign-tables", count: 0 },
+                { kind: "functions", count: 100 },
+                { kind: "materialized-views", count: 0 },
+                { kind: "operators", count: 50 },
+                { kind: "procedures", count: 0 },
+                { kind: "sequences", count: 0 },
+                { kind: "tables", count: 10 },
+                { kind: "trigger-functions", count: 0 },
+                { kind: "types", count: 40 },
+                { kind: "views", count: 20 },
+              ],
+        ),
+      );
+    const getCatalogCollectionItems = vi
+      .spyOn(databaseTreeApi, "getCatalogCollectionItems")
+      .mockResolvedValue([]);
+
+    render(
+      <I18nProvider>
+        <ConnectionTreeItem
+          connection={connection}
+          environmentClassName="environment-development"
+          selected
+          onSelect={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Local/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Databases/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Catalogs (2)" }));
+
+    const ansiCatalog = await screen.findByRole("button", {
+      name: "ANSI (information_schema)",
+    });
+    const postgresCatalog = await screen.findByRole("button", {
+      name: "PostgreSQL Catalog (pg_catalog)",
+    });
+
+    fireEvent.click(ansiCatalog);
+    expect(
+      await screen.findByRole("button", { name: "Catalog Objects (69)" }),
+    ).toBeVisible();
+
+    fireEvent.click(postgresCatalog);
+    const aggregates = await screen.findByRole("button", {
+      name: "Aggregates (68)",
+    });
+    expect(
+      screen.getByRole("button", { name: "FTS Configurations (29)" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Trigger Functions (0)" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Views (20)" })).toBeVisible();
+    expect(getCatalogTree).toHaveBeenCalledWith(
+      "session-1",
+      "postgres",
+      "pg_catalog",
+    );
+
+    fireEvent.click(aggregates);
+    expect(getCatalogCollectionItems).toHaveBeenCalledWith(
+      "session-1",
+      "postgres",
+      "pg_catalog",
+      "aggregates",
+    );
+  });
 });

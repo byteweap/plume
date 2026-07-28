@@ -34,6 +34,31 @@ export interface DatabaseCollectionSummary {
   count: number;
 }
 
+export type CatalogCollectionKind =
+  | "catalog-objects"
+  | "aggregates"
+  | "collations"
+  | "domains"
+  | "fts-configurations"
+  | "fts-dictionaries"
+  | "fts-parsers"
+  | "fts-templates"
+  | "foreign-tables"
+  | "functions"
+  | "materialized-views"
+  | "operators"
+  | "procedures"
+  | "sequences"
+  | "tables"
+  | "trigger-functions"
+  | "types"
+  | "views";
+
+export interface CatalogCollectionSummary {
+  kind: CatalogCollectionKind;
+  count?: number;
+}
+
 export type DatabaseObjectKind =
   | "table"
   | "foreign-table"

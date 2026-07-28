@@ -1,4 +1,11 @@
-import { useMemo, useState } from "react";
+import {
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+} from "react";
 import {
   Braces,
   Database,
@@ -27,12 +34,31 @@ const environmentClass: Record<SavedConnection["environment"], string> = {
   production: "environment-production",
 };
 
+const defaultSidebarWidth = 286;
+const minimumSidebarWidth = 220;
+const maximumSidebarWidth = 560;
+const sidebarKeyboardStep = 16;
+
+function clampSidebarWidth(width: number) {
+  return Math.min(
+    maximumSidebarWidth,
+    Math.max(minimumSidebarWidth, Math.round(width)),
+  );
+}
+
 export function App() {
   const { locale, setLocale, t } = useI18n();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const [activeConnectionId, setActiveConnectionId] = useState<string>();
   const [filter, setFilter] = useState("");
+  const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
+  const sidebarResizeStart = useRef<{
+    pointerId: number;
+    pointerX: number;
+    width: number;
+  } | null>(null);
 
   const activeConnection = connections.find(
     (connection) => connection.id === activeConnectionId,
@@ -46,6 +72,53 @@ export function App() {
       ),
     );
   }, [connections, filter]);
+
+  const appContentStyle = {
+    "--sidebar-width": `${sidebarWidth}px`,
+  } as CSSProperties;
+
+  function startSidebarResize(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+
+    sidebarResizeStart.current = {
+      pointerId: event.pointerId,
+      pointerX: event.clientX,
+      width: sidebarWidth,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizingSidebar(true);
+  }
+
+  function resizeSidebar(event: PointerEvent<HTMLDivElement>) {
+    const start = sidebarResizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    setSidebarWidth(
+      clampSidebarWidth(start.width + event.clientX - start.pointerX),
+    );
+  }
+
+  function stopSidebarResize(event: PointerEvent<HTMLDivElement>) {
+    const start = sidebarResizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    sidebarResizeStart.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setResizingSidebar(false);
+  }
+
+  function resizeSidebarWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    const direction =
+      event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (direction === 0) return;
+
+    event.preventDefault();
+    setSidebarWidth((width) =>
+      clampSidebarWidth(width + direction * sidebarKeyboardStep),
+    );
+  }
 
   function handleConnected(
     value: ConnectionFormValue,
@@ -103,7 +176,10 @@ export function App() {
         </div>
       </header>
 
-      <div className="app-content">
+      <div
+        className={`app-content ${resizingSidebar ? "app-content-resizing" : ""}`}
+        style={appContentStyle}
+      >
         <aside className="sidebar">
           <div className="sidebar-heading">
             <span>{t("sidebar.connections")}</span>
@@ -145,6 +221,23 @@ export function App() {
             )}
           </div>
         </aside>
+
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-label={t("sidebar.resize")}
+          aria-orientation="vertical"
+          aria-valuemin={minimumSidebarWidth}
+          aria-valuemax={maximumSidebarWidth}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          onDoubleClick={() => setSidebarWidth(defaultSidebarWidth)}
+          onKeyDown={resizeSidebarWithKeyboard}
+          onPointerDown={startSidebarResize}
+          onPointerMove={resizeSidebar}
+          onPointerUp={stopSidebarResize}
+          onPointerCancel={stopSidebarResize}
+        />
 
         <section className="workspace">
           <div className="tabbar" role="tablist">

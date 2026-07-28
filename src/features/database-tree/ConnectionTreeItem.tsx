@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleOff,
   Database,
+  Diamond,
   Eye,
   FolderKey,
   FolderTree,
@@ -33,6 +34,8 @@ import type { SavedConnection } from "../connections/connection";
 import {
   databaseObjectKinds,
   groupDatabaseObjects,
+  type CatalogCollectionKind,
+  type CatalogCollectionSummary,
   type DatabaseCollectionKind,
   type DatabaseCollectionSummary,
   type DatabaseObject,
@@ -71,6 +74,36 @@ const databaseCollectionPresentation: Record<
   publications: { icon: RadioTower, label: "tree.publications" },
   schemas: { icon: FolderTree, label: "tree.schemas" },
   subscriptions: { icon: RefreshCw, label: "tree.subscriptions" },
+};
+
+const catalogPresentation: Record<string, TranslationKey> = {
+  information_schema: "tree.catalogAnsi",
+  pg_catalog: "tree.catalogPostgresql",
+  pgagent: "tree.catalogPgAgent",
+};
+
+const catalogCollectionPresentation: Record<
+  CatalogCollectionKind,
+  { icon: TreeIcon; label: TranslationKey }
+> = {
+  "catalog-objects": { icon: Table2, label: "tree.catalogObjects" },
+  aggregates: { icon: Blocks, label: "tree.aggregates" },
+  collations: { icon: Languages, label: "tree.collations" },
+  domains: { icon: PackageOpen, label: "tree.domains" },
+  "fts-configurations": { icon: Shapes, label: "tree.ftsConfigurations" },
+  "fts-dictionaries": { icon: Library, label: "tree.ftsDictionaries" },
+  "fts-parsers": { icon: Braces, label: "tree.ftsParsers" },
+  "fts-templates": { icon: FolderTree, label: "tree.ftsTemplates" },
+  "foreign-tables": { icon: Globe2, label: "tree.foreignTables" },
+  functions: { icon: Braces, label: "tree.functions" },
+  "materialized-views": { icon: Layers3, label: "tree.materializedViews" },
+  operators: { icon: Network, label: "tree.operators" },
+  procedures: { icon: Blocks, label: "tree.procedures" },
+  sequences: { icon: ListOrdered, label: "tree.sequences" },
+  tables: { icon: Table2, label: "tree.tables" },
+  "trigger-functions": { icon: Webhook, label: "tree.triggerFunctions" },
+  types: { icon: Shapes, label: "tree.types" },
+  views: { icon: Eye, label: "tree.views" },
 };
 
 const objectGroupPresentation: Record<
@@ -320,6 +353,17 @@ function DatabaseCollectionNode({
             {(loadedItems) =>
               loadedItems.length === 0 ? (
                 <TreeEmpty />
+              ) : collection.kind === "catalogs" ? (
+                <>
+                  {loadedItems.map((catalog) => (
+                    <CatalogTreeItem
+                      key={catalog.name}
+                      catalog={catalog}
+                      database={database}
+                      sessionId={sessionId}
+                    />
+                  ))}
+                </>
               ) : collection.kind === "schemas" ? (
                 <>
                   {loadedItems.map((schema) => (
@@ -331,6 +375,151 @@ function DatabaseCollectionNode({
                     />
                   ))}
                 </>
+              ) : (
+                <>
+                  {loadedItems.map((item) => (
+                    <LeafRow key={item.name} label={item.name} />
+                  ))}
+                </>
+              )
+            }
+          </AsyncTreeContent>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalogTreeItem({
+  catalog,
+  database,
+  sessionId,
+}: {
+  catalog: NamedObject;
+  database: string;
+  sessionId: string;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const [collections, setCollections] = useState<
+    LoadState<CatalogCollectionSummary[]>
+  >({ status: "idle" });
+  const labelKey = catalogPresentation[catalog.name];
+
+  async function loadCollections() {
+    setCollections({ status: "loading" });
+    try {
+      setCollections({
+        status: "success",
+        value: await databaseTreeApi.getCatalogTree(
+          sessionId,
+          database,
+          catalog.name,
+        ),
+      });
+    } catch (error) {
+      setCollections({ status: "error", message: toCommandError(error).message });
+    }
+  }
+
+  function toggleCatalog() {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (nextExpanded && collections.status === "idle") void loadCollections();
+  }
+
+  return (
+    <div className="tree-node" role="treeitem" aria-expanded={expanded}>
+      <ToggleRow
+        icon={Diamond}
+        label={labelKey ? t(labelKey) : catalog.name}
+        expanded={expanded}
+        onToggle={toggleCatalog}
+      />
+      {expanded && (
+        <div className="tree-level" role="group">
+          <AsyncTreeContent
+            state={collections}
+            onRetry={() => void loadCollections()}
+          >
+            {(loadedCollections) =>
+              loadedCollections.map((collection) => (
+                <CatalogCollectionNode
+                  key={collection.kind}
+                  catalog={catalog.name}
+                  collection={collection}
+                  database={database}
+                  sessionId={sessionId}
+                />
+              ))
+            }
+          </AsyncTreeContent>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CatalogCollectionNode({
+  catalog,
+  collection,
+  database,
+  sessionId,
+}: {
+  catalog: string;
+  collection: CatalogCollectionSummary;
+  database: string;
+  sessionId: string;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState(false);
+  const [items, setItems] = useState<LoadState<NamedObject[]>>({ status: "idle" });
+  const presentation = catalogCollectionPresentation[collection.kind];
+
+  async function loadItems() {
+    if (collection.count === 0) {
+      setItems({ status: "success", value: [] });
+      return;
+    }
+
+    setItems({ status: "loading" });
+    try {
+      setItems({
+        status: "success",
+        value: await databaseTreeApi.getCatalogCollectionItems(
+          sessionId,
+          database,
+          catalog,
+          collection.kind,
+        ),
+      });
+    } catch (error) {
+      setItems({ status: "error", message: toCommandError(error).message });
+    }
+  }
+
+  function toggleCollection() {
+    const nextExpanded = !expanded;
+    setExpanded(nextExpanded);
+    if (nextExpanded && items.status === "idle") void loadItems();
+  }
+
+  return (
+    <div className="tree-node" role="treeitem" aria-expanded={expanded}>
+      <ToggleRow
+        icon={presentation.icon}
+        label={t(presentation.label)}
+        count={collection.count}
+        showZeroCount
+        expanded={expanded}
+        onToggle={toggleCollection}
+      />
+      {expanded && (
+        <div className="tree-level" role="group">
+          <AsyncTreeContent state={items} onRetry={() => void loadItems()}>
+            {(loadedItems) =>
+              loadedItems.length === 0 ? (
+                <TreeEmpty />
               ) : (
                 <>
                   {loadedItems.map((item) => (
@@ -475,6 +664,7 @@ function ToggleRow({
   expanded,
   onToggle,
   muted = false,
+  showZeroCount = false,
   title,
 }: {
   icon: TreeIcon;
@@ -483,9 +673,11 @@ function ToggleRow({
   expanded: boolean;
   onToggle: () => void;
   muted?: boolean;
+  showZeroCount?: boolean;
   title?: string;
 }) {
-  const visibleCount = count !== undefined && count > 0 ? count : undefined;
+  const visibleCount =
+    count !== undefined && (showZeroCount || count > 0) ? count : undefined;
 
   return (
     <button

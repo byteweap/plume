@@ -1,5 +1,7 @@
 import { invokeCommand } from "../../platform/tauri";
 import type {
+  CatalogCollectionKind,
+  CatalogCollectionSummary,
   DatabaseCollectionKind,
   DatabaseCollectionSummary,
   DatabaseObject,
@@ -40,6 +42,30 @@ export const databaseTreeApi = {
       sessionId,
       database,
       schema,
+    });
+  },
+  getCatalogTree(
+    sessionId: string,
+    database: string,
+    catalog: string,
+  ): Promise<CatalogCollectionSummary[]> {
+    return invokeCommand<CatalogCollectionSummary[]>("get_catalog_tree", {
+      sessionId,
+      database,
+      catalog,
+    });
+  },
+  getCatalogCollectionItems(
+    sessionId: string,
+    database: string,
+    catalog: string,
+    collection: CatalogCollectionKind,
+  ): Promise<NamedObject[]> {
+    return invokeCommand<NamedObject[]>("get_catalog_collection_items", {
+      sessionId,
+      database,
+      catalog,
+      collection,
     });
   },
 };

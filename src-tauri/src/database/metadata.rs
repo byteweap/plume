@@ -7,6 +7,32 @@ use crate::error::DatabaseError;
 // boundary when its "Show system objects" preference is disabled.
 const FIRST_USER_OBJECT_OID: i64 = 16_384;
 
+const PGADMIN_CATALOG_PREDICATE: &str = "
+    (
+        catalog_namespace.nspname = 'information_schema'
+        AND EXISTS (
+            SELECT 1 FROM pg_catalog.pg_class catalog_object
+             WHERE catalog_object.relname = 'tables'
+               AND catalog_object.relnamespace = catalog_namespace.oid
+        )
+    )
+    OR (
+        catalog_namespace.nspname = 'pg_catalog'
+        AND EXISTS (
+            SELECT 1 FROM pg_catalog.pg_class catalog_object
+             WHERE catalog_object.relname = 'pg_class'
+               AND catalog_object.relnamespace = catalog_namespace.oid
+        )
+    )
+    OR (
+        catalog_namespace.nspname = 'pgagent'
+        AND EXISTS (
+            SELECT 1 FROM pg_catalog.pg_class catalog_object
+             WHERE catalog_object.relname = 'pga_job'
+               AND catalog_object.relnamespace = catalog_namespace.oid
+        )
+    )";
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NamedObject {
@@ -130,22 +156,23 @@ pub async fn get_server_overview(client: &Client) -> Result<ServerOverview, Data
 pub async fn get_database_collections(
     client: &Client,
 ) -> Result<Vec<DatabaseCollectionSummary>, DatabaseError> {
+    let query = format!(
+        "SELECT
+           (SELECT count(*) FROM pg_catalog.pg_cast WHERE oid::bigint >= $1),
+           (SELECT count(*)
+              FROM pg_catalog.pg_namespace catalog_namespace
+             WHERE {PGADMIN_CATALOG_PREDICATE}),
+           (SELECT count(*) FROM pg_catalog.pg_event_trigger),
+           (SELECT count(*) FROM pg_catalog.pg_extension),
+           (SELECT count(*) FROM pg_catalog.pg_foreign_data_wrapper),
+           (SELECT count(*) FROM pg_catalog.pg_language),
+           (SELECT count(*) FROM pg_catalog.pg_publication),
+           (SELECT count(*) FROM pg_catalog.pg_namespace
+              WHERE nspname NOT LIKE 'pg\\_%' ESCAPE '\\' AND nspname <> 'information_schema'),
+           (SELECT count(*) FROM pg_catalog.pg_subscription)"
+    );
     let row = client
-        .query_one(
-            "SELECT
-               (SELECT count(*) FROM pg_catalog.pg_cast WHERE oid::bigint >= $1),
-               (SELECT count(*) FROM pg_catalog.pg_namespace
-                  WHERE nspname LIKE 'pg\\_%' ESCAPE '\\' OR nspname = 'information_schema'),
-               (SELECT count(*) FROM pg_catalog.pg_event_trigger),
-               (SELECT count(*) FROM pg_catalog.pg_extension),
-               (SELECT count(*) FROM pg_catalog.pg_foreign_data_wrapper),
-               (SELECT count(*) FROM pg_catalog.pg_language),
-               (SELECT count(*) FROM pg_catalog.pg_publication),
-               (SELECT count(*) FROM pg_catalog.pg_namespace
-                  WHERE nspname NOT LIKE 'pg\\_%' ESCAPE '\\' AND nspname <> 'information_schema'),
-               (SELECT count(*) FROM pg_catalog.pg_subscription)",
-            &[&FIRST_USER_OBJECT_OID],
-        )
+        .query_one(query.as_str(), &[&FIRST_USER_OBJECT_OID])
         .await?;
 
     let kinds = [
@@ -176,12 +203,7 @@ pub async fn get_database_collection(
 ) -> Result<Vec<NamedObject>, DatabaseError> {
     let query = match kind {
         DatabaseCollectionKind::Casts => return get_user_casts(client).await,
-        DatabaseCollectionKind::Catalogs => {
-            "SELECT nspname
-             FROM pg_catalog.pg_namespace
-             WHERE nspname LIKE 'pg\\_%' ESCAPE '\\' OR nspname = 'information_schema'
-             ORDER BY nspname"
-        }
+        DatabaseCollectionKind::Catalogs => return get_catalogs(client).await,
         DatabaseCollectionKind::EventTriggers => {
             "SELECT evtname FROM pg_catalog.pg_event_trigger ORDER BY evtname"
         }
@@ -231,6 +253,22 @@ async fn get_user_casts(client: &Client) -> Result<Vec<NamedObject>, DatabaseErr
             &[&FIRST_USER_OBJECT_OID],
         )
         .await?;
+
+    Ok(named_objects(rows))
+}
+
+async fn get_catalogs(client: &Client) -> Result<Vec<NamedObject>, DatabaseError> {
+    let query = format!(
+        "SELECT catalog_namespace.nspname
+           FROM pg_catalog.pg_namespace catalog_namespace
+          WHERE {PGADMIN_CATALOG_PREDICATE}
+          ORDER BY CASE catalog_namespace.nspname
+                     WHEN 'information_schema' THEN 1
+                     WHEN 'pg_catalog' THEN 2
+                     WHEN 'pgagent' THEN 3
+                   END"
+    );
+    let rows = client.query(query.as_str(), &[]).await?;
 
     Ok(named_objects(rows))
 }
@@ -316,6 +354,10 @@ fn parse_object_kind(kind: &str) -> Result<DatabaseObjectKind, DatabaseError> {
 
 #[cfg(test)]
 mod tests {
+    use crate::database::catalog::{
+        CatalogCollectionKind, get_catalog_collection, get_catalog_collections,
+    };
+
     use super::{
         DatabaseCollectionKind, DatabaseObjectKind, get_database_collection,
         get_database_collections, get_server_overview, list_schema_objects, parse_object_kind,
@@ -407,6 +449,58 @@ mod tests {
                         == "plume_navigation_test.cast_source->plume_navigation_test.cast_target"
                 }));
                 assert!(!casts.iter().any(|cast| cast.name == "bigint->integer"));
+                let catalogs =
+                    get_database_collection(&client, DatabaseCollectionKind::Catalogs).await?;
+                let catalog_count = collections
+                    .iter()
+                    .find(|collection| matches!(collection.kind, DatabaseCollectionKind::Catalogs))
+                    .expect("catalogs collection should be present")
+                    .count;
+                assert_eq!(catalog_count, catalogs.len() as i64);
+                assert_eq!(
+                    catalogs
+                        .iter()
+                        .map(|catalog| catalog.name.as_str())
+                        .take(2)
+                        .collect::<Vec<_>>(),
+                    ["information_schema", "pg_catalog"]
+                );
+                assert!(!catalogs.iter().any(|catalog| catalog.name == "pg_toast"));
+
+                let ansi_collections = get_catalog_collections(&client, "information_schema")
+                    .await?;
+                assert_eq!(ansi_collections.len(), 1);
+                assert!(matches!(
+                    ansi_collections[0].kind,
+                    CatalogCollectionKind::CatalogObjects
+                ));
+                let ansi_objects = get_catalog_collection(
+                    &client,
+                    "information_schema",
+                    CatalogCollectionKind::CatalogObjects,
+                )
+                .await?;
+                assert_eq!(
+                    ansi_collections[0].count,
+                    Some(ansi_objects.len() as i64)
+                );
+
+                let postgres_collections = get_catalog_collections(&client, "pg_catalog").await?;
+                assert_eq!(postgres_collections.len(), 17);
+                assert!(matches!(
+                    postgres_collections.first().map(|collection| collection.kind),
+                    Some(CatalogCollectionKind::Aggregates)
+                ));
+                assert!(matches!(
+                    postgres_collections.last().map(|collection| collection.kind),
+                    Some(CatalogCollectionKind::Views)
+                ));
+                for collection in postgres_collections {
+                    let items =
+                        get_catalog_collection(&client, "pg_catalog", collection.kind).await?;
+                    assert_eq!(collection.count, Some(items.len() as i64));
+                }
+
                 let schemas = get_database_collection(&client, DatabaseCollectionKind::Schemas)
                     .await?;
                 assert!(schemas.iter().any(|schema| schema.name == "plume_navigation_test"));

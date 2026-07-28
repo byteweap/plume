@@ -5,7 +5,8 @@ mod error;
 use commands::{
     connections::{connect_database, test_connection},
     metadata::{
-        get_database_collection_items, get_database_tree, get_schema_objects, get_server_tree,
+        get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
+        get_database_tree, get_schema_objects, get_server_tree,
     },
 };
 use database::session::ConnectionRegistry;
@@ -21,7 +22,9 @@ pub fn run() {
             get_server_tree,
             get_database_tree,
             get_database_collection_items,
-            get_schema_objects
+            get_schema_objects,
+            get_catalog_tree,
+            get_catalog_collection_items
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

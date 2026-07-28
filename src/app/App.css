@@ -323,7 +323,7 @@
   background: #f5f7f5;
 }
 
-.sidebar-expand-button {
+.icon-button.sidebar-expand-button {
   width: 36px;
   height: 35px;
   flex: 0 0 36px;

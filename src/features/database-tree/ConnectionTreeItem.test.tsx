@@ -98,4 +98,46 @@ describe("ConnectionTreeItem", () => {
     fireEvent.click(tablesButton);
     expect(await screen.findByText("users")).toBeVisible();
   });
+
+  it("hides zero collection counts and renders an empty collection locally", async () => {
+    vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
+      databases: [
+        {
+          name: "postgres",
+          owner: "root",
+          allowConnections: true,
+        },
+      ],
+      roles: [],
+      tablespaces: [],
+    });
+    vi.spyOn(databaseTreeApi, "getDatabaseTree").mockResolvedValue([
+      { kind: "casts", count: 0 },
+    ]);
+    const getDatabaseCollectionItems = vi.spyOn(
+      databaseTreeApi,
+      "getDatabaseCollectionItems",
+    );
+
+    render(
+      <I18nProvider>
+        <ConnectionTreeItem
+          connection={connection}
+          environmentClassName="environment-development"
+          selected
+          onSelect={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Local/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Databases/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
+
+    const castsButton = await screen.findByRole("button", { name: "Casts" });
+    fireEvent.click(castsButton);
+
+    expect(await screen.findByText("No visible objects")).toBeVisible();
+    expect(getDatabaseCollectionItems).not.toHaveBeenCalled();
+  });
 });

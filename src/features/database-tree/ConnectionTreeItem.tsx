@@ -485,18 +485,20 @@ function ToggleRow({
   muted?: boolean;
   title?: string;
 }) {
+  const visibleCount = count !== undefined && count > 0 ? count : undefined;
+
   return (
     <button
       className={`tree-row tree-toggle-row ${muted ? "tree-row-muted" : ""}`}
       type="button"
       onClick={onToggle}
       title={title}
-      aria-label={count === undefined ? label : `${label} (${count})`}
+      aria-label={visibleCount === undefined ? label : `${label} (${visibleCount})`}
     >
       <TreeChevron expanded={expanded} />
       <Icon size={14} />
       <span className="tree-row-label">{label}</span>
-      {count !== undefined && <small>({count})</small>}
+      {visibleCount !== undefined && <small>({visibleCount})</small>}
     </button>
   );
 }

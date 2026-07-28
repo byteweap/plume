@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
-use tokio_postgres::Client;
+use tokio_postgres::{Client, Row};
 
 use crate::error::DatabaseError;
+
+// PostgreSQL reserves lower OIDs for built-in objects. pgAdmin uses the same
+// boundary when its "Show system objects" preference is disabled.
+const FIRST_USER_OBJECT_OID: i64 = 16_384;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -129,7 +133,7 @@ pub async fn get_database_collections(
     let row = client
         .query_one(
             "SELECT
-               (SELECT count(*) FROM pg_catalog.pg_cast),
+               (SELECT count(*) FROM pg_catalog.pg_cast WHERE oid::bigint >= $1),
                (SELECT count(*) FROM pg_catalog.pg_namespace
                   WHERE nspname LIKE 'pg\\_%' ESCAPE '\\' OR nspname = 'information_schema'),
                (SELECT count(*) FROM pg_catalog.pg_event_trigger),
@@ -140,7 +144,7 @@ pub async fn get_database_collections(
                (SELECT count(*) FROM pg_catalog.pg_namespace
                   WHERE nspname NOT LIKE 'pg\\_%' ESCAPE '\\' AND nspname <> 'information_schema'),
                (SELECT count(*) FROM pg_catalog.pg_subscription)",
-            &[],
+            &[&FIRST_USER_OBJECT_OID],
         )
         .await?;
 
@@ -171,12 +175,7 @@ pub async fn get_database_collection(
     kind: DatabaseCollectionKind,
 ) -> Result<Vec<NamedObject>, DatabaseError> {
     let query = match kind {
-        DatabaseCollectionKind::Casts => {
-            "SELECT pg_catalog.format_type(castsource, NULL) || ' → ' ||
-                    pg_catalog.format_type(casttarget, NULL)
-             FROM pg_catalog.pg_cast
-             ORDER BY 1"
-        }
+        DatabaseCollectionKind::Casts => return get_user_casts(client).await,
         DatabaseCollectionKind::Catalogs => {
             "SELECT nspname
              FROM pg_catalog.pg_namespace
@@ -211,10 +210,35 @@ pub async fn get_database_collection(
     };
 
     let rows = client.query(query, &[]).await?;
-    Ok(rows
-        .into_iter()
+    Ok(named_objects(rows))
+}
+
+async fn get_user_casts(client: &Client) -> Result<Vec<NamedObject>, DatabaseError> {
+    let rows = client
+        .query(
+            "SELECT pg_catalog.concat(
+                       pg_catalog.format_type(source_type.oid, NULL),
+                       '->',
+                       pg_catalog.format_type(target_type.oid, target_type.typtypmod)
+                    )
+             FROM pg_catalog.pg_cast cast_definition
+             JOIN pg_catalog.pg_type source_type
+               ON source_type.oid = cast_definition.castsource
+             JOIN pg_catalog.pg_type target_type
+               ON target_type.oid = cast_definition.casttarget
+             WHERE cast_definition.oid::bigint >= $1
+             ORDER BY source_type.typname, target_type.typname",
+            &[&FIRST_USER_OBJECT_OID],
+        )
+        .await?;
+
+    Ok(named_objects(rows))
+}
+
+fn named_objects(rows: Vec<Row>) -> Vec<NamedObject> {
+    rows.into_iter()
         .map(|row| NamedObject { name: row.get(0) })
-        .collect())
+        .collect()
 }
 
 pub async fn list_schema_objects(
@@ -348,7 +372,19 @@ mod tests {
                            LANGUAGE sql AS 'SELECT 42';
                          CREATE PROCEDURE plume_navigation_test.add_item()
                            LANGUAGE sql AS 'INSERT INTO plume_navigation_test.items DEFAULT VALUES';
-                         CREATE TYPE plume_navigation_test.item_state AS ENUM ('active', 'archived');",
+                         CREATE TYPE plume_navigation_test.item_state AS ENUM ('active', 'archived');
+                         CREATE TYPE plume_navigation_test.cast_source AS (value integer);
+                         CREATE TYPE plume_navigation_test.cast_target AS (value integer);
+                         CREATE FUNCTION plume_navigation_test.cast_source_to_target(
+                           value plume_navigation_test.cast_source
+                         ) RETURNS plume_navigation_test.cast_target
+                           LANGUAGE sql IMMUTABLE STRICT
+                           AS 'SELECT ROW(($1).value)::plume_navigation_test.cast_target';
+                         CREATE CAST (
+                           plume_navigation_test.cast_source AS plume_navigation_test.cast_target
+                         ) WITH FUNCTION plume_navigation_test.cast_source_to_target(
+                           plume_navigation_test.cast_source
+                         );",
                     )
                     .await?;
 
@@ -358,6 +394,19 @@ mod tests {
 
                 let collections = get_database_collections(&client).await?;
                 assert_eq!(collections.len(), 9);
+                let casts = get_database_collection(&client, DatabaseCollectionKind::Casts)
+                    .await?;
+                let cast_count = collections
+                    .iter()
+                    .find(|collection| matches!(collection.kind, DatabaseCollectionKind::Casts))
+                    .expect("casts collection should be present")
+                    .count;
+                assert_eq!(cast_count, casts.len() as i64);
+                assert!(casts.iter().any(|cast| {
+                    cast.name
+                        == "plume_navigation_test.cast_source->plume_navigation_test.cast_target"
+                }));
+                assert!(!casts.iter().any(|cast| cast.name == "bigint->integer"));
                 let schemas = get_database_collection(&client, DatabaseCollectionKind::Schemas)
                     .await?;
                 assert!(schemas.iter().any(|schema| schema.name == "plume_navigation_test"));

@@ -90,7 +90,7 @@ export function App() {
             onClick={() => setLocale(locale === "zh-CN" ? "en-US" : "zh-CN")}
           >
             <Globe2 size={15} />
-            {locale === "zh-CN" ? "中" : "EN"}
+            {locale === "zh-CN" ? "中文" : "EN"}
           </button>
           <button
             className="button button-primary button-compact"

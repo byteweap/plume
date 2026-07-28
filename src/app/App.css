@@ -102,6 +102,11 @@
   user-select: none;
 }
 
+.app-content-resizing > .sidebar,
+.app-content-resizing > .workspace {
+  pointer-events: none;
+}
+
 .sidebar {
   display: flex;
   min-width: 0;

@@ -26,12 +26,15 @@ describe("App sidebar", () => {
       clientX: 286,
       pointerId: 1,
     });
+    expect(content).toHaveClass("app-content-resizing");
+
     fireEvent.pointerMove(resizer, { clientX: 386, pointerId: 1 });
 
     expect(setPointerCapture).toHaveBeenCalledWith(1);
     expect(content).toHaveStyle({ "--sidebar-width": "386px" });
 
     fireEvent.pointerUp(resizer, { pointerId: 1 });
+    expect(content).not.toHaveClass("app-content-resizing");
   });
 
   it("supports keyboard resizing and restores the default width", () => {

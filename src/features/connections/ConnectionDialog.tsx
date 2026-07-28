@@ -294,13 +294,15 @@ export function ConnectionDialog({
               </div>
             </fieldset>
 
-            <ConnectionStatus state={requestState} />
           </div>
 
           <footer className="dialog-footer">
             <button className="button button-quiet" type="button" onClick={onClose}>
               {t("connection.cancel")}
             </button>
+            <div className="dialog-status-slot">
+              <ConnectionStatus state={requestState} />
+            </div>
             <div className="dialog-actions">
               <button
                 className="button button-secondary"
@@ -353,12 +355,12 @@ function ConnectionStatus({ state }: { state: RequestState }) {
     );
   }
 
+  const details = `PostgreSQL ${state.result.serverVersion} · ${state.result.latencyMs} ms · ${state.result.transport.toUpperCase()}`;
+
   return (
     <div className="connection-status connection-status-success" role="status">
       <strong>{t("connection.success")}</strong>
-      <span>
-        PostgreSQL {state.result.serverVersion} · {state.result.latencyMs} ms · {state.result.transport.toUpperCase()}
-      </span>
+      <span title={details}>{details}</span>
     </div>
   );
 }

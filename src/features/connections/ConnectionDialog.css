@@ -11,13 +11,24 @@
 }
 
 .connection-dialog {
+  display: flex;
   width: min(640px, calc(100vw - 48px));
+  height: min(560px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
-  overflow: auto;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid #cdd4cf;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 18px 50px rgb(25 35 29 / 20%);
+}
+
+.connection-dialog > form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 
 .dialog-header {
@@ -25,6 +36,7 @@
   min-height: 62px;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto;
   border-bottom: 1px solid #e0e5e1;
   padding: 10px 14px 10px 18px;
 }
@@ -62,8 +74,11 @@
 
 .dialog-body {
   display: flex;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   gap: 20px;
+  overflow: hidden;
   padding: 18px;
 }
 
@@ -120,8 +135,9 @@
 
 .form-field input:focus,
 .form-field select:focus {
-  border-color: #6d9e84;
-  box-shadow: 0 0 0 2px rgb(47 109 82 / 10%);
+  border-color: #aeb7b0;
+  box-shadow: none;
+  outline: 0;
 }
 
 .form-field input:disabled {
@@ -160,16 +176,25 @@
 
 .connection-status {
   display: flex;
+  min-width: 0;
   align-items: baseline;
   gap: 8px;
   border-left: 3px solid;
   border-radius: 3px;
-  padding: 9px 11px;
+  padding: 6px 9px;
   font-size: 11px;
 }
 
 .connection-status strong {
+  flex: 0 0 auto;
   font-size: 11px;
+}
+
+.connection-status-success span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .connection-status-error {
@@ -179,19 +204,35 @@
 }
 
 .connection-status-success {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 1px;
   border-color: #3b8a64;
+  padding-top: 4px;
+  padding-bottom: 4px;
   color: #286749;
   background: #f0f8f3;
 }
 
+.connection-status-success span {
+  font-size: 10px;
+  line-height: 1.25;
+}
+
 .dialog-footer {
-  display: flex;
+  display: grid;
   min-height: 58px;
   align-items: center;
-  justify-content: space-between;
+  flex: 0 0 auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
   border-top: 1px solid #e0e5e1;
   padding: 10px 14px 10px 18px;
   background: #f8faf8;
+}
+
+.dialog-status-slot {
+  min-width: 0;
 }
 
 .dialog-actions {

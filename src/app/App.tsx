@@ -11,6 +11,8 @@ import {
   Database,
   FileText,
   Globe2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Search,
   Table2,
@@ -53,6 +55,7 @@ export function App() {
   const [activeConnectionId, setActiveConnectionId] = useState<string>();
   const [filter, setFilter] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const sidebarResizeStart = useRef<{
     pointerId: number;
@@ -74,7 +77,7 @@ export function App() {
   }, [connections, filter]);
 
   const appContentStyle = {
-    "--sidebar-width": `${sidebarWidth}px`,
+    "--sidebar-width": `${sidebarCollapsed ? 0 : sidebarWidth}px`,
   } as CSSProperties;
 
   function startSidebarResize(event: PointerEvent<HTMLDivElement>) {
@@ -177,18 +180,30 @@ export function App() {
       </header>
 
       <div
-        className={`app-content ${resizingSidebar ? "app-content-resizing" : ""}`}
+        className={`app-content ${resizingSidebar ? "app-content-resizing" : ""} ${sidebarCollapsed ? "app-content-sidebar-collapsed" : ""}`}
         style={appContentStyle}
       >
-        <aside className="sidebar">
+        <aside
+          className="sidebar"
+          aria-hidden={sidebarCollapsed}
+          inert={sidebarCollapsed}
+        >
           <div className="sidebar-heading">
             <span>{t("sidebar.connections")}</span>
-            <IconButton
-              label={t("workspace.newConnection")}
-              onClick={() => setDialogOpen(true)}
-            >
-              <Plus size={16} />
-            </IconButton>
+            <div className="sidebar-heading-actions">
+              <IconButton
+                label={t("workspace.newConnection")}
+                onClick={() => setDialogOpen(true)}
+              >
+                <Plus size={16} />
+              </IconButton>
+              <IconButton
+                label={t("sidebar.collapse")}
+                onClick={() => setSidebarCollapsed(true)}
+              >
+                <PanelLeftClose size={16} />
+              </IconButton>
+            </div>
           </div>
 
           <label className="sidebar-search">
@@ -222,25 +237,36 @@ export function App() {
           </div>
         </aside>
 
-        <div
-          className="sidebar-resizer"
-          role="separator"
-          aria-label={t("sidebar.resize")}
-          aria-orientation="vertical"
-          aria-valuemin={minimumSidebarWidth}
-          aria-valuemax={maximumSidebarWidth}
-          aria-valuenow={sidebarWidth}
-          tabIndex={0}
-          onDoubleClick={() => setSidebarWidth(defaultSidebarWidth)}
-          onKeyDown={resizeSidebarWithKeyboard}
-          onPointerDown={startSidebarResize}
-          onPointerMove={resizeSidebar}
-          onPointerUp={stopSidebarResize}
-          onPointerCancel={stopSidebarResize}
-        />
+        {!sidebarCollapsed && (
+          <div
+            className="sidebar-resizer"
+            role="separator"
+            aria-label={t("sidebar.resize")}
+            aria-orientation="vertical"
+            aria-valuemin={minimumSidebarWidth}
+            aria-valuemax={maximumSidebarWidth}
+            aria-valuenow={sidebarWidth}
+            tabIndex={0}
+            onDoubleClick={() => setSidebarWidth(defaultSidebarWidth)}
+            onKeyDown={resizeSidebarWithKeyboard}
+            onPointerDown={startSidebarResize}
+            onPointerMove={resizeSidebar}
+            onPointerUp={stopSidebarResize}
+            onPointerCancel={stopSidebarResize}
+          />
+        )}
 
         <section className="workspace">
           <div className="tabbar" role="tablist">
+            {sidebarCollapsed && (
+              <IconButton
+                className="sidebar-expand-button"
+                label={t("sidebar.expand")}
+                onClick={() => setSidebarCollapsed(false)}
+              >
+                <PanelLeftOpen size={16} />
+              </IconButton>
+            )}
             <button className="tab tab-active" type="button" role="tab">
               <FileText size={14} />
               {activeConnection?.name ?? "Welcome"}

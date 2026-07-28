@@ -121,6 +121,11 @@
   background: #f2f5f2;
 }
 
+.app-content-sidebar-collapsed .sidebar {
+  border-right: 0;
+  visibility: hidden;
+}
+
 .sidebar-resizer {
   position: absolute;
   z-index: 5;
@@ -162,6 +167,12 @@
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.sidebar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .sidebar-search {
@@ -307,6 +318,14 @@
   align-items: end;
   border-bottom: 1px solid #d8ded9;
   background: #f5f7f5;
+}
+
+.sidebar-expand-button {
+  width: 36px;
+  height: 35px;
+  flex: 0 0 36px;
+  border-right: 1px solid #d8ded9;
+  border-radius: 0;
 }
 
 .tab {

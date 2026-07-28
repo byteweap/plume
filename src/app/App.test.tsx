@@ -56,4 +56,31 @@ describe("App sidebar", () => {
     fireEvent.doubleClick(resizer);
     expect(content).toHaveStyle({ "--sidebar-width": "286px" });
   });
+
+  it("collapses and restores the sidebar at its previous width", () => {
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    const sidebar = screen.getByRole("complementary");
+    const content = sidebar.parentElement;
+    const resizer = screen.getByRole("separator", { name: "Resize sidebar" });
+
+    fireEvent.keyDown(resizer, { key: "ArrowRight" });
+    fireEvent.click(screen.getByRole("button", { name: "Collapse sidebar" }));
+
+    expect(content).toHaveStyle({ "--sidebar-width": "0px" });
+    expect(sidebar).toHaveAttribute("aria-hidden", "true");
+    expect(screen.queryByRole("separator", { name: "Resize sidebar" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand sidebar" }));
+
+    expect(content).toHaveStyle({ "--sidebar-width": "302px" });
+    expect(sidebar).toHaveAttribute("aria-hidden", "false");
+    expect(
+      screen.getByRole("separator", { name: "Resize sidebar" }),
+    ).toBeVisible();
+  });
 });

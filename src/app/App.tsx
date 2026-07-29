@@ -44,6 +44,8 @@ import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import {
   createQueryId,
+  formatQueryDuration,
+  summarizeQueryResult,
   type QueryExecutionState,
 } from "../features/query-execution/queryExecution";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
@@ -217,6 +219,7 @@ export function App() {
       tabId: tab.id,
       queryId,
       target,
+      startedAt: Date.now(),
     });
     dispatchSession({ type: "begin-work", profileId: tab.profileId });
 
@@ -231,6 +234,7 @@ export function App() {
         type: "query-succeeded",
         tabId: tab.id,
         result,
+        finishedAt: Date.now(),
       });
       dispatchSession({ type: "ready", profileId: tab.profileId });
     } catch (error) {
@@ -240,6 +244,7 @@ export function App() {
           type: "query-cancelled",
           tabId: tab.id,
           queryId,
+          finishedAt: Date.now(),
         });
       } else {
         dispatchWorkspaceTabs({
@@ -247,6 +252,7 @@ export function App() {
           tabId: tab.id,
           queryId,
           error: commandError,
+          finishedAt: Date.now(),
         });
       }
       if (isConnectionQueryError(commandError.code)) {
@@ -1227,6 +1233,7 @@ function QueryExecutionNotice({
   onCancel: () => void;
 }) {
   const { t } = useI18n();
+  const durationMs = useQueryElapsedMs(execution);
   const message =
     execution.status === "running"
       ? execution.cancelError?.message ?? t("query.running")
@@ -1237,6 +1244,23 @@ function QueryExecutionNotice({
       : execution.status === "succeeded"
         ? t("query.completed")
         : execution.error.message;
+  const details = [
+    `${t(
+      execution.status === "running" || execution.status === "cancelling"
+        ? "query.elapsed"
+        : "query.duration",
+    )} ${formatQueryDuration(durationMs)}`,
+  ];
+  if (execution.status === "succeeded") {
+    const summary = summarizeQueryResult(execution.result);
+    if (summary.returnedRows !== undefined) {
+      details.push(`${t("query.rowsReturned")} ${summary.returnedRows}`);
+    }
+    if (summary.affectedRows !== undefined) {
+      details.push(`${t("query.rowsAffected")} ${summary.affectedRows}`);
+    }
+    if (summary.truncated) details.push(t("query.truncated"));
+  }
 
   return (
     <div
@@ -1248,7 +1272,14 @@ function QueryExecutionNotice({
           : "status"
       }
     >
-      <span>{message}</span>
+      <div className="query-execution-content">
+        <span className="query-execution-message">{message}</span>
+        <span className="query-execution-details">
+          {details.map((detail) => (
+            <span key={detail}>{detail}</span>
+          ))}
+        </span>
+      </div>
       {execution.status === "running" && (
         <IconButton
           className="query-cancel-button"
@@ -1260,6 +1291,23 @@ function QueryExecutionNotice({
       )}
     </div>
   );
+}
+
+function useQueryElapsedMs(
+  execution: Exclude<QueryExecutionState, { status: "idle" }>,
+) {
+  const active = execution.status === "running" || execution.status === "cancelling";
+  const [now, setNow] = useState(Date.now);
+
+  useEffect(() => {
+    if (!active) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 100);
+    return () => window.clearInterval(interval);
+  }, [active, execution.queryId]);
+
+  return active
+    ? Math.max(0, now - execution.startedAt)
+    : execution.durationMs;
 }
 
 function UnavailableWorkspace({

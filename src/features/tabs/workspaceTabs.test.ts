@@ -164,11 +164,13 @@ describe("workspaceTabsReducer", () => {
       tabId,
       queryId: "query-2",
       target,
+      startedAt: 1_000,
     });
     state = workspaceTabsReducer(state, {
       type: "query-succeeded",
       tabId,
       result: { queryId: "query-1", status: "succeeded", results: [] },
+      finishedAt: 1_500,
     });
 
     const runningTab = state.tabs.find(
@@ -187,6 +189,7 @@ describe("workspaceTabsReducer", () => {
       tabId,
       queryId: "query-2",
       error: { code: "query_failed", message: "syntax error" },
+      finishedAt: 1_750,
     });
     const failedTab = state.tabs.find(
       (tab) => tab.id === tabId && tab.kind === "query",
@@ -198,6 +201,7 @@ describe("workspaceTabsReducer", () => {
       status: "failed",
       queryId: "query-2",
       error: { code: "query_failed", message: "syntax error" },
+      durationMs: 750,
     });
   });
 
@@ -220,6 +224,7 @@ describe("workspaceTabsReducer", () => {
       tabId,
       queryId: "query-1",
       target,
+      startedAt: 1_000,
     });
     state = workspaceTabsReducer(state, {
       type: "query-cancelling",
@@ -246,16 +251,20 @@ describe("workspaceTabsReducer", () => {
       type: "query-succeeded",
       tabId,
       result: { queryId: "query-1", status: "succeeded", results: [] },
+      finishedAt: 1_300,
     });
     state = workspaceTabsReducer(state, {
       type: "query-cancelled",
       tabId,
       queryId: "query-1",
+      finishedAt: 1_400,
     });
     const succeededTab = state.tabs.find(
       (tab) => tab.id === tabId && tab.kind === "query",
     );
-    expect(succeededTab).toMatchObject({ execution: { status: "succeeded" } });
+    expect(succeededTab).toMatchObject({
+      execution: { status: "succeeded", startedAt: 1_000, durationMs: 300 },
+    });
   });
 
   it("shows confirmed and failed cancellation outcomes", () => {
@@ -277,6 +286,7 @@ describe("workspaceTabsReducer", () => {
       tabId,
       queryId: "query-1",
       target,
+      startedAt: 1_000,
     });
     state = workspaceTabsReducer(state, {
       type: "query-cancelling",
@@ -308,11 +318,14 @@ describe("workspaceTabsReducer", () => {
       type: "query-cancelled",
       tabId,
       queryId: "query-1",
+      finishedAt: 1_300,
     });
     const cancelledTab = state.tabs.find(
       (tab) => tab.id === tabId && tab.kind === "query",
     );
-    expect(cancelledTab).toMatchObject({ execution: { status: "cancelled" } });
+    expect(cancelledTab).toMatchObject({
+      execution: { status: "cancelled", startedAt: 1_000, durationMs: 300 },
+    });
   });
 
   it("renames tabs and selects an adjacent tab when closing the active tab", () => {

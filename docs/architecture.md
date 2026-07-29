@@ -122,6 +122,12 @@ send moves the UI only into a waiting state. Cancellation becomes final only
 when that same execution returns PostgreSQL SQLSTATE `57014`; a query that wins
 the race and completes normally remains succeeded.
 
+The frontend records user-perceived elapsed time from dispatch through the
+terminal response. Active queries refresh their elapsed display without changing
+stored execution state; terminal states freeze the duration. Successful
+multi-statement responses summarize returned rows, affected rows, and whether
+any statement was truncated.
+
 Execution results live only for the query-tab lifecycle and are not persisted in
 drafts. Type metadata and batch contracts, configurable result limits,
 and virtualized rendering remain follow-up work in P0-F01, P0-F04, and P0-F02

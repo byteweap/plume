@@ -634,13 +634,38 @@
   color: #526058;
   background: #f4f7f5;
   font-size: 11px;
+}
+
+.query-execution-content {
+  display: flex;
+  overflow: hidden;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.query-execution-message {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.query-execution-notice > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.query-execution-details {
+  display: inline-flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: #667068;
+}
+
+.query-execution-details > span {
+  border-left: 1px solid currentColor;
+  padding-left: 8px;
+  white-space: nowrap;
 }
 
 .query-execution-notice-running {
@@ -779,6 +804,10 @@
   .query-execution-notice-cancelling {
     color: #dbc58f;
     background: #2c281f;
+  }
+
+  .query-execution-details {
+    color: #aab4ad;
   }
 
   .query-execution-notice-failed {

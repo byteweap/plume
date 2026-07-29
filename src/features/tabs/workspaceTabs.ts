@@ -63,17 +63,20 @@ export type WorkspaceTabsAction =
       tabId: string;
       queryId: string;
       target: SqlExecutionTarget;
+      startedAt: number;
     }
   | {
       type: "query-succeeded";
       tabId: string;
       result: QueryExecutionResult;
+      finishedAt: number;
     }
   | {
       type: "query-failed";
       tabId: string;
       queryId: string;
       error: CommandError;
+      finishedAt: number;
     }
   | { type: "query-cancelling"; tabId: string; queryId: string }
   | {
@@ -87,7 +90,12 @@ export type WorkspaceTabsAction =
       queryId: string;
       error: CommandError;
     }
-  | { type: "query-cancelled"; tabId: string; queryId: string }
+  | {
+      type: "query-cancelled";
+      tabId: string;
+      queryId: string;
+      finishedAt: number;
+    }
   | { type: "close"; tabId: string }
   | { type: "close-profile"; profileId: string };
 
@@ -230,6 +238,7 @@ export function workspaceTabsReducer(
           status: "running",
           queryId: action.queryId,
           target: action.target,
+          startedAt: action.startedAt,
         },
       }));
     case "query-succeeded":
@@ -243,6 +252,7 @@ export function workspaceTabsReducer(
             queryId: action.result.queryId,
             target: execution.target,
             result: action.result,
+            ...finishQueryTiming(execution, action.finishedAt),
           },
         }),
       );
@@ -257,6 +267,7 @@ export function workspaceTabsReducer(
             queryId: action.queryId,
             target: execution.target,
             error: action.error,
+            ...finishQueryTiming(execution, action.finishedAt),
           },
         }),
       );
@@ -270,6 +281,7 @@ export function workspaceTabsReducer(
             status: "cancelling",
             queryId: action.queryId,
             target: execution.target,
+            startedAt: execution.startedAt,
             requestStatus: "requesting",
           },
         }),
@@ -296,6 +308,7 @@ export function workspaceTabsReducer(
             status: "running",
             queryId: action.queryId,
             target: execution.target,
+            startedAt: execution.startedAt,
             cancelError: action.error,
           },
         }),
@@ -310,6 +323,7 @@ export function workspaceTabsReducer(
             status: "cancelled",
             queryId: action.queryId,
             target: execution.target,
+            ...finishQueryTiming(execution, action.finishedAt),
           },
         }),
       );
@@ -364,6 +378,19 @@ function updateCancellingQuery(
       ? update(execution)
       : {};
   });
+}
+
+function finishQueryTiming(
+  execution: Extract<
+    QueryExecutionState,
+    { status: "running" | "cancelling" }
+  >,
+  finishedAt: number,
+) {
+  return {
+    startedAt: execution.startedAt,
+    durationMs: Math.max(0, finishedAt - execution.startedAt),
+  };
 }
 
 function updateQueryTab(

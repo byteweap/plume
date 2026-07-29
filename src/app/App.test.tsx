@@ -573,6 +573,8 @@ describe("App sidebar", () => {
       sql: "select 2;",
     });
     expect(await screen.findByText("Query completed")).toBeVisible();
+    expect(screen.getByText("Rows returned 1")).toBeVisible();
+    expect(screen.getByText(/^Duration /)).toBeVisible();
 
     fireEvent.click(screen.getByRole("button", { name: "Run all SQL" }));
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
@@ -662,6 +664,7 @@ describe("App sidebar", () => {
     expect(
       await screen.findByText("Cancellation requested; waiting for PostgreSQL…"),
     ).toBeVisible();
+    expect(screen.getByText(/^Elapsed /)).toBeVisible();
     expect(screen.queryByText("Query cancelled")).not.toBeInTheDocument();
 
     await act(async () => {
@@ -671,6 +674,7 @@ describe("App sidebar", () => {
       });
     });
     expect(await screen.findByText("Query cancelled")).toBeVisible();
+    expect(screen.getByText(/^Duration /)).toBeVisible();
     expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
   });
 });

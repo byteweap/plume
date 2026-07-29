@@ -211,6 +211,7 @@ impl SshTunnel {
     }
 
     pub async fn close(&self) {
+        self.healthy.store(false, Ordering::Release);
         let _ = self.cancel.send(true);
         let _ = self
             .primary

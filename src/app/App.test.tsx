@@ -1,7 +1,24 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
+import type { ConnectionProfile } from "../features/connections/connection";
+import { connectionApi } from "../features/connections/connectionApi";
 import { App } from "./App";
+
+const savedProfile: ConnectionProfile = {
+  id: "profile-1",
+  name: "Local saved",
+  host: "localhost",
+  port: 5432,
+  database: "postgres",
+  username: "postgres",
+  environment: "development",
+  color: "#2f6d52",
+  sslMode: "disable",
+  favorite: true,
+  createdAt: 1,
+  updatedAt: 1,
+};
 
 describe("App sidebar", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -82,5 +99,32 @@ describe("App sidebar", () => {
     expect(
       screen.getByRole("separator", { name: "Resize sidebar" }),
     ).toBeVisible();
+  });
+
+  it("restores saved profiles without connecting until the user selects one", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    const connectSaved = vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    const savedConnection = await screen.findByRole("button", {
+      name: /Local saved/,
+    });
+    expect(savedConnection).toHaveTextContent("Saved");
+    expect(connectSaved).not.toHaveBeenCalled();
+
+    fireEvent.click(savedConnection);
+    await waitFor(() => expect(connectSaved).toHaveBeenCalledWith("profile-1"));
+    expect(await screen.findByText("PostgreSQL 18.0")).toBeVisible();
   });
 });

@@ -1,6 +1,8 @@
 use serde::Serialize;
 use thiserror::Error;
 
+use crate::profiles::ProfileError;
+
 #[derive(Debug, Error)]
 pub enum DatabaseError {
     #[error("The connection configuration is invalid: {0}")]
@@ -72,6 +74,39 @@ impl From<DatabaseError> for CommandError {
                     detail: Some(error.to_string()),
                 }
             }
+        }
+    }
+}
+
+impl From<ProfileError> for CommandError {
+    fn from(error: ProfileError) -> Self {
+        match error {
+            ProfileError::NotFound(_) => Self {
+                code: "profile_not_found",
+                message: "The saved connection no longer exists.".to_owned(),
+                detail: None,
+            },
+            ProfileError::Invalid(ref message) => Self {
+                code: "invalid_profile",
+                message: message.clone(),
+                detail: None,
+            },
+            ProfileError::Credential(_) => Self {
+                code: "credential_error",
+                message: "The password could not be accessed in the system credential store."
+                    .to_owned(),
+                detail: Some(error.to_string()),
+            },
+            ProfileError::UnsupportedSchema(_) => Self {
+                code: "storage_version_error",
+                message: "This Plume version cannot read the local profile database.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            ProfileError::Storage(_) | ProfileError::Directory(_) | ProfileError::Lock => Self {
+                code: "storage_error",
+                message: "Plume could not update the local connection profiles.".to_owned(),
+                detail: Some(error.to_string()),
+            },
         }
     }
 }

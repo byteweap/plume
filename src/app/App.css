@@ -213,6 +213,22 @@
   padding: 0 6px 10px;
 }
 
+.connection-item-line {
+  display: grid;
+  position: relative;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border-radius: 5px;
+}
+
+.connection-item-line:hover {
+  background: #e8ece9;
+}
+
+.connection-item-line.connection-row-active {
+  background: #dfe9e2;
+}
+
 .connection-row {
   display: grid;
   width: 100%;
@@ -226,14 +242,6 @@
   text-align: left;
   background: transparent;
   cursor: pointer;
-}
-
-.connection-row:hover {
-  background: #e8ece9;
-}
-
-.connection-row-active {
-  background: #dfe9e2;
 }
 
 .connection-row-copy {

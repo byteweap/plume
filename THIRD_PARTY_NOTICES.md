@@ -21,6 +21,8 @@ inventory for a particular source revision:
 | `tokio` | Asynchronous runtime | MIT |
 | `tokio-postgres` | PostgreSQL protocol driver | Apache-2.0 OR MIT |
 | `native-tls`, `postgres-native-tls` | TLS support for PostgreSQL | Apache-2.0 OR MIT |
+| `rusqlite` | Versioned local SQLite storage | MIT |
+| `keyring` | macOS Keychain and Windows Credential Manager integration | Apache-2.0 OR MIT |
 | `uuid` | Opaque session identifiers | Apache-2.0 OR MIT |
 
 ## Direct Development and Build Dependencies

@@ -16,12 +16,17 @@ import {
   Library,
   ListOrdered,
   LoaderCircle,
+  MoreHorizontal,
   Network,
   PackageOpen,
+  Pencil,
+  Copy,
   RadioTower,
   RefreshCw,
   Shapes,
+  Star,
   Table2,
+  Trash2,
   UserRound,
   UsersRound,
   Webhook,
@@ -30,7 +35,10 @@ import type { LucideProps } from "lucide-react";
 import { useI18n } from "../../i18n/I18nContext";
 import type { TranslationKey } from "../../i18n/catalog";
 import { toCommandError } from "../../platform/tauri";
-import type { SavedConnection } from "../connections/connection";
+import type {
+  ConnectionProfile,
+  SavedConnection,
+} from "../connections/connection";
 import {
   databaseObjectKinds,
   groupDatabaseObjects,
@@ -50,10 +58,18 @@ import { databaseTreeApi } from "./databaseTreeApi";
 import "./ConnectionTreeItem.css";
 
 interface ConnectionTreeItemProps {
-  connection: SavedConnection;
+  connection: ConnectionProfile | SavedConnection;
+  sessionId?: string;
   environmentClassName: string;
   selected: boolean;
   onSelect: () => void;
+  connecting?: boolean;
+  onConnect?: () => void;
+  onEdit?: () => void;
+  onDuplicate?: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
+  onToggleFavorite?: () => void;
 }
 
 type TreeIcon = ComponentType<LucideProps>;
@@ -125,22 +141,32 @@ const objectGroupPresentation: Record<
 
 export function ConnectionTreeItem({
   connection,
+  sessionId,
   environmentClassName,
   selected,
   onSelect,
+  connecting = false,
+  onConnect,
+  onEdit,
+  onDuplicate,
+  onRename,
+  onDelete,
+  onToggleFavorite,
 }: ConnectionTreeItemProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [overview, setOverview] = useState<LoadState<ServerOverview>>({
     status: "idle",
   });
 
   async function loadOverview() {
+    if (!activeSessionId) return;
     setOverview({ status: "loading" });
     try {
       setOverview({
         status: "success",
-        value: await databaseTreeApi.getServerTree(connection.sessionId),
+        value: await databaseTreeApi.getServerTree(activeSessionId),
       });
     } catch (error) {
       setOverview({ status: "error", message: toCommandError(error).message });
@@ -148,32 +174,88 @@ export function ConnectionTreeItem({
   }
 
   function toggleConnection() {
+    onSelect();
+    if (!activeSessionId) {
+      onConnect?.();
+      return;
+    }
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    onSelect();
     if (nextExpanded && overview.status === "idle") void loadOverview();
   }
 
+  function runMenuAction(action: () => void) {
+    setMenuOpen(false);
+    action();
+  }
+
+  const activeSessionId =
+    sessionId ?? ("sessionId" in connection ? connection.sessionId : undefined);
+  const hasActions = Boolean(
+    onEdit || onDuplicate || onRename || onDelete || onToggleFavorite,
+  );
+
   return (
     <div className="tree-connection" role="treeitem" aria-expanded={expanded}>
-      <button
-        className={`connection-row ${selected ? "connection-row-active" : ""}`}
-        type="button"
-        onClick={toggleConnection}
-      >
-        <TreeChevron expanded={expanded} />
-        <Database size={15} />
-        <span className="connection-row-copy">
-          <strong>{connection.name}</strong>
-          <small>{connection.host}:{connection.port}</small>
-        </span>
-        <span
-          className={`environment-dot ${environmentClassName}`}
-          title={t(`environment.${connection.environment}`)}
-        />
-      </button>
+      <div className={`connection-item-line ${selected ? "connection-row-active" : ""}`}>
+        <button className="connection-row" type="button" onClick={toggleConnection}>
+          {connecting ? (
+            <LoaderCircle className="spin" size={13} />
+          ) : (
+            <TreeChevron expanded={expanded} />
+          )}
+          <Database size={15} />
+          <span className="connection-row-copy">
+            <strong>{connection.name}</strong>
+            <small>
+              {connection.host}:{connection.port}
+              {!activeSessionId ? ` · ${t("connection.disconnected")}` : ""}
+            </small>
+          </span>
+          <span
+            className={`environment-dot ${environmentClassName}`}
+            style={{ backgroundColor: connection.color }}
+            title={t(`environment.${connection.environment}`)}
+          />
+        </button>
+        {hasActions && (
+          <div className="connection-menu-wrap">
+            {onToggleFavorite && (
+              <button
+                className="connection-row-action"
+                type="button"
+                aria-label={t(
+                  connection.favorite
+                    ? "connection.unfavorite"
+                    : "connection.favorite",
+                )}
+                onClick={onToggleFavorite}
+              >
+                <Star size={13} fill={connection.favorite ? "currentColor" : "none"} />
+              </button>
+            )}
+            <button
+              className="connection-row-action"
+              type="button"
+              aria-label={t("connection.actions")}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <MoreHorizontal size={15} />
+            </button>
+            {menuOpen && (
+              <div className="connection-menu" role="menu">
+                {onEdit && <MenuAction icon={Pencil} label={t("connection.edit")} onClick={() => runMenuAction(onEdit)} />}
+                {onDuplicate && <MenuAction icon={Copy} label={t("connection.duplicate")} onClick={() => runMenuAction(onDuplicate)} />}
+                {onRename && <MenuAction icon={Pencil} label={t("connection.rename")} onClick={() => runMenuAction(onRename)} />}
+                {onDelete && <MenuAction icon={Trash2} label={t("connection.delete")} onClick={() => runMenuAction(onDelete)} danger />}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-      {expanded && (
+      {expanded && activeSessionId && (
         <div className="tree-level" role="group">
           <AsyncTreeContent state={overview} onRetry={() => void loadOverview()}>
             {(server) => (
@@ -187,7 +269,7 @@ export function ConnectionTreeItem({
                     <DatabaseTreeItem
                       key={database.name}
                       database={database}
-                      sessionId={connection.sessionId}
+                      sessionId={activeSessionId}
                     />
                   ))}
                 </StaticCollectionNode>
@@ -221,6 +303,30 @@ export function ConnectionTreeItem({
         </div>
       )}
     </div>
+  );
+}
+
+function MenuAction({
+  icon: Icon,
+  label,
+  onClick,
+  danger = false,
+}: {
+  icon: TreeIcon;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      className={danger ? "connection-menu-danger" : ""}
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+    >
+      <Icon size={13} />
+      {label}
+    </button>
   );
 }
 

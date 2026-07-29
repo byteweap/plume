@@ -23,7 +23,7 @@ pub struct ConnectionTestRequest {
     pub timeout_seconds: u64,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum SslMode {
     Disable,

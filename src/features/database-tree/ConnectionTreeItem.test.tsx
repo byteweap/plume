@@ -14,7 +14,11 @@ const connection: SavedConnection = {
   database: "postgres",
   username: "postgres",
   environment: "development",
+  color: "#2f6d52",
   sslMode: "disable",
+  favorite: false,
+  createdAt: 1,
+  updatedAt: 1,
   serverVersion: "18.0",
 };
 

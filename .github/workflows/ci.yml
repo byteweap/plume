@@ -63,6 +63,9 @@ jobs:
       - name: Check Rust
         run: npm run check:rust
 
+      - name: Verify operating-system credential storage
+        run: cargo test --manifest-path src-tauri/Cargo.toml system_store_supports_a_real_round_trip -- --ignored
+
       - name: Build unsigned desktop bundles
         run: npm run tauri build
 

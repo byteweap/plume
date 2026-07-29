@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   connectionFormSchema,
   defaultConnectionFormValue,
+  profileToFormValue,
   toConnectionTestRequest,
+  toProfileWriteRequest,
 } from "./connection";
 
 describe("connectionFormSchema", () => {
@@ -28,6 +30,24 @@ describe("connectionFormSchema", () => {
       sslMode: "verify-full",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe("saved profile conversion", () => {
+  it("never includes an empty password in a persisted update", () => {
+    const profile = {
+      ...defaultConnectionFormValue,
+      id: "profile-1",
+      name: "Local",
+      password: undefined,
+      rootCertificatePath: undefined,
+      favorite: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const form = profileToFormValue(profile);
+    expect(form.password).toBe("");
+    expect(toProfileWriteRequest(form, profile).password).toBeUndefined();
   });
 });
 

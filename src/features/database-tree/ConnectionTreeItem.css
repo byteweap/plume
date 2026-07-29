@@ -20,6 +20,71 @@
   content: "";
 }
 
+.connection-menu-wrap {
+  display: flex;
+  position: relative;
+  align-items: center;
+  padding-right: 3px;
+}
+
+.connection-row-action {
+  display: inline-flex;
+  width: 24px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: #657068;
+  background: transparent;
+  cursor: pointer;
+}
+
+.connection-row-action:hover {
+  color: #263029;
+  background: rgb(255 255 255 / 68%);
+}
+
+.connection-menu {
+  display: flex;
+  position: absolute;
+  z-index: 20;
+  top: 29px;
+  right: 2px;
+  width: 132px;
+  flex-direction: column;
+  border: 1px solid #ccd3ce;
+  border-radius: 6px;
+  padding: 4px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgb(28 36 31 / 18%);
+}
+
+.connection-menu button {
+  display: flex;
+  width: 100%;
+  height: 29px;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0 8px;
+  color: #3f4942;
+  background: transparent;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.connection-menu button:hover {
+  background: #eef2ef;
+}
+
+.connection-menu .connection-menu-danger {
+  color: #a43b39;
+}
+
 .tree-row {
   display: flex;
   width: 100%;
@@ -139,5 +204,18 @@
   .tree-error {
     color: #efb0ae;
     background: #3a2222;
+  }
+
+  .connection-menu {
+    border-color: #414a43;
+    background: #242925;
+  }
+
+  .connection-menu button {
+    color: #dce2dd;
+  }
+
+  .connection-menu button:hover {
+    background: #303731;
   }
 }

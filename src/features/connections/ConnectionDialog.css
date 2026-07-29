@@ -13,7 +13,7 @@
 .connection-dialog {
   display: flex;
   width: min(640px, calc(100vw - 48px));
-  height: min(560px, calc(100vh - 48px));
+  height: min(620px, calc(100vh - 48px));
   max-height: calc(100vh - 48px);
   flex: 0 0 auto;
   flex-direction: column;
@@ -78,7 +78,7 @@
   flex: 1;
   flex-direction: column;
   gap: 20px;
-  overflow: hidden;
+  overflow: auto;
   padding: 18px;
 }
 
@@ -172,6 +172,27 @@
   position: absolute;
   top: 2px;
   right: 2px;
+}
+
+.color-options {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  padding: 0;
+  box-shadow: 0 0 0 1px #bcc5be;
+  cursor: pointer;
+}
+
+.color-swatch-selected {
+  box-shadow: 0 0 0 2px #263029;
 }
 
 .connection-status {

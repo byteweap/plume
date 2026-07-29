@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -20,16 +21,18 @@ import {
 import plumeMark from "../assets/plume-mark.svg";
 import { ConnectionDialog } from "../features/connections/ConnectionDialog";
 import type {
+  ActiveConnection,
   ConnectedDatabaseResult,
-  ConnectionFormValue,
-  SavedConnection,
+  ConnectionProfile,
 } from "../features/connections/connection";
+import { connectionApi } from "../features/connections/connectionApi";
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
 import { useI18n } from "../i18n/I18nContext";
+import { toCommandError } from "../platform/tauri";
 import { IconButton } from "../shared/IconButton";
 import "./App.css";
 
-const environmentClass: Record<SavedConnection["environment"], string> = {
+const environmentClass: Record<ConnectionProfile["environment"], string> = {
   development: "environment-development",
   test: "environment-test",
   staging: "environment-staging",
@@ -50,9 +53,16 @@ function clampSidebarWidth(width: number) {
 
 export function App() {
   const { locale, setLocale, t } = useI18n();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [connections, setConnections] = useState<SavedConnection[]>([]);
-  const [activeConnectionId, setActiveConnectionId] = useState<string>();
+  const [dialogProfile, setDialogProfile] = useState<
+    ConnectionProfile | null | undefined
+  >(undefined);
+  const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
+  const [sessions, setSessions] = useState<
+    Record<string, { sessionId: string; serverVersion: string }>
+  >({});
+  const [selectedProfileId, setSelectedProfileId] = useState<string>();
+  const [connectingProfileId, setConnectingProfileId] = useState<string>();
+  const [profileError, setProfileError] = useState<string>();
   const [filter, setFilter] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -63,18 +73,41 @@ export function App() {
     width: number;
   } | null>(null);
 
-  const activeConnection = connections.find(
-    (connection) => connection.id === activeConnectionId,
+  const selectedProfile = profiles.find(
+    (profile) => profile.id === selectedProfileId,
   );
+  const activeConnection = useMemo<ActiveConnection | undefined>(() => {
+    if (!selectedProfile) return undefined;
+    const session = sessions[selectedProfile.id];
+    return session ? { ...selectedProfile, ...session } : undefined;
+  }, [selectedProfile, sessions]);
   const visibleConnections = useMemo(() => {
     const query = filter.trim().toLowerCase();
-    if (!query) return connections;
-    return connections.filter((connection) =>
+    if (!query) return profiles;
+    return profiles.filter((connection) =>
       [connection.name, connection.host, connection.database].some((value) =>
         value.toLowerCase().includes(query),
       ),
     );
-  }, [connections, filter]);
+  }, [profiles, filter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    connectionApi
+      .listProfiles()
+      .then((savedProfiles) => {
+        if (!cancelled) setProfiles(savedProfiles);
+      })
+      .catch((error) => {
+        const commandError = toCommandError(error);
+        if (!cancelled && commandError.code !== "desktop_required") {
+          setProfileError(commandError.message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const appContentStyle = {
     "--sidebar-width": `${sidebarCollapsed ? 0 : sidebarWidth}px`,
@@ -123,27 +156,94 @@ export function App() {
     );
   }
 
+  function updateProfile(profile: ConnectionProfile) {
+    setProfiles((current) =>
+      [...current.filter((item) => item.id !== profile.id), profile].sort(
+        (left, right) =>
+          Number(right.favorite) - Number(left.favorite) ||
+          left.name.localeCompare(right.name),
+      ),
+    );
+  }
+
+  function handleProfileSaved(profile: ConnectionProfile) {
+    updateProfile(profile);
+    setDialogProfile(profile);
+  }
+
   function handleConnected(
-    value: ConnectionFormValue,
+    profile: ConnectionProfile,
     result: ConnectedDatabaseResult,
   ) {
-    const connection: SavedConnection = {
-      id: crypto.randomUUID(),
-      name: value.name,
-      host: value.host,
-      port: value.port,
-      database: value.database,
-      username: value.username,
-      environment: value.environment,
-      sslMode: value.sslMode,
-      rootCertificatePath: value.rootCertificatePath || undefined,
-      sessionId: result.sessionId,
-      serverVersion: result.serverVersion,
-    };
+    updateProfile(profile);
+    setSessions((current) => ({
+      ...current,
+      [profile.id]: {
+        sessionId: result.sessionId,
+        serverVersion: result.serverVersion,
+      },
+    }));
+    setSelectedProfileId(profile.id);
+    setDialogProfile(undefined);
+    setProfileError(undefined);
+  }
 
-    setConnections((current) => [...current, connection]);
-    setActiveConnectionId(connection.id);
-    setDialogOpen(false);
+  async function connectProfile(profile: ConnectionProfile) {
+    if (sessions[profile.id] || connectingProfileId) {
+      setSelectedProfileId(profile.id);
+      return;
+    }
+    setConnectingProfileId(profile.id);
+    setProfileError(undefined);
+    try {
+      handleConnected(profile, await connectionApi.connectSaved(profile.id));
+    } catch (error) {
+      setProfileError(toCommandError(error).message);
+    } finally {
+      setConnectingProfileId(undefined);
+    }
+  }
+
+  async function toggleFavorite(profile: ConnectionProfile) {
+    try {
+      updateProfile(await connectionApi.setFavorite(profile.id, !profile.favorite));
+    } catch (error) {
+      setProfileError(toCommandError(error).message);
+    }
+  }
+
+  async function duplicateProfile(profile: ConnectionProfile) {
+    try {
+      updateProfile(await connectionApi.duplicateProfile(profile.id));
+    } catch (error) {
+      setProfileError(toCommandError(error).message);
+    }
+  }
+
+  async function renameProfile(profile: ConnectionProfile) {
+    const name = window.prompt(t("connection.renamePrompt"), profile.name)?.trim();
+    if (!name || name === profile.name) return;
+    try {
+      updateProfile(await connectionApi.renameProfile(profile.id, name));
+    } catch (error) {
+      setProfileError(toCommandError(error).message);
+    }
+  }
+
+  async function deleteProfile(profile: ConnectionProfile) {
+    if (!window.confirm(t("connection.deleteConfirm"))) return;
+    try {
+      await connectionApi.deleteProfile(profile.id);
+      setProfiles((current) => current.filter((item) => item.id !== profile.id));
+      setSessions((current) => {
+        const next = { ...current };
+        delete next[profile.id];
+        return next;
+      });
+      if (selectedProfileId === profile.id) setSelectedProfileId(undefined);
+    } catch (error) {
+      setProfileError(toCommandError(error).message);
+    }
   }
 
   return (
@@ -171,7 +271,7 @@ export function App() {
           <button
             className="button button-primary button-compact"
             type="button"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => setDialogProfile(null)}
           >
             <Plus size={15} />
             {t("workspace.newConnection")}
@@ -193,7 +293,7 @@ export function App() {
             <div className="sidebar-heading-actions">
               <IconButton
                 label={t("workspace.newConnection")}
-                onClick={() => setDialogOpen(true)}
+                onClick={() => setDialogProfile(null)}
               >
                 <Plus size={16} />
               </IconButton>
@@ -221,13 +321,21 @@ export function App() {
               <ConnectionTreeItem
                 key={connection.id}
                 connection={connection}
+                sessionId={sessions[connection.id]?.sessionId}
                 environmentClassName={environmentClass[connection.environment]}
-                selected={activeConnectionId === connection.id}
-                onSelect={() => setActiveConnectionId(connection.id)}
+                selected={selectedProfileId === connection.id}
+                connecting={connectingProfileId === connection.id}
+                onSelect={() => setSelectedProfileId(connection.id)}
+                onConnect={() => void connectProfile(connection)}
+                onEdit={() => setDialogProfile(connection)}
+                onDuplicate={() => void duplicateProfile(connection)}
+                onRename={() => void renameProfile(connection)}
+                onDelete={() => void deleteProfile(connection)}
+                onToggleFavorite={() => void toggleFavorite(connection)}
               />
             ))}
 
-            {connections.length === 0 && (
+            {profiles.length === 0 && (
               <div className="sidebar-empty">
                 <Database size={20} strokeWidth={1.5} />
                 <strong>{t("sidebar.emptyTitle")}</strong>
@@ -276,7 +384,7 @@ export function App() {
           {activeConnection ? (
             <ConnectedWorkspace connection={activeConnection} />
           ) : (
-            <WelcomeWorkspace onNewConnection={() => setDialogOpen(true)} />
+            <WelcomeWorkspace onNewConnection={() => setDialogProfile(null)} />
           )}
         </section>
       </div>
@@ -284,7 +392,9 @@ export function App() {
       <footer className="statusbar">
         <span className={`status-dot ${activeConnection ? "status-dot-online" : ""}`} />
         <span>
-          {activeConnection
+          {profileError
+            ? profileError
+            : activeConnection
             ? `${activeConnection.host}:${activeConnection.port} / ${activeConnection.database}`
             : t("status.disconnected")}
         </span>
@@ -292,9 +402,11 @@ export function App() {
         <span>Plume 0.1.0</span>
       </footer>
 
-      {dialogOpen && (
+      {dialogProfile !== undefined && (
         <ConnectionDialog
-          onClose={() => setDialogOpen(false)}
+          profile={dialogProfile ?? undefined}
+          onClose={() => setDialogProfile(undefined)}
+          onSaved={handleProfileSaved}
           onConnected={handleConnected}
         />
       )}
@@ -319,7 +431,7 @@ function WelcomeWorkspace({ onNewConnection }: { onNewConnection: () => void }) 
   );
 }
 
-function ConnectedWorkspace({ connection }: { connection: SavedConnection }) {
+function ConnectedWorkspace({ connection }: { connection: ActiveConnection }) {
   const { t } = useI18n();
   return (
     <div className="connected-workspace">

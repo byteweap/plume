@@ -6,21 +6,26 @@ import { toCommandError } from "../../platform/tauri";
 import { IconButton } from "../../shared/IconButton";
 import {
   connectionFormSchema,
+  connectionColors,
   defaultConnectionFormValue,
   environments,
+  profileToFormValue,
   sslModes,
-  toConnectionTestRequest,
+  toProfileWriteRequest,
   type ConnectedDatabaseResult,
   type ConnectionFormValue,
+  type ConnectionProfile,
   type ConnectionTestResult,
 } from "./connection";
 import { connectionApi } from "./connectionApi";
 import "./ConnectionDialog.css";
 
 interface ConnectionDialogProps {
+  profile?: ConnectionProfile;
   onClose: () => void;
+  onSaved: (profile: ConnectionProfile) => void;
   onConnected: (
-    connection: ConnectionFormValue,
+    profile: ConnectionProfile,
     result: ConnectedDatabaseResult,
   ) => void;
 }
@@ -52,13 +57,15 @@ function getFieldErrors(
 }
 
 export function ConnectionDialog({
+  profile,
   onClose,
+  onSaved,
   onConnected,
 }: ConnectionDialogProps) {
   const { t } = useI18n();
   const titleId = useId();
   const [form, setForm] = useState<ConnectionFormValue>(
-    defaultConnectionFormValue,
+    profile ? profileToFormValue(profile) : defaultConnectionFormValue,
   );
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [requestState, setRequestState] = useState<RequestState>({
@@ -86,13 +93,20 @@ export function ConnectionDialog({
     setRequestState({ status: "testing" });
 
     try {
-      const request = toConnectionTestRequest(parsed.data);
       if (closeAfterSuccess) {
-        const result = await connectionApi.connect(request);
+        const savedProfile = profile
+          ? await connectionApi.updateProfile(
+              toProfileWriteRequest(parsed.data, profile),
+            )
+          : await connectionApi.createProfile(toProfileWriteRequest(parsed.data));
+        onSaved(savedProfile);
+        const result = await connectionApi.connectSaved(savedProfile.id);
         setRequestState({ status: "success", result });
-        onConnected(parsed.data, result);
+        onConnected(savedProfile, result);
       } else {
-        const result = await connectionApi.test(request);
+        const result = await connectionApi.testProfile(
+          toProfileWriteRequest(parsed.data, profile),
+        );
         setRequestState({ status: "success", result });
       }
     } catch (error) {
@@ -130,7 +144,9 @@ export function ConnectionDialog({
               <Server size={18} strokeWidth={1.8} />
             </span>
             <div>
-              <h2 id={titleId}>{t("connection.newTitle")}</h2>
+              <h2 id={titleId}>
+                {t(profile ? "connection.editTitle" : "connection.newTitle")}
+              </h2>
               <p>PostgreSQL 14+</p>
             </div>
           </div>
@@ -172,6 +188,23 @@ export function ConnectionDialog({
                       </option>
                     ))}
                   </select>
+                </Field>
+
+                <Field label={t("connection.color")} className="form-field-wide">
+                  <div className="color-options" role="radiogroup">
+                    {connectionColors.map((color) => (
+                      <button
+                        key={color}
+                        className={`color-swatch ${form.color === color ? "color-swatch-selected" : ""}`}
+                        type="button"
+                        role="radio"
+                        aria-checked={form.color === color}
+                        aria-label={color}
+                        style={{ backgroundColor: color }}
+                        onClick={() => updateField("color", color)}
+                      />
+                    ))}
+                  </div>
                 </Field>
 
                 <Field label={t("connection.host")} error={fieldErrors.host && t(fieldErrors.host)}>

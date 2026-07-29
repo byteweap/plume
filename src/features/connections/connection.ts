@@ -15,6 +15,14 @@ export const sslModes = [
   "verify-full",
 ] as const;
 
+export const connectionColors = [
+  "#2f6d52",
+  "#2563a6",
+  "#7c5a18",
+  "#9b3a3a",
+  "#6b4ba1",
+] as const;
+
 export type Environment = (typeof environments)[number];
 export type SslMode = (typeof sslModes)[number];
 
@@ -27,6 +35,7 @@ export const connectionFormSchema = z
     username: z.string().trim().min(1, "required"),
     password: z.string(),
     environment: z.enum(environments),
+    color: z.string().regex(/^#[0-9a-f]{6}$/i),
     sslMode: z.enum(sslModes),
     rootCertificatePath: z.string().trim(),
   })
@@ -66,12 +75,43 @@ export interface ConnectedDatabaseResult extends ConnectionTestResult {
   sessionId: string;
 }
 
-export interface SavedConnection
+export interface ConnectionProfile
   extends Omit<ConnectionFormValue, "password" | "rootCertificatePath"> {
   id: string;
   rootCertificatePath?: string;
+  clientCertificatePath?: string;
+  clientKeyPath?: string;
+  sshConfig?: SshConfig;
+  favorite: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ActiveConnection extends ConnectionProfile {
   sessionId: string;
   serverVersion: string;
+}
+
+export type SavedConnection = ActiveConnection;
+
+export interface SshConfig {
+  host: string;
+  port: number;
+  username: string;
+  authentication: string;
+  privateKeyPath?: string;
+  jumpHost?: string;
+}
+
+export interface ProfileWriteRequest
+  extends Omit<ConnectionFormValue, "password" | "rootCertificatePath"> {
+  id?: string;
+  password?: string;
+  rootCertificatePath?: string;
+  clientCertificatePath?: string;
+  clientKeyPath?: string;
+  sshConfig?: SshConfig;
+  favorite: boolean;
 }
 
 export const defaultConnectionFormValue: ConnectionFormValue = {
@@ -82,6 +122,7 @@ export const defaultConnectionFormValue: ConnectionFormValue = {
   username: "postgres",
   password: "",
   environment: "development",
+  color: connectionColors[0],
   sslMode: "prefer",
   rootCertificatePath: "",
 };
@@ -98,5 +139,45 @@ export function toConnectionTestRequest(
     sslMode: value.sslMode,
     rootCertificatePath: value.rootCertificatePath || undefined,
     timeoutSeconds: 10,
+  };
+}
+
+export function toProfileWriteRequest(
+  value: ConnectionFormValue,
+  existing?: ConnectionProfile,
+): ProfileWriteRequest {
+  return {
+    id: existing?.id,
+    name: value.name,
+    host: value.host,
+    port: value.port,
+    database: value.database,
+    username: value.username,
+    password: value.password || undefined,
+    environment: value.environment,
+    color: value.color,
+    sslMode: value.sslMode,
+    rootCertificatePath: value.rootCertificatePath || undefined,
+    clientCertificatePath: existing?.clientCertificatePath,
+    clientKeyPath: existing?.clientKeyPath,
+    sshConfig: existing?.sshConfig,
+    favorite: existing?.favorite ?? false,
+  };
+}
+
+export function profileToFormValue(
+  profile: ConnectionProfile,
+): ConnectionFormValue {
+  return {
+    name: profile.name,
+    host: profile.host,
+    port: profile.port,
+    database: profile.database,
+    username: profile.username,
+    password: "",
+    environment: profile.environment,
+    color: profile.color,
+    sslMode: profile.sslMode,
+    rootCertificatePath: profile.rootCertificatePath ?? "",
   };
 }

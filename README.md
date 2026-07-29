@@ -125,16 +125,12 @@ The browser build is useful for layout work, but privileged database commands in
 ### Quality Checks
 
 ```bash
-npm run check
-npm run build
+npm run check:all
 ```
 
-```bash
-cd src-tauri
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-```
+`npm install` configures the repository-local Git hook. It runs the same check
+before each commit. If the repository was cloned before this configuration was
+introduced, run `npm run hooks:install` once.
 
 Build a desktop bundle with:
 
@@ -159,6 +155,7 @@ src-tauri/src/
 └── error.rs              Safe, structured errors returned to the UI
 
 docs/
+├── adr/                  Architecture Decision Records
 ├── architecture.md       Architecture guide in English
 ├── architecture.zh-CN.md Architecture guide in Simplified Chinese
 ├── 产品需求文档.md         Product requirements
@@ -188,3 +185,5 @@ Plume is at an early architectural stage, so focused changes are easier to revie
 ## License
 
 Plume is available under the [MIT License](LICENSE).
+See [third-party software notices](THIRD_PARTY_NOTICES.md) for the dependency
+inventory and release-reporting policy.

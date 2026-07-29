@@ -125,16 +125,10 @@ npm run dev
 ### 质量检查
 
 ```bash
-npm run check
-npm run build
+npm run check:all
 ```
 
-```bash
-cd src-tauri
-cargo fmt --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test
-```
+`npm install` 会配置仅作用于当前仓库的 Git hook，并在每次提交前运行同一套检查。若仓库克隆于该配置加入之前，请执行一次 `npm run hooks:install`。
 
 构建桌面安装包：
 
@@ -159,6 +153,7 @@ src-tauri/src/
 └── error.rs              返回 UI 的安全结构化错误
 
 docs/
+├── adr/                  架构决策记录
 ├── architecture.md       英文架构文档
 ├── architecture.zh-CN.md 简体中文架构文档
 ├── 产品需求文档.md         产品需求
@@ -188,3 +183,4 @@ Plume 仍处于架构形成阶段，小而聚焦的修改比大范围重写更�
 ## 许可证
 
 Plume 使用 [MIT License](LICENSE)。
+依赖清单与发布时的许可证报告规则见[第三方软件声明](THIRD_PARTY_NOTICES.md)。

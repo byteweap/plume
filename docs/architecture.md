@@ -2,7 +2,7 @@
 
 [English](architecture.md) · [简体中文](architecture.zh-CN.md)
 
-This document records Plume's current architectural boundaries. It describes implemented behavior, not the complete target product. See the [product requirements](产品需求文档.md) and [development task breakdown](开发任务分解.md) for planned work.
+This document records Plume's current architectural boundaries. It describes implemented behavior, not the complete target product. See the [product requirements](产品需求文档.md), [development task breakdown](开发任务分解.md), and [Architecture Decision Records](adr/README.md) for planned work and binding decisions.
 
 ## Design Goals
 

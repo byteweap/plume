@@ -5,9 +5,13 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "prepare": "node scripts/install-git-hooks.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "check": "npm run typecheck && npm run lint && npm run test",
+    "check:all": "npm run check && npm run build && npm run check:rust",
+    "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
+    "hooks:install": "node scripts/install-git-hooks.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

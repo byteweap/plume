@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useMemo,
   useReducer,
@@ -19,6 +20,7 @@ import {
   PanelLeftOpen,
   Plus,
   Search,
+  Save,
   Table2,
   X,
 } from "lucide-react";
@@ -36,10 +38,12 @@ import {
   type ConnectionLifecycleState,
 } from "../features/connections/connectionSession";
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
+import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
   workspaceTabsReducer,
+  type QueryTab,
   type WorkspaceTab,
 } from "../features/tabs/workspaceTabs";
 import { useI18n } from "../i18n/I18nContext";
@@ -85,6 +89,7 @@ export function App() {
   );
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [profileError, setProfileError] = useState<string>();
+  const [draftError, setDraftError] = useState<string>();
   const [filter, setFilter] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -94,6 +99,10 @@ export function App() {
     pointerX: number;
     width: number;
   } | null>(null);
+  const draftSaveTimers = useRef(
+    new Map<string, { timeout: number; title: string; sql: string }>(),
+  );
+  const discardedDraftIds = useRef(new Set<string>());
 
   const activeTab = getActiveWorkspaceTab(workspaceTabs);
   const activeProfile =
@@ -131,23 +140,145 @@ export function App() {
     );
   }, [profiles, filter]);
 
+  const saveQueryDraft = useCallback(async (tab: QueryTab) => {
+    if (discardedDraftIds.current.has(tab.id)) return;
+    const pending = draftSaveTimers.current.get(tab.id);
+    if (pending) window.clearTimeout(pending.timeout);
+    draftSaveTimers.current.delete(tab.id);
+    dispatchWorkspaceTabs({ type: "draft-saving", tabId: tab.id });
+    try {
+      const saved = await queryDraftApi.save({
+        id: tab.id,
+        profileId: tab.profileId,
+        database: tab.database,
+        schema: tab.schema,
+        title: tab.title,
+        sql: tab.sql,
+      });
+      if (discardedDraftIds.current.has(tab.id)) {
+        try {
+          await queryDraftApi.delete(tab.id);
+        } catch (error) {
+          const commandError = toCommandError(error);
+          if (commandError.code !== "desktop_required") {
+            setDraftError(commandError.message);
+          }
+        }
+        return;
+      }
+      dispatchWorkspaceTabs({
+        type: "draft-saved",
+        tabId: tab.id,
+        title: tab.title,
+        sql: tab.sql,
+        updatedAt: saved.updatedAt,
+      });
+      setDraftError(undefined);
+    } catch (error) {
+      if (discardedDraftIds.current.has(tab.id)) return;
+      dispatchWorkspaceTabs({
+        type: "draft-failed",
+        tabId: tab.id,
+        title: tab.title,
+        sql: tab.sql,
+      });
+      const commandError = toCommandError(error);
+      if (commandError.code !== "desktop_required") {
+        setDraftError(commandError.message);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    connectionApi
-      .listProfiles()
-      .then((savedProfiles) => {
-        if (!cancelled) setProfiles(savedProfiles);
-      })
-      .catch((error) => {
+    void (async () => {
+      let savedProfiles: ConnectionProfile[];
+      try {
+        savedProfiles = await connectionApi.listProfiles();
+      } catch (error) {
         const commandError = toCommandError(error);
         if (!cancelled && commandError.code !== "desktop_required") {
           setProfileError(commandError.message);
         }
-      });
+        return;
+      }
+      if (cancelled) return;
+
+      try {
+        const knownProfiles = new Set(savedProfiles.map((profile) => profile.id));
+        const drafts = await queryDraftApi.list();
+        if (cancelled) return;
+        setProfiles(savedProfiles);
+        dispatchWorkspaceTabs({
+          type: "restore-queries",
+          tabs: drafts
+            .filter((draft) => knownProfiles.has(draft.profileId))
+            .map((draft) => ({
+              id: draft.id,
+              kind: "query" as const,
+              profileId: draft.profileId,
+              database: draft.database,
+              schema: draft.schema,
+              title: draft.title,
+              sql: draft.sql,
+              draftState: "saved" as const,
+              updatedAt: draft.updatedAt,
+            })),
+        });
+      } catch (error) {
+        const commandError = toCommandError(error);
+        if (cancelled) return;
+        setProfiles(savedProfiles);
+        if (commandError.code !== "desktop_required") setDraftError(commandError.message);
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const timers = draftSaveTimers.current;
+    const queryTabs = workspaceTabs.tabs.filter(
+      (tab): tab is QueryTab => tab.kind === "query",
+    );
+    const queryIds = new Set(queryTabs.map((tab) => tab.id));
+    for (const [tabId, pending] of timers) {
+      if (!queryIds.has(tabId)) {
+        window.clearTimeout(pending.timeout);
+        timers.delete(tabId);
+      }
+    }
+
+    for (const tab of queryTabs) {
+      const pending = timers.get(tab.id);
+      if (tab.draftState !== "unsaved") {
+        if (pending) window.clearTimeout(pending.timeout);
+        timers.delete(tab.id);
+        continue;
+      }
+      if (pending?.title === tab.title && pending.sql === tab.sql) continue;
+      if (pending) window.clearTimeout(pending.timeout);
+      timers.set(tab.id, {
+        title: tab.title,
+        sql: tab.sql,
+        timeout: window.setTimeout(() => {
+          timers.delete(tab.id);
+          void saveQueryDraft(tab);
+        }, 600),
+      });
+    }
+  }, [saveQueryDraft, workspaceTabs.tabs]);
+
+  useEffect(
+    () => () => {
+      for (const pending of draftSaveTimers.current.values()) {
+        window.clearTimeout(pending.timeout);
+      }
+      draftSaveTimers.current.clear();
+    },
+    [],
+  );
 
   const appContentStyle = {
     "--sidebar-width": `${sidebarCollapsed ? 0 : sidebarWidth}px`,
@@ -243,6 +374,22 @@ export function App() {
     const title = window.prompt(t("workspace.renameTabPrompt"), currentTitle);
     if (!title?.trim() || title.trim() === currentTitle) return;
     dispatchWorkspaceTabs({ type: "rename", tabId: tab.id, title });
+  }
+
+  function closeWorkspaceTab(tab: WorkspaceTab) {
+    const pending = draftSaveTimers.current.get(tab.id);
+    if (pending) window.clearTimeout(pending.timeout);
+    draftSaveTimers.current.delete(tab.id);
+    dispatchWorkspaceTabs({ type: "close", tabId: tab.id });
+    if (tab.kind === "query") {
+      discardedDraftIds.current.add(tab.id);
+      void queryDraftApi.delete(tab.id).catch((error) => {
+        const commandError = toCommandError(error);
+        if (commandError.code !== "desktop_required") {
+          setDraftError(commandError.message);
+        }
+      });
+    }
   }
 
   function navigateWorkspaceTabs(
@@ -440,6 +587,13 @@ export function App() {
         dispatchSession({ type: "disconnected", profileId: profile.id });
       }
       await connectionApi.deleteProfile(profile.id);
+      for (const tab of workspaceTabs.tabs) {
+        if (tab.kind !== "query" || tab.profileId !== profile.id) continue;
+        const pending = draftSaveTimers.current.get(tab.id);
+        if (pending) window.clearTimeout(pending.timeout);
+        draftSaveTimers.current.delete(tab.id);
+        discardedDraftIds.current.add(tab.id);
+      }
       setProfiles((current) => current.filter((item) => item.id !== profile.id));
       dispatchSession({ type: "remove", profileId: profile.id });
       dispatchWorkspaceTabs({ type: "close-profile", profileId: profile.id });
@@ -625,9 +779,7 @@ export function App() {
                       <IconButton
                         className="tab-close"
                         label={`${t("workspace.closeTab")} ${title}`}
-                        onClick={() =>
-                          dispatchWorkspaceTabs({ type: "close", tabId: tab.id })
-                        }
+                        onClick={() => closeWorkspaceTab(tab)}
                       >
                         <X size={13} />
                       </IconButton>
@@ -667,6 +819,7 @@ export function App() {
                 state={activeSession?.state ?? "disconnected"}
                 error={activeSession?.error}
                 onReconnect={() => void connectProfile(activeProfile, false)}
+                onSave={() => void saveQueryDraft(activeTab)}
                 onSqlChange={(sql) =>
                   dispatchWorkspaceTabs({
                     type: "update-query",
@@ -700,8 +853,8 @@ export function App() {
           className={`status-dot ${activeSession?.state === "connected" ? "status-dot-online" : ""} ${activeSession?.state === "error" ? "status-dot-error" : ""}`}
         />
         <span>
-          {profileError
-            ? profileError
+          {profileError || draftError
+            ? profileError ?? draftError
             : activeProfile && activeSession
             ? `${t(`connection.state.${activeSession.state}`)} · ${activeProfile.host}:${activeProfile.port} / ${activeTab.kind === "welcome" ? activeProfile.database : activeTab.database}`
             : t("status.disconnected")}
@@ -823,6 +976,7 @@ function QueryWorkspace({
   state,
   error,
   onReconnect,
+  onSave,
   onSqlChange,
 }: {
   tab: Extract<WorkspaceTab, { kind: "query" }>;
@@ -831,6 +985,7 @@ function QueryWorkspace({
   state: ConnectionLifecycleState;
   error?: string;
   onReconnect: () => void;
+  onSave: () => void;
   onSqlChange: (sql: string) => void;
 }) {
   const { t } = useI18n();
@@ -840,19 +995,35 @@ function QueryWorkspace({
       className={`query-workspace ${connection ? "" : "query-workspace-offline"}`}
     >
       <header className="query-contextbar">
-        <div>
+        <div className="query-context-title">
           <strong>{tab.title}</strong>
           <span>
             {profile.name} / {tab.database}
             {tab.schema ? ` / ${tab.schema}` : ""}
           </span>
         </div>
-        <span className="query-connection-state">
+        <div className="query-context-actions">
           <span
-            className={`status-dot ${connection ? "status-dot-online" : state === "error" ? "status-dot-error" : ""}`}
-          />
-          {connection ? t("status.ready") : t(`connection.state.${state}`)}
-        </span>
+            className={`query-draft-state query-draft-state-${tab.draftState}`}
+            role="status"
+          >
+            {t(`workspace.draft.${tab.draftState}`)}
+          </span>
+          <IconButton
+            className="query-save-button"
+            label={t("workspace.saveDraft")}
+            disabled={tab.draftState === "saved" || tab.draftState === "saving"}
+            onClick={onSave}
+          >
+            <Save size={14} />
+          </IconButton>
+          <span className="query-connection-state">
+            <span
+              className={`status-dot ${connection ? "status-dot-online" : state === "error" ? "status-dot-error" : ""}`}
+            />
+            {connection ? t("status.ready") : t(`connection.state.${state}`)}
+          </span>
+        </div>
       </header>
       {!connection && (
         <div className="query-offline-notice" role="status">

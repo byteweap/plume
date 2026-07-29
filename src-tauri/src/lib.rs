@@ -1,6 +1,7 @@
 mod commands;
 mod credentials;
 mod database;
+mod drafts;
 mod error;
 mod profiles;
 
@@ -9,6 +10,7 @@ use commands::{
         check_database_session, connect_database, connect_saved_database, disconnect_database,
         reconnect_saved_database, test_connection, test_connection_profile,
     },
+    drafts::{delete_query_draft, list_query_drafts, save_query_draft},
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree,
@@ -21,6 +23,7 @@ use commands::{
 };
 use credentials::platform_credential_store;
 use database::session::ConnectionRegistry;
+use drafts::QueryDraftService;
 use profiles::ConnectionProfileService;
 use tauri::Manager;
 
@@ -32,8 +35,10 @@ pub fn run() {
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("plume.sqlite3");
             let profiles =
-                ConnectionProfileService::open(database_path, platform_credential_store())?;
+                ConnectionProfileService::open(database_path.clone(), platform_credential_store())?;
+            let drafts = QueryDraftService::open(database_path)?;
             app.manage(profiles);
+            app.manage(drafts);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -51,6 +56,9 @@ pub fn run() {
             rename_connection_profile,
             set_connection_favorite,
             delete_connection_profile,
+            list_query_drafts,
+            save_query_draft,
+            delete_query_draft,
             get_server_tree,
             get_database_tree,
             get_database_collection_items,

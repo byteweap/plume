@@ -563,7 +563,7 @@
   padding: 0 14px;
 }
 
-.query-contextbar > div {
+.query-context-title {
   display: flex;
   min-width: 0;
   align-items: baseline;
@@ -582,11 +582,35 @@
   font-size: 12px;
 }
 
-.query-contextbar > div > span {
+.query-context-title > span {
   min-width: 0;
   color: #737d76;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
+}
+
+.query-context-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.query-draft-state {
+  color: #6d776f;
+  font-size: 10px;
+}
+
+.query-draft-state-unsaved,
+.query-draft-state-error {
+  color: #91651f;
+}
+
+.icon-button.query-save-button {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
 }
 
 .query-connection-state {
@@ -683,6 +707,15 @@
     border-color: #594b2d;
     color: #dbc58f;
     background: #2c281f;
+  }
+
+  .query-draft-state {
+    color: #aab4ad;
+  }
+
+  .query-draft-state-unsaved,
+  .query-draft-state-error {
+    color: #dbc58f;
   }
 
   .sql-editor-loading {

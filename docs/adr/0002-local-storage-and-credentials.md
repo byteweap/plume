@@ -48,10 +48,17 @@ application data.
   by serialized profile responses.
 - Credential failures map to a stable `credential_error`; storage, version, and
   missing-profile failures have separate command codes.
+- Schema version 3 adds connection-bound SQL drafts. Draft rows store only the
+  database/schema context, title, SQL text, and timestamps; deleting a
+  connection cascades to its drafts. SQL text is bounded to 5 MiB per draft.
+- Query edits are saved after a 600 ms debounce and can be retried explicitly.
+  Startup restores saved query tabs with the welcome tab active and does not
+  connect to PostgreSQL, execute SQL, or restore result data.
 - Unit tests cover migrations, recovery, the credential lifecycle, duplication,
-  deletion, and absence of passwords from both SQLite bytes and JSON. Desktop CI
-  runs a real create/read/delete round trip on macOS Keychain and Windows
-  Credential Manager; the test always deletes its generated entry.
+  deletion, draft CRUD/cascade behavior, and absence of passwords from both
+  SQLite bytes and JSON. Desktop CI runs a real create/read/delete round trip on
+  macOS Keychain and Windows Credential Manager; the test always deletes its
+  generated entry.
 
 ## Acceptance Evidence
 

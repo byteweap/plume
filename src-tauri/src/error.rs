@@ -1,7 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::profiles::ProfileError;
+use crate::{drafts::DraftError, profiles::ProfileError};
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
@@ -190,6 +190,28 @@ impl From<ProfileError> for CommandError {
             ProfileError::Storage(_) | ProfileError::Directory(_) | ProfileError::Lock => Self {
                 code: "storage_error",
                 message: "Plume could not update the local connection profiles.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+        }
+    }
+}
+
+impl From<DraftError> for CommandError {
+    fn from(error: DraftError) -> Self {
+        match error {
+            DraftError::Invalid(ref message) => Self {
+                code: "invalid_draft",
+                message: message.clone(),
+                detail: None,
+            },
+            DraftError::ProfileNotFound(_) => Self {
+                code: "profile_not_found",
+                message: "The saved connection for this query draft no longer exists.".to_owned(),
+                detail: None,
+            },
+            DraftError::Storage(_) | DraftError::Lock => Self {
+                code: "storage_error",
+                message: "Plume could not update the local query drafts.".to_owned(),
                 detail: Some(error.to_string()),
             },
         }

@@ -1,10 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EditorView } from "codemirror";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { ConnectionProfile } from "../features/connections/connection";
 import { connectionApi } from "../features/connections/connectionApi";
 import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
+import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import { App } from "./App";
 
 const savedProfile: ConnectionProfile = {
@@ -37,6 +38,16 @@ async function replaceEditorText(value: string) {
 }
 
 describe("App sidebar", () => {
+  beforeEach(() => {
+    vi.spyOn(queryDraftApi, "list").mockResolvedValue([]);
+    vi.spyOn(queryDraftApi, "save").mockImplementation(async (request) => ({
+      ...request,
+      createdAt: 1,
+      updatedAt: 2,
+    }));
+    vi.spyOn(queryDraftApi, "delete").mockResolvedValue();
+  });
+
   afterEach(() => vi.restoreAllMocks());
 
   it("resizes by dragging the right divider", () => {
@@ -144,6 +155,44 @@ describe("App sidebar", () => {
     expect(await screen.findByText("PostgreSQL 18.0")).toBeVisible();
   });
 
+  it("restores query drafts without connecting or executing them", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    const connectSaved = vi.spyOn(connectionApi, "connectSaved");
+    vi.mocked(queryDraftApi.list).mockResolvedValue([
+      {
+        id: "workspace-7",
+        profileId: "profile-1",
+        database: "postgres",
+        schema: "public",
+        title: "Audit users",
+        sql: "select * from users;",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    const restored = await screen.findByRole("tab", { name: "Audit users" });
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(connectSaved).not.toHaveBeenCalled();
+
+    fireEvent.click(restored);
+    expect(
+      await screen.findByRole("textbox", { name: "SQL query workspace" }),
+    ).toHaveTextContent("select * from users;");
+    expect(screen.getByText("Saved")).toBeVisible();
+    expect(screen.getByText(/query draft remains editable/)).toBeVisible();
+    expect(connectSaved).not.toHaveBeenCalled();
+  });
+
   it("checks, explicitly reconnects, and disconnects without replaying the initial connect", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     const connectSaved = vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
@@ -249,6 +298,92 @@ describe("App sidebar", () => {
     expect(
       screen.getByRole("textbox", { name: "SQL query workspace" }),
     ).toHaveTextContent("select * from users;");
+    expect(queryDraftApi.delete).toHaveBeenCalledWith("workspace-3");
+  });
+
+  it("debounces draft persistence and reports the saved state", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select current_user;");
+
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    await waitFor(() => expect(queryDraftApi.save).toHaveBeenCalledTimes(1), {
+      timeout: 1_500,
+    });
+    expect(queryDraftApi.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Query 1",
+        sql: "select current_user;",
+        profileId: "profile-1",
+      }),
+    );
+    expect(await screen.findByText("Saved")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save query draft" })).toBeDisabled();
+  });
+
+  it("does not restore a draft whose save finishes after its tab closes", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    let resolveSave!: (draft: Awaited<ReturnType<typeof queryDraftApi.save>>) => void;
+    vi.mocked(queryDraftApi.save).mockReturnValue(
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select 1;");
+    await waitFor(() => expect(queryDraftApi.save).toHaveBeenCalledTimes(1), {
+      timeout: 1_500,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Close tab Query 1" }));
+    expect(queryDraftApi.delete).toHaveBeenCalledTimes(1);
+    act(() => {
+      resolveSave({
+        id: "workspace-2",
+        profileId: "profile-1",
+        database: "postgres",
+        title: "Query 1",
+        sql: "select 1;",
+        createdAt: 1,
+        updatedAt: 2,
+      });
+    });
+
+    await waitFor(() => expect(queryDraftApi.delete).toHaveBeenCalledTimes(2));
+    expect(queryDraftApi.delete).toHaveBeenLastCalledWith("workspace-2");
+    expect(screen.queryByRole("tab", { name: "Query 1" })).toBeNull();
   });
 
   it("keeps a query tab offline and reuses its profile context after reconnect", async () => {

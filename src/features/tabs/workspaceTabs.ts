@@ -20,6 +20,8 @@ export interface QueryTab extends WorkspaceContext {
   kind: "query";
   title: string;
   sql: string;
+  draftState: "unsaved" | "saving" | "saved" | "error";
+  updatedAt?: number;
 }
 
 export type WorkspaceTab = WelcomeTab | ConnectionTab | QueryTab;
@@ -34,9 +36,19 @@ export interface WorkspaceTabsState {
 export type WorkspaceTabsAction =
   | ({ type: "open-connection" } & WorkspaceContext)
   | ({ type: "open-query"; titlePrefix: string } & WorkspaceContext)
+  | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
   | { type: "update-query"; tabId: string; sql: string }
+  | { type: "draft-saving"; tabId: string }
+  | {
+      type: "draft-saved";
+      tabId: string;
+      title: string;
+      sql: string;
+      updatedAt: number;
+    }
+  | { type: "draft-failed"; tabId: string; title: string; sql: string }
   | { type: "close"; tabId: string }
   | { type: "close-profile"; profileId: string };
 
@@ -99,6 +111,7 @@ export function workspaceTabsReducer(
         schema: action.schema,
         title: `${action.titlePrefix} ${state.nextQueryNumber}`,
         sql: "",
+        draftState: "unsaved",
       };
       return {
         ...state,
@@ -106,6 +119,17 @@ export function workspaceTabsReducer(
         activeTabId: tab.id,
         nextTabId: state.nextTabId + 1,
         nextQueryNumber: state.nextQueryNumber + 1,
+      };
+    }
+    case "restore-queries": {
+      const existingIds = new Set(state.tabs.map((tab) => tab.id));
+      const restored = action.tabs.filter((tab) => !existingIds.has(tab.id));
+      const tabs = [...state.tabs, ...restored];
+      return {
+        ...state,
+        tabs,
+        nextTabId: getNextTabId(tabs, state.nextTabId),
+        nextQueryNumber: getNextQueryNumber(tabs, state.nextQueryNumber),
       };
     }
     case "activate":
@@ -119,20 +143,48 @@ export function workspaceTabsReducer(
         ...state,
         tabs: state.tabs.map((tab) =>
           tab.id === action.tabId && tab.kind !== "welcome"
-            ? { ...tab, title }
+            ? {
+                ...tab,
+                title,
+                ...(tab.kind === "query" ? { draftState: "unsaved" as const } : {}),
+              }
             : tab,
         ),
       };
     }
-    case "update-query":
+    case "update-query": {
+      const current = state.tabs.find((tab) => tab.id === action.tabId);
+      if (!current || current.kind !== "query" || current.sql === action.sql) {
+        return state;
+      }
       return {
         ...state,
         tabs: state.tabs.map((tab) =>
           tab.id === action.tabId && tab.kind === "query"
-            ? { ...tab, sql: action.sql }
+            ? { ...tab, sql: action.sql, draftState: "unsaved" }
             : tab,
         ),
       };
+    }
+    case "draft-saving":
+      return updateQueryDraftState(state, action.tabId, () => ({
+        draftState: "saving",
+      }));
+    case "draft-saved":
+      return updateQueryDraftState(state, action.tabId, (tab) => ({
+        draftState:
+          tab.title === action.title && tab.sql === action.sql
+            ? "saved"
+            : "unsaved",
+        updatedAt: action.updatedAt,
+      }));
+    case "draft-failed":
+      return updateQueryDraftState(state, action.tabId, (tab) => ({
+        draftState:
+          tab.title === action.title && tab.sql === action.sql
+            ? "error"
+            : "unsaved",
+      }));
     case "close":
       if (action.tabId === welcomeTab.id) return state;
       return removeTabs(state, (tab) => tab.id === action.tabId);
@@ -142,6 +194,35 @@ export function workspaceTabsReducer(
         (tab) => tab.kind !== "welcome" && tab.profileId === action.profileId,
       );
   }
+}
+
+function updateQueryDraftState(
+  state: WorkspaceTabsState,
+  tabId: string,
+  update: (tab: QueryTab) => Pick<QueryTab, "draftState"> & Partial<QueryTab>,
+): WorkspaceTabsState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.id === tabId && tab.kind === "query"
+        ? { ...tab, ...update(tab) }
+        : tab,
+    ),
+  };
+}
+
+function getNextTabId(tabs: WorkspaceTab[], minimum: number) {
+  return tabs.reduce((next, tab) => {
+    const match = /^workspace-(\d+)$/.exec(tab.id);
+    return match ? Math.max(next, Number(match[1]) + 1) : next;
+  }, minimum);
+}
+
+function getNextQueryNumber(tabs: WorkspaceTab[], minimum: number) {
+  return tabs.reduce((next, tab) => {
+    const match = tab.kind === "query" ? /\s(\d+)$/.exec(tab.title) : null;
+    return match ? Math.max(next, Number(match[1]) + 1) : next;
+  }, minimum);
 }
 
 function removeTabs(

@@ -42,7 +42,12 @@ describe("workspaceTabsReducer", () => {
     });
 
     expect(state.tabs.slice(1)).toEqual([
-      expect.objectContaining({ title: "Query 1", sql: "", ...context }),
+      expect.objectContaining({
+        title: "Query 1",
+        sql: "",
+        draftState: "unsaved",
+        ...context,
+      }),
       expect.objectContaining({
         title: "Query 2",
         profileId: "profile-2",
@@ -78,6 +83,64 @@ describe("workspaceTabsReducer", () => {
     expect(state.tabs.find((tab) => tab.id === secondQueryId)).toMatchObject({
       kind: "query",
       sql: "",
+    });
+  });
+
+  it("restores saved drafts without activating them and advances counters", () => {
+    const state = workspaceTabsReducer(createInitialWorkspaceTabsState(), {
+      type: "restore-queries",
+      tabs: [
+        {
+          id: "workspace-7",
+          kind: "query",
+          title: "Query 12",
+          sql: "select 12;",
+          draftState: "saved",
+          updatedAt: 10,
+          ...context,
+        },
+      ],
+    });
+
+    expect(state.activeTabId).toBe("welcome");
+    expect(state.nextTabId).toBe(8);
+    expect(state.nextQueryNumber).toBe(13);
+    expect(state.tabs[1]).toMatchObject({
+      id: "workspace-7",
+      draftState: "saved",
+    });
+  });
+
+  it("does not mark a newer edit saved when an older request completes", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const tabId = state.activeTabId;
+    state = workspaceTabsReducer(state, {
+      type: "update-query",
+      tabId,
+      sql: "select 1;",
+    });
+    state = workspaceTabsReducer(state, { type: "draft-saving", tabId });
+    state = workspaceTabsReducer(state, {
+      type: "update-query",
+      tabId,
+      sql: "select 2;",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "draft-saved",
+      tabId,
+      title: "Query 1",
+      sql: "select 1;",
+      updatedAt: 20,
+    });
+
+    expect(state.tabs.find((tab) => tab.id === tabId)).toMatchObject({
+      sql: "select 2;",
+      draftState: "unsaved",
     });
   });
 

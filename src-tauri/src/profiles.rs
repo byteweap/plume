@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-const CURRENT_SCHEMA_VERSION: i64 = 2;
+const CURRENT_SCHEMA_VERSION: i64 = 3;
 
 #[derive(Debug, Error)]
 pub enum ProfileError {
@@ -181,6 +181,28 @@ impl ProfileRepository {
                  ALTER TABLE connection_profiles ADD COLUMN client_certificate_path TEXT;
                  ALTER TABLE connection_profiles ADD COLUMN client_key_path TEXT;
                  PRAGMA user_version = 2;",
+            )?;
+            transaction.commit()?;
+        }
+
+        let version: i64 = self
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        if version == 2 {
+            let transaction = self.connection.transaction()?;
+            transaction.execute_batch(
+                "CREATE TABLE query_drafts (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    profile_id TEXT NOT NULL REFERENCES connection_profiles(id) ON DELETE CASCADE,
+                    database_name TEXT NOT NULL,
+                    schema_name TEXT,
+                    title TEXT NOT NULL,
+                    sql TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    updated_at INTEGER NOT NULL
+                 );
+                 CREATE INDEX query_drafts_profile_id_idx ON query_drafts(profile_id);
+                 PRAGMA user_version = 3;",
             )?;
             transaction.commit()?;
         }
@@ -1316,6 +1338,15 @@ mod tests {
             .query_row("PRAGMA user_version", [], |row| row.get(0))
             .unwrap();
         assert_eq!(version, CURRENT_SCHEMA_VERSION);
+        let draft_table_exists: bool = repository
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'query_drafts')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(draft_table_exists);
         drop(repository);
         remove_test_files(&path);
     }

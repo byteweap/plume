@@ -5,6 +5,7 @@ import type {
   ConnectionTestRequest,
   ConnectionTestResult,
   ProfileWriteRequest,
+  SessionHealth,
 } from "./connection";
 
 export const connectionApi = {
@@ -49,6 +50,24 @@ export const connectionApi = {
   connectSaved(id: string): Promise<ConnectedDatabaseResult> {
     return invokeCommand<ConnectedDatabaseResult>("connect_saved_database", {
       request: { id },
+    });
+  },
+  reconnectSaved(
+    profileId: string,
+    sessionId: string,
+  ): Promise<ConnectedDatabaseResult> {
+    return invokeCommand<ConnectedDatabaseResult>("reconnect_saved_database", {
+      request: { profileId, sessionId },
+    });
+  },
+  disconnect(sessionId: string): Promise<void> {
+    return invokeCommand<void>("disconnect_database", {
+      request: { sessionId },
+    });
+  },
+  checkSession(sessionId: string): Promise<SessionHealth> {
+    return invokeCommand<SessionHealth>("check_database_session", {
+      request: { sessionId },
     });
   },
 };

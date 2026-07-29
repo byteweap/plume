@@ -75,6 +75,12 @@ export interface ConnectedDatabaseResult extends ConnectionTestResult {
   sessionId: string;
 }
 
+export interface SessionHealth {
+  sessionId: string;
+  state: "connected";
+  databaseCount: number;
+}
+
 export interface ConnectionProfile
   extends Omit<ConnectionFormValue, "password" | "rootCertificatePath"> {
   id: string;

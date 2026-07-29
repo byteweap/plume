@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use serde::Serialize;
 use tokio::sync::RwLock;
 use tokio_postgres::Client;
 use uuid::Uuid;
@@ -12,6 +13,14 @@ use crate::{
 struct ServerSession {
     settings: ConnectionTestRequest,
     clients: RwLock<HashMap<String, Arc<Client>>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionHealth {
+    pub session_id: String,
+    pub state: &'static str,
+    pub database_count: usize,
 }
 
 #[derive(Default)]
@@ -68,6 +77,39 @@ impl ConnectionRegistry {
             .clone())
     }
 
+    pub async fn health(&self, session_id: &str) -> Result<SessionHealth, DatabaseError> {
+        let session = self.session(session_id).await?;
+        let client = session
+            .clients
+            .read()
+            .await
+            .get(&session.settings.database)
+            .cloned()
+            .ok_or_else(|| DatabaseError::SessionNotFound(session_id.to_owned()))?;
+
+        client.simple_query("SELECT 1").await?;
+        let database_count = session.clients.read().await.len();
+        Ok(SessionHealth {
+            session_id: session_id.to_owned(),
+            state: "connected",
+            database_count,
+        })
+    }
+
+    pub async fn remove(&self, session_id: &str) -> Result<(), DatabaseError> {
+        self.sessions
+            .write()
+            .await
+            .remove(session_id)
+            .map(drop)
+            .ok_or_else(|| DatabaseError::SessionNotFound(session_id.to_owned()))
+    }
+
+    #[cfg(test)]
+    async fn len(&self) -> usize {
+        self.sessions.read().await.len()
+    }
+
     async fn session(&self, session_id: &str) -> Result<Arc<ServerSession>, DatabaseError> {
         self.sessions
             .read()
@@ -90,6 +132,18 @@ mod tests {
         let error = tauri::async_runtime::block_on(async {
             ConnectionRegistry::default()
                 .primary_client("missing")
+                .await
+                .expect_err("unknown session should fail")
+        });
+
+        assert!(error.to_string().contains("no longer available"));
+    }
+
+    #[test]
+    fn removing_a_missing_session_returns_an_explicit_error() {
+        let error = tauri::async_runtime::block_on(async {
+            ConnectionRegistry::default()
+                .remove("missing")
                 .await
                 .expect_err("unknown session should fail")
         });
@@ -140,6 +194,31 @@ mod tests {
                     .get::<_, String>(0),
                 primary_database
             );
+
+            let health = registry
+                .health(&session_id)
+                .await
+                .expect("connected session should be healthy");
+            assert_eq!(health.state, "connected");
+            assert_eq!(health.database_count, 2);
+
+            let replacement_request = test_support::connection_request();
+            let replacement = open(&replacement_request)
+                .await
+                .expect("replacement connection should open");
+            let replacement_id = registry
+                .insert(replacement_request, replacement.client)
+                .await;
+            registry
+                .remove(&session_id)
+                .await
+                .expect("old session should disconnect after replacement opens");
+            assert_eq!(registry.len().await, 1);
+            assert!(registry.primary_client(&session_id).await.is_err());
+            assert!(registry.health(&replacement_id).await.is_ok());
+
+            registry.remove(&replacement_id).await.unwrap();
+            assert_eq!(registry.len().await, 0);
         });
     }
 }

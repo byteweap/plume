@@ -1,13 +1,13 @@
 use crate::{
     database::{
         connection::{ConnectionTestRequest, ConnectionTestResult, open, test},
-        session::ConnectionRegistry,
+        session::{ConnectionRegistry, SessionHealth},
     },
     error::CommandError,
     profiles::{ConnectionProfileService, ProfileIdRequest, ProfileWriteRequest},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 
 #[tauri::command]
@@ -39,6 +39,63 @@ pub async fn connect_saved_database(
         .map_err(CommandError::from)?;
     let connection = open(&settings).await.map_err(CommandError::from)?;
     let session_id = registry.insert(settings, connection.client).await;
+
+    Ok(ConnectedDatabaseResult {
+        session_id,
+        connection: connection.result,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionIdRequest {
+    pub session_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconnectSavedRequest {
+    pub profile_id: String,
+    pub session_id: String,
+}
+
+#[tauri::command]
+pub async fn check_database_session(
+    registry: State<'_, ConnectionRegistry>,
+    request: SessionIdRequest,
+) -> Result<SessionHealth, CommandError> {
+    registry
+        .health(&request.session_id)
+        .await
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn disconnect_database(
+    registry: State<'_, ConnectionRegistry>,
+    request: SessionIdRequest,
+) -> Result<(), CommandError> {
+    registry
+        .remove(&request.session_id)
+        .await
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn reconnect_saved_database(
+    profiles: State<'_, ConnectionProfileService>,
+    registry: State<'_, ConnectionRegistry>,
+    request: ReconnectSavedRequest,
+) -> Result<ConnectedDatabaseResult, CommandError> {
+    let settings = profiles
+        .connection_request(&request.profile_id)
+        .map_err(CommandError::from)?;
+    let connection = open(&settings).await.map_err(CommandError::from)?;
+    let session_id = registry.insert(settings, connection.client).await;
+
+    // The replacement is already usable before the old session is removed.
+    // No database operation from the old session is replayed.
+    let _ = registry.remove(&request.session_id).await;
 
     Ok(ConnectedDatabaseResult {
         session_id,

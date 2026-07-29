@@ -1,5 +1,6 @@
 import { useState, type ComponentType, type ReactNode } from "react";
 import {
+  Activity,
   Blocks,
   Braces,
   ChevronRight,
@@ -20,9 +21,12 @@ import {
   Network,
   PackageOpen,
   Pencil,
+  Plug,
+  PlugZap,
   Copy,
   RadioTower,
   RefreshCw,
+  RotateCw,
   Shapes,
   Star,
   Table2,
@@ -39,6 +43,7 @@ import type {
   ConnectionProfile,
   SavedConnection,
 } from "../connections/connection";
+import type { ConnectionLifecycleState } from "../connections/connectionSession";
 import {
   databaseObjectKinds,
   groupDatabaseObjects,
@@ -60,11 +65,15 @@ import "./ConnectionTreeItem.css";
 interface ConnectionTreeItemProps {
   connection: ConnectionProfile | SavedConnection;
   sessionId?: string;
+  lifecycleState?: ConnectionLifecycleState;
   environmentClassName: string;
   selected: boolean;
   onSelect: () => void;
-  connecting?: boolean;
   onConnect?: () => void;
+  onReconnect?: () => void;
+  onDisconnect?: () => void;
+  onCheckHealth?: () => void;
+  onSessionError?: (message: string) => void;
   onEdit?: () => void;
   onDuplicate?: () => void;
   onRename?: () => void;
@@ -142,11 +151,15 @@ const objectGroupPresentation: Record<
 export function ConnectionTreeItem({
   connection,
   sessionId,
+  lifecycleState,
   environmentClassName,
   selected,
   onSelect,
-  connecting = false,
   onConnect,
+  onReconnect,
+  onDisconnect,
+  onCheckHealth,
+  onSessionError,
   onEdit,
   onDuplicate,
   onRename,
@@ -154,6 +167,16 @@ export function ConnectionTreeItem({
   onToggleFavorite,
 }: ConnectionTreeItemProps) {
   const { t } = useI18n();
+  const candidateSessionId =
+    sessionId ?? ("sessionId" in connection ? connection.sessionId : undefined);
+  const state = lifecycleState ?? (candidateSessionId ? "connected" : "disconnected");
+  const activeSessionId =
+    state === "connected" || state === "busy" ? candidateSessionId : undefined;
+  const transitioning =
+    state === "connecting" ||
+    state === "reconnecting" ||
+    state === "disconnecting" ||
+    state === "busy";
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [overview, setOverview] = useState<LoadState<ServerOverview>>({
@@ -169,12 +192,19 @@ export function ConnectionTreeItem({
         value: await databaseTreeApi.getServerTree(activeSessionId),
       });
     } catch (error) {
-      setOverview({ status: "error", message: toCommandError(error).message });
+      const message = toCommandError(error).message;
+      setOverview({ status: "error", message });
+      onSessionError?.(message);
     }
   }
 
   function toggleConnection() {
     onSelect();
+    if (transitioning) return;
+    if (state === "error") {
+      onReconnect?.();
+      return;
+    }
     if (!activeSessionId) {
       onConnect?.();
       return;
@@ -189,17 +219,23 @@ export function ConnectionTreeItem({
     action();
   }
 
-  const activeSessionId =
-    sessionId ?? ("sessionId" in connection ? connection.sessionId : undefined);
   const hasActions = Boolean(
-    onEdit || onDuplicate || onRename || onDelete || onToggleFavorite,
+    onConnect ||
+      onReconnect ||
+      onDisconnect ||
+      onCheckHealth ||
+      onEdit ||
+      onDuplicate ||
+      onRename ||
+      onDelete ||
+      onToggleFavorite,
   );
 
   return (
     <div className="tree-connection" role="treeitem" aria-expanded={expanded}>
       <div className={`connection-item-line ${selected ? "connection-row-active" : ""}`}>
         <button className="connection-row" type="button" onClick={toggleConnection}>
-          {connecting ? (
+          {transitioning ? (
             <LoaderCircle className="spin" size={13} />
           ) : (
             <TreeChevron expanded={expanded} />
@@ -209,7 +245,7 @@ export function ConnectionTreeItem({
             <strong>{connection.name}</strong>
             <small>
               {connection.host}:{connection.port}
-              {!activeSessionId ? ` · ${t("connection.disconnected")}` : ""}
+              {` · ${t(`connection.state.${state}`)}`}
             </small>
           </span>
           <span
@@ -245,6 +281,18 @@ export function ConnectionTreeItem({
             </button>
             {menuOpen && (
               <div className="connection-menu" role="menu">
+                {state === "disconnected" && onConnect && (
+                  <MenuAction icon={PlugZap} label={t("connection.connect")} onClick={() => runMenuAction(onConnect)} />
+                )}
+                {state === "error" && onReconnect && (
+                  <MenuAction icon={RotateCw} label={t("connection.reconnect")} onClick={() => runMenuAction(onReconnect)} />
+                )}
+                {state === "connected" && onCheckHealth && (
+                  <MenuAction icon={Activity} label={t("connection.checkHealth")} onClick={() => runMenuAction(onCheckHealth)} />
+                )}
+                {(state === "connected" || state === "error") && onDisconnect && candidateSessionId && (
+                  <MenuAction icon={Plug} label={t("connection.disconnect")} onClick={() => runMenuAction(onDisconnect)} />
+                )}
                 {onEdit && <MenuAction icon={Pencil} label={t("connection.edit")} onClick={() => runMenuAction(onEdit)} />}
                 {onDuplicate && <MenuAction icon={Copy} label={t("connection.duplicate")} onClick={() => runMenuAction(onDuplicate)} />}
                 {onRename && <MenuAction icon={Pencil} label={t("connection.rename")} onClick={() => runMenuAction(onRename)} />}

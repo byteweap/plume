@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type CSSProperties,
@@ -26,6 +27,11 @@ import type {
   ConnectionProfile,
 } from "../features/connections/connection";
 import { connectionApi } from "../features/connections/connectionApi";
+import {
+  connectionSessionReducer,
+  getConnectionSession,
+  type ConnectionLifecycleState,
+} from "../features/connections/connectionSession";
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
 import { useI18n } from "../i18n/I18nContext";
 import { toCommandError } from "../platform/tauri";
@@ -57,11 +63,8 @@ export function App() {
     ConnectionProfile | null | undefined
   >(undefined);
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
-  const [sessions, setSessions] = useState<
-    Record<string, { sessionId: string; serverVersion: string }>
-  >({});
+  const [sessions, dispatchSession] = useReducer(connectionSessionReducer, {});
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
-  const [connectingProfileId, setConnectingProfileId] = useState<string>();
   const [profileError, setProfileError] = useState<string>();
   const [filter, setFilter] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
@@ -76,10 +79,19 @@ export function App() {
   const selectedProfile = profiles.find(
     (profile) => profile.id === selectedProfileId,
   );
+  const selectedSession = selectedProfile
+    ? getConnectionSession(sessions, selectedProfile.id)
+    : undefined;
   const activeConnection = useMemo<ActiveConnection | undefined>(() => {
     if (!selectedProfile) return undefined;
-    const session = sessions[selectedProfile.id];
-    return session ? { ...selectedProfile, ...session } : undefined;
+    const session = getConnectionSession(sessions, selectedProfile.id);
+    return session.sessionId && session.serverVersion
+      ? {
+          ...selectedProfile,
+          sessionId: session.sessionId,
+          serverVersion: session.serverVersion,
+        }
+      : undefined;
   }, [selectedProfile, sessions]);
   const visibleConnections = useMemo(() => {
     const query = filter.trim().toLowerCase();
@@ -176,32 +188,103 @@ export function App() {
     result: ConnectedDatabaseResult,
   ) {
     updateProfile(profile);
-    setSessions((current) => ({
-      ...current,
-      [profile.id]: {
-        sessionId: result.sessionId,
-        serverVersion: result.serverVersion,
-      },
-    }));
+    dispatchSession({ type: "connected", profileId: profile.id, result });
     setSelectedProfileId(profile.id);
     setDialogProfile(undefined);
     setProfileError(undefined);
   }
 
   async function connectProfile(profile: ConnectionProfile) {
-    if (sessions[profile.id] || connectingProfileId) {
+    const session = getConnectionSession(sessions, profile.id);
+    if (session.state === "connected" || session.state === "busy") {
       setSelectedProfileId(profile.id);
       return;
     }
-    setConnectingProfileId(profile.id);
+    if (session.state === "error" && session.sessionId) {
+      await reconnectProfile(profile);
+      return;
+    }
+    if (isTransitioning(session.state)) return;
+
+    dispatchSession({ type: "connect", profileId: profile.id });
+    setSelectedProfileId(profile.id);
     setProfileError(undefined);
     try {
       handleConnected(profile, await connectionApi.connectSaved(profile.id));
     } catch (error) {
-      setProfileError(toCommandError(error).message);
-    } finally {
-      setConnectingProfileId(undefined);
+      dispatchSession({
+        type: "failed",
+        profileId: profile.id,
+        error: toCommandError(error).message,
+      });
     }
+  }
+
+  async function reconnectProfile(profile: ConnectionProfile) {
+    const session = getConnectionSession(sessions, profile.id);
+    if (!session.sessionId) {
+      await connectProfile(profile);
+      return;
+    }
+    if (isTransitioning(session.state)) return;
+
+    dispatchSession({ type: "reconnect", profileId: profile.id });
+    setSelectedProfileId(profile.id);
+    try {
+      handleConnected(
+        profile,
+        await connectionApi.reconnectSaved(profile.id, session.sessionId),
+      );
+    } catch (error) {
+      dispatchSession({
+        type: "failed",
+        profileId: profile.id,
+        error: toCommandError(error).message,
+      });
+    }
+  }
+
+  async function disconnectProfile(profile: ConnectionProfile) {
+    const session = getConnectionSession(sessions, profile.id);
+    if (!session.sessionId || isTransitioning(session.state)) return;
+
+    dispatchSession({ type: "disconnect", profileId: profile.id });
+    try {
+      await connectionApi.disconnect(session.sessionId);
+      dispatchSession({ type: "disconnected", profileId: profile.id });
+    } catch (error) {
+      const commandError = toCommandError(error);
+      if (commandError.code === "session_not_found") {
+        dispatchSession({ type: "disconnected", profileId: profile.id });
+      } else {
+        dispatchSession({
+          type: "failed",
+          profileId: profile.id,
+          error: commandError.message,
+        });
+      }
+    }
+  }
+
+  async function checkProfileSession(profile: ConnectionProfile) {
+    const session = getConnectionSession(sessions, profile.id);
+    if (!session.sessionId || session.state !== "connected") return;
+
+    dispatchSession({ type: "begin-work", profileId: profile.id });
+    try {
+      await connectionApi.checkSession(session.sessionId);
+      dispatchSession({ type: "ready", profileId: profile.id });
+    } catch (error) {
+      dispatchSession({
+        type: "failed",
+        profileId: profile.id,
+        error: toCommandError(error).message,
+      });
+    }
+  }
+
+  function markSessionFailed(profileId: string, message: string) {
+    dispatchSession({ type: "failed", profileId, error: message });
   }
 
   async function toggleFavorite(profile: ConnectionProfile) {
@@ -233,13 +316,18 @@ export function App() {
   async function deleteProfile(profile: ConnectionProfile) {
     if (!window.confirm(t("connection.deleteConfirm"))) return;
     try {
+      const sessionId = getConnectionSession(sessions, profile.id).sessionId;
+      if (sessionId) {
+        try {
+          await connectionApi.disconnect(sessionId);
+        } catch (error) {
+          if (toCommandError(error).code !== "session_not_found") throw error;
+        }
+        dispatchSession({ type: "disconnected", profileId: profile.id });
+      }
       await connectionApi.deleteProfile(profile.id);
       setProfiles((current) => current.filter((item) => item.id !== profile.id));
-      setSessions((current) => {
-        const next = { ...current };
-        delete next[profile.id];
-        return next;
-      });
+      dispatchSession({ type: "remove", profileId: profile.id });
       if (selectedProfileId === profile.id) setSelectedProfileId(undefined);
     } catch (error) {
       setProfileError(toCommandError(error).message);
@@ -319,14 +407,18 @@ export function App() {
           <div className="connection-tree" role="tree">
             {visibleConnections.map((connection) => (
               <ConnectionTreeItem
-                key={connection.id}
+                key={`${connection.id}:${getConnectionSession(sessions, connection.id).sessionId ?? "none"}`}
                 connection={connection}
-                sessionId={sessions[connection.id]?.sessionId}
+                sessionId={getConnectionSession(sessions, connection.id).sessionId}
+                lifecycleState={getConnectionSession(sessions, connection.id).state}
                 environmentClassName={environmentClass[connection.environment]}
                 selected={selectedProfileId === connection.id}
-                connecting={connectingProfileId === connection.id}
                 onSelect={() => setSelectedProfileId(connection.id)}
                 onConnect={() => void connectProfile(connection)}
+                onReconnect={() => void reconnectProfile(connection)}
+                onDisconnect={() => void disconnectProfile(connection)}
+                onCheckHealth={() => void checkProfileSession(connection)}
+                onSessionError={(message) => markSessionFailed(connection.id, message)}
                 onEdit={() => setDialogProfile(connection)}
                 onDuplicate={() => void duplicateProfile(connection)}
                 onRename={() => void renameProfile(connection)}
@@ -377,11 +469,16 @@ export function App() {
             )}
             <button className="tab tab-active" type="button" role="tab">
               <FileText size={14} />
-              {activeConnection?.name ?? "Welcome"}
+              {selectedProfile?.name ?? "Welcome"}
             </button>
           </div>
 
-          {activeConnection ? (
+          {selectedProfile && selectedSession?.state === "error" ? (
+            <ConnectionErrorWorkspace
+              message={selectedSession.error ?? t("connection.state.error")}
+              onReconnect={() => void reconnectProfile(selectedProfile)}
+            />
+          ) : activeConnection ? (
             <ConnectedWorkspace connection={activeConnection} />
           ) : (
             <WelcomeWorkspace onNewConnection={() => setDialogProfile(null)} />
@@ -390,12 +487,14 @@ export function App() {
       </div>
 
       <footer className="statusbar">
-        <span className={`status-dot ${activeConnection ? "status-dot-online" : ""}`} />
+        <span
+          className={`status-dot ${selectedSession?.state === "connected" ? "status-dot-online" : ""} ${selectedSession?.state === "error" ? "status-dot-error" : ""}`}
+        />
         <span>
           {profileError
             ? profileError
-            : activeConnection
-            ? `${activeConnection.host}:${activeConnection.port} / ${activeConnection.database}`
+            : selectedProfile && selectedSession
+            ? `${t(`connection.state.${selectedSession.state}`)} · ${selectedProfile.host}:${selectedProfile.port} / ${selectedProfile.database}`
             : t("status.disconnected")}
         </span>
         <span className="status-spacer" />
@@ -405,12 +504,56 @@ export function App() {
       {dialogProfile !== undefined && (
         <ConnectionDialog
           profile={dialogProfile ?? undefined}
+          currentSessionId={
+            dialogProfile
+              ? getConnectionSession(sessions, dialogProfile.id).sessionId
+              : undefined
+          }
           onClose={() => setDialogProfile(undefined)}
           onSaved={handleProfileSaved}
+          onConnecting={(profile) => {
+            const session = getConnectionSession(sessions, profile.id);
+            dispatchSession({
+              type: session.sessionId ? "reconnect" : "connect",
+              profileId: profile.id,
+            });
+          }}
+          onConnectionFailed={(profileId, message) =>
+            dispatchSession({ type: "failed", profileId, error: message })
+          }
           onConnected={handleConnected}
         />
       )}
     </main>
+  );
+}
+
+function ConnectionErrorWorkspace({
+  message,
+  onReconnect,
+}: {
+  message: string;
+  onReconnect: () => void;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="connection-error-workspace" role="alert">
+      <Database size={24} strokeWidth={1.5} />
+      <h1>{t("connection.state.error")}</h1>
+      <p>{message}</p>
+      <button className="button button-primary" type="button" onClick={onReconnect}>
+        {t("connection.reconnect")}
+      </button>
+    </div>
+  );
+}
+
+function isTransitioning(state: ConnectionLifecycleState) {
+  return (
+    state === "connecting" ||
+    state === "reconnecting" ||
+    state === "disconnecting" ||
+    state === "busy"
   );
 }
 

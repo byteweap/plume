@@ -6,7 +6,8 @@ mod profiles;
 
 use commands::{
     connections::{
-        connect_database, connect_saved_database, test_connection, test_connection_profile,
+        check_database_session, connect_database, connect_saved_database, disconnect_database,
+        reconnect_saved_database, test_connection, test_connection_profile,
     },
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
@@ -40,6 +41,9 @@ pub fn run() {
             test_connection_profile,
             connect_database,
             connect_saved_database,
+            reconnect_saved_database,
+            disconnect_database,
+            check_database_session,
             list_connection_profiles,
             create_connection_profile,
             update_connection_profile,

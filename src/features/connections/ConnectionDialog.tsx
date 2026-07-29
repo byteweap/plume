@@ -22,8 +22,11 @@ import "./ConnectionDialog.css";
 
 interface ConnectionDialogProps {
   profile?: ConnectionProfile;
+  currentSessionId?: string;
   onClose: () => void;
   onSaved: (profile: ConnectionProfile) => void;
+  onConnecting?: (profile: ConnectionProfile) => void;
+  onConnectionFailed?: (profileId: string, message: string) => void;
   onConnected: (
     profile: ConnectionProfile,
     result: ConnectedDatabaseResult,
@@ -58,8 +61,11 @@ function getFieldErrors(
 
 export function ConnectionDialog({
   profile,
+  currentSessionId,
   onClose,
   onSaved,
+  onConnecting,
+  onConnectionFailed,
   onConnected,
 }: ConnectionDialogProps) {
   const { t } = useI18n();
@@ -91,6 +97,7 @@ export function ConnectionDialog({
 
     setFieldErrors({});
     setRequestState({ status: "testing" });
+    let attemptedProfileId: string | undefined;
 
     try {
       if (closeAfterSuccess) {
@@ -99,8 +106,12 @@ export function ConnectionDialog({
               toProfileWriteRequest(parsed.data, profile),
             )
           : await connectionApi.createProfile(toProfileWriteRequest(parsed.data));
+        attemptedProfileId = savedProfile.id;
         onSaved(savedProfile);
-        const result = await connectionApi.connectSaved(savedProfile.id);
+        onConnecting?.(savedProfile);
+        const result = currentSessionId
+          ? await connectionApi.reconnectSaved(savedProfile.id, currentSessionId)
+          : await connectionApi.connectSaved(savedProfile.id);
         setRequestState({ status: "success", result });
         onConnected(savedProfile, result);
       } else {
@@ -111,6 +122,9 @@ export function ConnectionDialog({
       }
     } catch (error) {
       const commandError = toCommandError(error);
+      if (closeAfterSuccess && attemptedProfileId) {
+        onConnectionFailed?.(attemptedProfileId, commandError.message);
+      }
       setRequestState({
         status: "error",
         message:

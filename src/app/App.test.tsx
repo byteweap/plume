@@ -120,11 +120,65 @@ describe("App sidebar", () => {
     const savedConnection = await screen.findByRole("button", {
       name: /Local saved/,
     });
-    expect(savedConnection).toHaveTextContent("Saved");
+    expect(savedConnection).toHaveTextContent("Disconnected");
     expect(connectSaved).not.toHaveBeenCalled();
 
     fireEvent.click(savedConnection);
     await waitFor(() => expect(connectSaved).toHaveBeenCalledWith("profile-1"));
     expect(await screen.findByText("PostgreSQL 18.0")).toBeVisible();
+  });
+
+  it("checks, explicitly reconnects, and disconnects without replaying the initial connect", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    const connectSaved = vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    vi.spyOn(connectionApi, "checkSession").mockRejectedValue({
+      code: "connection_failed",
+      message: "The PostgreSQL session closed.",
+    });
+    const reconnectSaved = vi
+      .spyOn(connectionApi, "reconnectSaved")
+      .mockResolvedValue({
+        sessionId: "session-2",
+        database: "postgres",
+        latencyMs: 9,
+        serverVersion: "18.1",
+        transport: "plain",
+      });
+    const disconnect = vi.spyOn(connectionApi, "disconnect").mockResolvedValue();
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Local saved/ }),
+    );
+    await screen.findByText("PostgreSQL 18.0");
+
+    fireEvent.click(screen.getByRole("button", { name: "Connection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Check connection" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The PostgreSQL session closed.",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() =>
+      expect(reconnectSaved).toHaveBeenCalledWith("profile-1", "session-1"),
+    );
+    expect(await screen.findByText("PostgreSQL 18.1")).toBeVisible();
+    expect(connectSaved).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Connection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Disconnect" }));
+    await waitFor(() => expect(disconnect).toHaveBeenCalledWith("session-2"));
+    expect(await screen.findByText(/Disconnected · localhost:5432/)).toBeVisible();
   });
 });

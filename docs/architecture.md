@@ -68,11 +68,13 @@ Rules:
 ```text
 src-tauri/src/
 ├── commands/      Tauri commands and response shaping
+├── credentials.rs  Operating-system credential adapter
 ├── database/
 │   ├── connection.rs  PostgreSQL and TLS connection setup
 │   ├── session.rs     Server sessions and per-database clients
 │   └── metadata.rs    Read-only PostgreSQL catalog queries
 ├── error.rs       Stable errors safe to return to the UI
+├── profiles.rs    Versioned connection-profile repository
 └── lib.rs         Application composition and command registration
 ```
 
@@ -80,14 +82,25 @@ The command boundary converts internal failures into stable codes such as `authe
 
 ## Connection and Session Lifecycle
 
-1. React validates the connection form and sends a short-lived request to Rust.
-2. `test_connection` opens a client, verifies the server, returns metadata, and closes it.
-3. `connect_database` opens the initial client and registers a server session.
-4. React receives an opaque session ID. The password does not return to React.
-5. Expanding another database asks the registry for a client. The registry reuses an existing client or creates one with the server session settings.
-6. Sessions and profiles currently live in memory and disappear when Plume exits.
+1. React validates the connection form. Rust stores the non-secret profile in
+   SQLite and the password in the operating-system credential store.
+2. `test_connection_profile` tests unsaved form changes and resolves an existing
+   password from the credential store when the edit form leaves it blank.
+3. `connect_saved_database` resolves the password in Rust, opens the initial
+   client, and registers a server session.
+4. React receives only an opaque session ID and tracks `disconnected`,
+   `connecting`, `connected`, `busy`, `reconnecting`, `disconnecting`, and
+   `error` states. Application startup restores profiles but never sessions.
+5. Expanding another database asks the registry for a client. The registry
+   reuses an existing client or creates one from the in-memory session settings.
+6. `check_database_session` executes a real health query. Explicit disconnect
+   removes every database client owned by the session.
+7. Safe reconnect opens and registers the replacement before removing the old
+   session. It never replays the operation that detected the failure.
 
-The current registry is intentionally small. Pooling, explicit disconnect, reconnection, query ownership, and cancellation will extend this boundary rather than adding global mutable state to command modules.
+Profiles survive application restarts; PostgreSQL sessions do not. Query
+ownership and cancellation will continue to extend the registry boundary rather
+than adding mutable session state to command modules.
 
 ## Lazy Metadata Navigation
 
@@ -119,7 +132,8 @@ Each node owns `idle`, `loading`, `success`, and `error` states. Loaded data rem
 - The frontend receives an opaque session ID instead of retained credentials.
 - Metadata queries are parameterized where user-provided identifiers are involved.
 - Browser-only development must fail privileged operations explicitly; it must not fake successful database behavior.
-- A future persistent credential implementation must use the operating-system credential facility.
+- Saved passwords use macOS Keychain or Windows Credential Manager and never
+  enter SQLite or serialized profile responses.
 
 ## Testing Strategy
 
@@ -146,8 +160,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 
 ## Current Limitations
 
-- Connection profiles and sessions are memory-only.
-- System credential persistence is not implemented.
+- PostgreSQL sessions are memory-only and reconnection is always explicit.
 - SSH Tunnel is not implemented.
 - Query execution, cancellation, result streaming, and transaction ownership are not implemented.
 - Data browsing, editing, export, and object actions are not implemented.

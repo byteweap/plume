@@ -87,4 +87,50 @@ describe("ConnectionDialog", () => {
       expect.objectContaining({ sessionId: "session-1" }),
     );
   });
+
+  it("uses safe reconnect when editing an active profile", async () => {
+    const profile = {
+      id: "profile-1",
+      name: "Local",
+      host: "localhost",
+      port: 5432,
+      database: "postgres",
+      username: "postgres",
+      environment: "development" as const,
+      color: "#2f6d52",
+      sslMode: "prefer" as const,
+      favorite: false,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    vi.spyOn(connectionApi, "updateProfile").mockResolvedValue(profile);
+    const reconnect = vi.spyOn(connectionApi, "reconnectSaved").mockResolvedValue({
+      sessionId: "session-2",
+      database: "postgres",
+      latencyMs: 8,
+      serverVersion: "18.1",
+      transport: "plain",
+    });
+    const onConnecting = vi.fn();
+
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          profile={profile}
+          currentSessionId="session-1"
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnecting={onConnecting}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Save and connect" }));
+
+    await waitFor(() =>
+      expect(reconnect).toHaveBeenCalledWith("profile-1", "session-1"),
+    );
+    expect(onConnecting).toHaveBeenCalledWith(profile);
+  });
 });

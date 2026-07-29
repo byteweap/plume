@@ -282,6 +282,10 @@
   background: #3b946b;
 }
 
+.status-dot-error {
+  background: #c44a48;
+}
+
 .environment-test {
   background: #397aab;
 }
@@ -439,6 +443,31 @@
   gap: 10px;
   color: #8a938d;
   font-size: 12px;
+}
+
+.connection-error-workspace {
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 9px;
+  padding: 32px;
+  color: #6a746d;
+  text-align: center;
+}
+
+.connection-error-workspace h1 {
+  margin: 3px 0 0;
+  color: #923a39;
+  font-size: 18px;
+}
+
+.connection-error-workspace p {
+  max-width: 520px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .statusbar {

@@ -66,10 +66,24 @@ describe("App sidebar", () => {
         status: "succeeded",
         results: [
           {
+            statementIndex: 0,
+            status: "succeeded",
             kind: "rows",
-            columns: [{ name: "value", ordinal: 0 }],
-            rows: [["2"]],
+            columns: [
+              {
+                name: "value",
+                ordinal: 0,
+                dataType: {
+                  oid: 23,
+                  name: "int4",
+                  schema: "pg_catalog",
+                  kind: "simple",
+                },
+              },
+            ],
+            batches: [{ offset: 0, rows: [["2"]] }],
             rowCount: 1,
+            retainedRowCount: 1,
             truncated: false,
           },
         ],

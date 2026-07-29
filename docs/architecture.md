@@ -113,9 +113,14 @@ The query workspace sends only the plain SQL resolved by the statement-boundary
 module, a query ID, a session ID, and a database. Rust uses PostgreSQL's Simple
 Query protocol, so a current target can contain a PostgreSQL function body and
 the all-document target remains compatible with multiple statements. Responses
-preserve statement framing, column names, text-form values, nulls, actual row
-counts, and affected-row counts. Each execution retains at most 10,000 rows in
-memory; excess rows are drained from the protocol stream and marked truncated.
+preserve statement framing, a zero-based statement index, completion status,
+column names and metadata (PostgreSQL type OID, type name, schema, and category),
+text-form values, nulls, actual row counts, retained row counts, and affected-row
+counts. Row data is returned in fixed 256-row batches with a zero-based offset.
+Each execution retains at most 10,000 rows in memory; excess rows are drained
+from the protocol stream and marked truncated. A failed Describe (for example,
+because the request contains multiple statements) returns an explicit `unknown`
+type category instead of guessing.
 The response echoes the query ID, and the frontend accepts it only for the
 matching request that is still active in that tab. A successful cancel-packet
 send moves the UI only into a waiting state. Cancellation becomes final only
@@ -137,9 +142,8 @@ reveals the failing character only while that executed SQL still matches the
 current document; the notice separately presents copyable technical details.
 
 Execution results live only for the query-tab lifecycle and are not persisted in
-drafts. Type metadata and batch contracts, configurable result limits,
-and virtualized rendering remain follow-up work in P0-F01, P0-F04, and P0-F02
-respectively.
+drafts. The result protocol is defined by P0-F01; configurable result limits and
+virtualized rendering remain follow-up work in P0-F04 and P0-F02.
 
 ## SQL Completion Boundary
 

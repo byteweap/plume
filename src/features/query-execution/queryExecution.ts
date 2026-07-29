@@ -22,13 +22,38 @@ export interface CancelQueryResult {
 export interface QueryColumn {
   name: string;
   ordinal: number;
+  dataType: QueryDataType;
+}
+
+export interface QueryDataType {
+  oid?: number;
+  name?: string;
+  schema?: string;
+  kind:
+    | "simple"
+    | "enum"
+    | "pseudo"
+    | "array"
+    | "range"
+    | "multirange"
+    | "domain"
+    | "composite"
+    | "unknown";
+}
+
+export interface QueryRowBatch {
+  offset: number;
+  rows: Array<Array<string | null>>;
 }
 
 export interface QueryStatementResult {
+  statementIndex: number;
+  status: "succeeded";
   kind: "rows" | "command";
   columns: QueryColumn[];
-  rows: Array<Array<string | null>>;
+  batches: QueryRowBatch[];
   rowCount: number;
+  retainedRowCount: number;
   affectedRows?: number;
   truncated: boolean;
 }

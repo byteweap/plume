@@ -231,6 +231,18 @@ impl From<QueryError> for CommandError {
                 message: "This query is already running.".to_owned(),
                 detail: None,
             },
+            QueryError::Cancelled => Self {
+                code: "query_cancelled",
+                message: "The query was cancelled by PostgreSQL.".to_owned(),
+                detail: None,
+            },
+            QueryError::CancellationFailed(_) => Self {
+                code: "query_cancellation_failed",
+                message:
+                    "The cancellation request could not be sent. The query may still be running."
+                        .to_owned(),
+                detail: Some(error.to_string()),
+            },
             QueryError::Database(error) => Self::from(error),
             QueryError::Postgres(ref postgres_error) => {
                 if let Some(database_error) = postgres_error.as_db_error() {
@@ -377,6 +389,7 @@ mod tests {
                 QueryError::AlreadyRunning("query-1".to_owned()),
                 "query_already_running",
             ),
+            (QueryError::Cancelled, "query_cancelled"),
         ];
 
         for (error, expected_code) in cases {
@@ -385,5 +398,12 @@ mod tests {
             assert_eq!(json["code"], expected_code);
             assert!(json.get("detail").is_none());
         }
+
+        let cancellation_failure = serde_json::to_value(CommandError::from(
+            QueryError::CancellationFailed("connection refused".to_owned()),
+        ))
+        .expect("cancellation error should serialize");
+        assert_eq!(cancellation_failure["code"], "query_cancellation_failed");
+        assert!(cancellation_failure.get("detail").is_some());
     }
 }

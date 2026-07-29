@@ -201,6 +201,120 @@ describe("workspaceTabsReducer", () => {
     });
   });
 
+  it("lets the execution result arbitrate cancellation races", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const tabId = state.activeTabId;
+    const target = {
+      sql: "select pg_sleep(10);",
+      from: 0,
+      to: 20,
+      source: "statement" as const,
+    };
+    state = workspaceTabsReducer(state, {
+      type: "query-started",
+      tabId,
+      queryId: "query-1",
+      target,
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancelling",
+      tabId,
+      queryId: "query-1",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancel-requested",
+      tabId,
+      result: { queryId: "query-1", status: "requested" },
+    });
+
+    const cancellingTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    expect(cancellingTab).toMatchObject({
+      execution: {
+        status: "cancelling",
+        requestStatus: "requested",
+      },
+    });
+
+    state = workspaceTabsReducer(state, {
+      type: "query-succeeded",
+      tabId,
+      result: { queryId: "query-1", status: "succeeded", results: [] },
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancelled",
+      tabId,
+      queryId: "query-1",
+    });
+    const succeededTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    expect(succeededTab).toMatchObject({ execution: { status: "succeeded" } });
+  });
+
+  it("shows confirmed and failed cancellation outcomes", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const tabId = state.activeTabId;
+    const target = {
+      sql: "select pg_sleep(10);",
+      from: 0,
+      to: 20,
+      source: "statement" as const,
+    };
+    state = workspaceTabsReducer(state, {
+      type: "query-started",
+      tabId,
+      queryId: "query-1",
+      target,
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancelling",
+      tabId,
+      queryId: "query-1",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancel-failed",
+      tabId,
+      queryId: "query-1",
+      error: { code: "query_cancellation_failed", message: "Send failed" },
+    });
+    const runningTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    expect(runningTab).toMatchObject({
+      execution: {
+        status: "running",
+        cancelError: { message: "Send failed" },
+      },
+    });
+
+    state = workspaceTabsReducer(state, {
+      type: "query-cancelling",
+      tabId,
+      queryId: "query-1",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-cancelled",
+      tabId,
+      queryId: "query-1",
+    });
+    const cancelledTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    expect(cancelledTab).toMatchObject({ execution: { status: "cancelled" } });
+  });
+
   it("renames tabs and selects an adjacent tab when closing the active tab", () => {
     let state = createInitialWorkspaceTabsState();
     state = workspaceTabsReducer(state, {

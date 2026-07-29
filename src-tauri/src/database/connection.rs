@@ -4,7 +4,7 @@ use native_tls::{Certificate, Identity, TlsConnector};
 use postgres_native_tls::MakeTlsConnector;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
-use tokio_postgres::{Client, Config, config::SslMode as PostgresSslMode};
+use tokio_postgres::{CancelToken, Client, Config, config::SslMode as PostgresSslMode};
 
 use crate::{
     database::ssh::{ResolvedSshConfig, SshTunnel},
@@ -65,6 +65,38 @@ pub struct OpenConnection {
     pub result: ConnectionTestResult,
     pub settings: ConnectionTestRequest,
     pub tunnel: Option<SshTunnel>,
+}
+
+#[derive(Clone)]
+pub struct QueryCanceller {
+    token: CancelToken,
+    settings: ConnectionTestRequest,
+}
+
+impl QueryCanceller {
+    pub fn new(client: &Client, settings: ConnectionTestRequest) -> Self {
+        Self {
+            token: client.cancel_token(),
+            settings,
+        }
+    }
+
+    pub async fn cancel(&self) -> Result<(), DatabaseError> {
+        match self.settings.ssl_mode {
+            SslMode::Disable => self
+                .token
+                .cancel_query(tokio_postgres::NoTls)
+                .await
+                .map_err(DatabaseError::Postgres),
+            _ => {
+                let connector = build_tls_connector(&self.settings)?;
+                self.token
+                    .cancel_query(connector)
+                    .await
+                    .map_err(DatabaseError::Postgres)
+            }
+        }
+    }
 }
 
 pub async fn test(request: &ConnectionTestRequest) -> Result<ConnectionTestResult, DatabaseError> {

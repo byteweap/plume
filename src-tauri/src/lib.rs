@@ -20,7 +20,7 @@ use commands::{
         list_connection_profiles, rename_connection_profile, set_connection_favorite,
         update_connection_profile,
     },
-    queries::execute_query,
+    queries::{cancel_query, execute_query},
 };
 use credentials::platform_credential_store;
 use database::query::QueryRegistry;
@@ -68,7 +68,8 @@ pub fn run() {
             get_schema_objects,
             get_catalog_tree,
             get_catalog_collection_items,
-            execute_query
+            execute_query,
+            cancel_query
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

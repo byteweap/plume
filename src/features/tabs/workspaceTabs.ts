@@ -1,5 +1,6 @@
 import type { CommandError } from "../../platform/tauri";
 import type {
+  CancelQueryResult,
   QueryExecutionResult,
   QueryExecutionState,
 } from "../query-execution/queryExecution";
@@ -74,6 +75,19 @@ export type WorkspaceTabsAction =
       queryId: string;
       error: CommandError;
     }
+  | { type: "query-cancelling"; tabId: string; queryId: string }
+  | {
+      type: "query-cancel-requested";
+      tabId: string;
+      result: CancelQueryResult;
+    }
+  | {
+      type: "query-cancel-failed";
+      tabId: string;
+      queryId: string;
+      error: CommandError;
+    }
+  | { type: "query-cancelled"; tabId: string; queryId: string }
   | { type: "close"; tabId: string }
   | { type: "close-profile"; profileId: string };
 
@@ -219,7 +233,7 @@ export function workspaceTabsReducer(
         },
       }));
     case "query-succeeded":
-      return updateRunningQuery(
+      return updateActiveQuery(
         state,
         action.tabId,
         action.result.queryId,
@@ -233,7 +247,7 @@ export function workspaceTabsReducer(
         }),
       );
     case "query-failed":
-      return updateRunningQuery(
+      return updateActiveQuery(
         state,
         action.tabId,
         action.queryId,
@@ -243,6 +257,59 @@ export function workspaceTabsReducer(
             queryId: action.queryId,
             target: execution.target,
             error: action.error,
+          },
+        }),
+      );
+    case "query-cancelling":
+      return updateActiveQuery(
+        state,
+        action.tabId,
+        action.queryId,
+        (execution) => ({
+          execution: {
+            status: "cancelling",
+            queryId: action.queryId,
+            target: execution.target,
+            requestStatus: "requesting",
+          },
+        }),
+      );
+    case "query-cancel-requested":
+      return updateCancellingQuery(
+        state,
+        action.tabId,
+        action.result.queryId,
+        (execution) => ({
+          execution: {
+            ...execution,
+            requestStatus: action.result.status,
+          },
+        }),
+      );
+    case "query-cancel-failed":
+      return updateCancellingQuery(
+        state,
+        action.tabId,
+        action.queryId,
+        (execution) => ({
+          execution: {
+            status: "running",
+            queryId: action.queryId,
+            target: execution.target,
+            cancelError: action.error,
+          },
+        }),
+      );
+    case "query-cancelled":
+      return updateActiveQuery(
+        state,
+        action.tabId,
+        action.queryId,
+        (execution) => ({
+          execution: {
+            status: "cancelled",
+            queryId: action.queryId,
+            target: execution.target,
           },
         }),
       );
@@ -263,17 +330,37 @@ export function getQueryExecution(tab: QueryTab): QueryExecutionState {
   return tab.execution ?? idleQueryExecution;
 }
 
-function updateRunningQuery(
+function updateActiveQuery(
   state: WorkspaceTabsState,
   tabId: string,
   queryId: string,
   update: (
-    execution: Extract<QueryExecutionState, { status: "running" }>,
+    execution: Extract<
+      QueryExecutionState,
+      { status: "running" | "cancelling" }
+    >,
   ) => Partial<QueryTab>,
 ): WorkspaceTabsState {
   return updateQueryTab(state, tabId, (tab) => {
     const execution = getQueryExecution(tab);
-    return execution.status === "running" && execution.queryId === queryId
+    return (execution.status === "running" || execution.status === "cancelling") &&
+      execution.queryId === queryId
+      ? update(execution)
+      : {};
+  });
+}
+
+function updateCancellingQuery(
+  state: WorkspaceTabsState,
+  tabId: string,
+  queryId: string,
+  update: (
+    execution: Extract<QueryExecutionState, { status: "cancelling" }>,
+  ) => Partial<QueryTab>,
+): WorkspaceTabsState {
+  return updateQueryTab(state, tabId, (tab) => {
+    const execution = getQueryExecution(tab);
+    return execution.status === "cancelling" && execution.queryId === queryId
       ? update(execution)
       : {};
   });

@@ -6,9 +6,14 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::{
-    database::connection::{ConnectionTestRequest, OpenConnection, open},
+    database::connection::{ConnectionTestRequest, OpenConnection, QueryCanceller, open},
     error::DatabaseError,
 };
+
+pub struct QueryClient {
+    pub client: Arc<Client>,
+    pub canceller: QueryCanceller,
+}
 
 struct ServerSession {
     settings: ConnectionTestRequest,
@@ -80,6 +85,18 @@ impl ConnectionRegistry {
             .entry(database.to_owned())
             .or_insert_with(|| Arc::clone(&client))
             .clone())
+    }
+
+    pub async fn query_client(
+        &self,
+        session_id: &str,
+        database: &str,
+    ) -> Result<QueryClient, DatabaseError> {
+        let session = self.session(session_id).await?;
+        let client = self.database_client(session_id, database).await?;
+        let settings = session.settings.for_database(database);
+        let canceller = QueryCanceller::new(&client, settings);
+        Ok(QueryClient { client, canceller })
     }
 
     pub async fn health(&self, session_id: &str) -> Result<SessionHealth, DatabaseError> {

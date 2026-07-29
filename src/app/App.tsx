@@ -23,6 +23,7 @@ import {
   Plus,
   Search,
   Save,
+  Square,
   Table2,
   X,
 } from "lucide-react";
@@ -234,12 +235,20 @@ export function App() {
       dispatchSession({ type: "ready", profileId: tab.profileId });
     } catch (error) {
       const commandError = toCommandError(error);
-      dispatchWorkspaceTabs({
-        type: "query-failed",
-        tabId: tab.id,
-        queryId,
-        error: commandError,
-      });
+      if (commandError.code === "query_cancelled") {
+        dispatchWorkspaceTabs({
+          type: "query-cancelled",
+          tabId: tab.id,
+          queryId,
+        });
+      } else {
+        dispatchWorkspaceTabs({
+          type: "query-failed",
+          tabId: tab.id,
+          queryId,
+          error: commandError,
+        });
+      }
       if (isConnectionQueryError(commandError.code)) {
         dispatchSession({
           type: "failed",
@@ -251,6 +260,36 @@ export function App() {
       }
     } finally {
       executingProfiles.current.delete(tab.profileId);
+    }
+  }
+
+  async function cancelQuery(tab: QueryTab, sessionId: string) {
+    const execution = getQueryExecution(tab);
+    if (execution.status !== "running") return;
+
+    dispatchWorkspaceTabs({
+      type: "query-cancelling",
+      tabId: tab.id,
+      queryId: execution.queryId,
+    });
+    try {
+      const result = await queryExecutionApi.cancel({
+        queryId: execution.queryId,
+        sessionId,
+        database: tab.database,
+      });
+      dispatchWorkspaceTabs({
+        type: "query-cancel-requested",
+        tabId: tab.id,
+        result,
+      });
+    } catch (error) {
+      dispatchWorkspaceTabs({
+        type: "query-cancel-failed",
+        tabId: tab.id,
+        queryId: execution.queryId,
+        error: toCommandError(error),
+      });
     }
   }
 
@@ -898,6 +937,11 @@ export function App() {
                     target,
                   );
                 }}
+                onCancel={() => {
+                  if (activeConnection) {
+                    void cancelQuery(activeTab, activeConnection.sessionId);
+                  }
+                }}
                 onSqlChange={(sql) =>
                   dispatchWorkspaceTabs({
                     type: "update-query",
@@ -1056,6 +1100,7 @@ function QueryWorkspace({
   onReconnect,
   onSave,
   onExecute,
+  onCancel,
   onSqlChange,
 }: {
   tab: Extract<WorkspaceTab, { kind: "query" }>;
@@ -1066,6 +1111,7 @@ function QueryWorkspace({
   onReconnect: () => void;
   onSave: () => void;
   onExecute: (target: SqlExecutionTarget) => void;
+  onCancel: () => void;
   onSqlChange: (sql: string) => void;
 }) {
   const { t } = useI18n();
@@ -1076,6 +1122,7 @@ function QueryWorkspace({
     Boolean(connection) &&
     state === "connected" &&
     execution.status !== "running" &&
+    execution.status !== "cancelling" &&
     tab.sql.trim().length > 0;
   return (
     <div
@@ -1150,7 +1197,7 @@ function QueryWorkspace({
         </div>
       )}
       {execution.status !== "idle" && (
-        <QueryExecutionNotice execution={execution} />
+        <QueryExecutionNotice execution={execution} onCancel={onCancel} />
       )}
       <Suspense
         fallback={
@@ -1174,13 +1221,19 @@ function QueryWorkspace({
 
 function QueryExecutionNotice({
   execution,
+  onCancel,
 }: {
   execution: Exclude<QueryExecutionState, { status: "idle" }>;
+  onCancel: () => void;
 }) {
   const { t } = useI18n();
   const message =
     execution.status === "running"
-      ? t("query.running")
+      ? execution.cancelError?.message ?? t("query.running")
+      : execution.status === "cancelling"
+        ? t(`query.cancelling.${execution.requestStatus}`)
+        : execution.status === "cancelled"
+          ? t("query.cancelled")
       : execution.status === "succeeded"
         ? t("query.completed")
         : execution.error.message;
@@ -1188,9 +1241,23 @@ function QueryExecutionNotice({
   return (
     <div
       className={`query-execution-notice query-execution-notice-${execution.status}`}
-      role={execution.status === "failed" ? "alert" : "status"}
+      role={
+        execution.status === "failed" ||
+        (execution.status === "running" && execution.cancelError)
+          ? "alert"
+          : "status"
+      }
     >
-      {message}
+      <span>{message}</span>
+      {execution.status === "running" && (
+        <IconButton
+          className="query-cancel-button"
+          label={t("query.cancel")}
+          onClick={onCancel}
+        >
+          <Square size={12} fill="currentColor" />
+        </IconButton>
+      )}
     </div>
   );
 }

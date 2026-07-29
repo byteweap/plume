@@ -623,7 +623,12 @@
 }
 
 .query-execution-notice {
+  display: flex;
   overflow: hidden;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   border-bottom: 1px solid #dce2de;
   padding: 7px 14px;
   color: #526058;
@@ -633,9 +638,30 @@
   white-space: nowrap;
 }
 
+.query-execution-notice > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .query-execution-notice-running {
   color: #315f7a;
   background: #edf6fa;
+}
+
+.query-execution-notice-cancelling {
+  color: #725721;
+  background: #fff8e8;
+}
+
+.query-execution-notice-cancelled {
+  color: #526058;
+  background: #f4f7f5;
+}
+
+.icon-button.query-cancel-button {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 }
 
 .query-execution-notice-failed {
@@ -748,6 +774,11 @@
   .query-execution-notice-running {
     color: #a8d2e8;
     background: #202c32;
+  }
+
+  .query-execution-notice-cancelling {
+    color: #dbc58f;
+    background: #2c281f;
   }
 
   .query-execution-notice-failed {

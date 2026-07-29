@@ -2,7 +2,10 @@ use tauri::State;
 
 use crate::{
     database::{
-        query::{self, ExecuteQueryRequest, QueryExecutionResult, QueryRegistry},
+        query::{
+            self, CancelQueryRequest, CancelQueryResult, ExecuteQueryRequest, QueryError,
+            QueryExecutionResult, QueryRegistry,
+        },
         session::ConnectionRegistry,
     },
     error::CommandError,
@@ -14,17 +17,40 @@ pub async fn execute_query(
     queries: State<'_, QueryRegistry>,
     request: ExecuteQueryRequest,
 ) -> Result<QueryExecutionResult, CommandError> {
-    queries
+    let registered = queries
         .register(&request)
         .await
         .map_err(CommandError::from)?;
+    let query_client = match connections
+        .query_client(&request.session_id, &request.database)
+        .await
+    {
+        Ok(query_client) => query_client,
+        Err(error) => {
+            registered.abort_preparation().await;
+            queries.finish(&request.query_id, false).await;
+            return Err(CommandError::from(error));
+        }
+    };
+    registered.activate(query_client.canceller).await;
     let result = async {
-        let client = connections
-            .database_client(&request.session_id, &request.database)
-            .await?;
-        query::execute(&client, request.query_id.clone(), &request.sql).await
+        query::execute(&query_client.client, request.query_id.clone(), &request.sql).await
     }
     .await;
-    queries.finish(&request.query_id).await;
-    result.map_err(CommandError::from)
+    let cancelled = queries
+        .finish(&request.query_id, query::is_postgres_cancellation(&result))
+        .await;
+    if cancelled {
+        Err(CommandError::from(QueryError::Cancelled))
+    } else {
+        result.map_err(CommandError::from)
+    }
+}
+
+#[tauri::command]
+pub async fn cancel_query(
+    queries: State<'_, QueryRegistry>,
+    request: CancelQueryRequest,
+) -> Result<CancelQueryResult, CommandError> {
+    queries.cancel(request).await.map_err(CommandError::from)
 }

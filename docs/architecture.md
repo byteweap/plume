@@ -103,9 +103,9 @@ The command boundary converts internal failures into stable codes such as `authe
 
 Profiles survive application restarts; PostgreSQL sessions do not. The frontend
 creates an opaque query ID before execution, and the Rust active-query registry
-binds it to a session and database until the command succeeds or fails. Query
-cancellation will extend this ownership boundary rather than adding mutable
-session state to command modules.
+binds it to a session, database, PostgreSQL cancel token, and resolved transport
+settings until the command succeeds or fails. Cancellation requests must match
+that ownership; duplicate requests share one in-flight cancellation attempt.
 
 ## Query Execution Boundary
 
@@ -117,12 +117,15 @@ preserve statement framing, column names, text-form values, nulls, actual row
 counts, and affected-row counts. Each execution retains at most 10,000 rows in
 memory; excess rows are drained from the protocol stream and marked truncated.
 The response echoes the query ID, and the frontend accepts it only for the
-matching request that is still running in that tab.
+matching request that is still active in that tab. A successful cancel-packet
+send moves the UI only into a waiting state. Cancellation becomes final only
+when that same execution returns PostgreSQL SQLSTATE `57014`; a query that wins
+the race and completes normally remains succeeded.
 
 Execution results live only for the query-tab lifecycle and are not persisted in
 drafts. Type metadata and batch contracts, configurable result limits,
-virtualized rendering, and confirmed cancellation remain follow-up work in
-P0-F01, P0-F04, P0-F02, and P0-E04 respectively.
+and virtualized rendering remain follow-up work in P0-F01, P0-F04, and P0-F02
+respectively.
 
 ## Lazy Metadata Navigation
 
@@ -211,7 +214,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
-- Query cancellation, incrementally consumable result streaming, and transaction ownership are not implemented.
+- Incrementally consumable result streaming and transaction ownership are not implemented.
 - Data browsing, editing, export, and object actions are not implemented.
 - Linux packaging is not part of the first release target.
 

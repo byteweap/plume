@@ -62,6 +62,10 @@ describe("App sidebar", () => {
         ],
       }),
     );
+    vi.spyOn(queryExecutionApi, "cancel").mockImplementation(async (request) => ({
+      queryId: request.queryId,
+      status: "requested",
+    }));
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -613,6 +617,60 @@ describe("App sidebar", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "syntax error at or near select",
     );
+    expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
+  });
+
+  it("waits for PostgreSQL confirmation before showing a query as cancelled", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    let rejectExecution!: (error: unknown) => void;
+    vi.mocked(queryExecutionApi.execute).mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectExecution = reject;
+        }),
+    );
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select pg_sleep(10);");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Run selection or current statement",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Cancel query" }));
+
+    expect(queryExecutionApi.cancel).toHaveBeenCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+    });
+    expect(
+      await screen.findByText("Cancellation requested; waiting for PostgreSQL…"),
+    ).toBeVisible();
+    expect(screen.queryByText("Query cancelled")).not.toBeInTheDocument();
+
+    await act(async () => {
+      rejectExecution({
+        code: "query_cancelled",
+        message: "The query was cancelled by PostgreSQL.",
+      });
+    });
+    expect(await screen.findByText("Query cancelled")).toBeVisible();
     expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
   });
 });

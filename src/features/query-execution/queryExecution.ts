@@ -8,6 +8,17 @@ export interface ExecuteQueryRequest {
   sql: string;
 }
 
+export interface CancelQueryRequest {
+  queryId: string;
+  sessionId: string;
+  database: string;
+}
+
+export interface CancelQueryResult {
+  queryId: string;
+  status: "requested" | "alreadyFinished";
+}
+
 export interface QueryColumn {
   name: string;
   ordinal: number;
@@ -32,6 +43,18 @@ export type QueryExecutionState =
   | { status: "idle" }
   | {
       status: "running";
+      queryId: string;
+      target: SqlExecutionTarget;
+      cancelError?: CommandError;
+    }
+  | {
+      status: "cancelling";
+      queryId: string;
+      target: SqlExecutionTarget;
+      requestStatus: "requesting" | CancelQueryResult["status"];
+    }
+  | {
+      status: "cancelled";
       queryId: string;
       target: SqlExecutionTarget;
     }

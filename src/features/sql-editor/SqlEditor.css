@@ -1,0 +1,123 @@
+.sql-editor {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #fbfcfb;
+}
+
+.sql-editor .cm-editor {
+  height: 100%;
+  color: #243029;
+  background: #fbfcfb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.sql-editor .cm-scroller {
+  overflow: auto;
+  font-family: inherit;
+  line-height: 1.55;
+}
+
+.sql-editor .cm-content {
+  min-width: max-content;
+  padding: 12px 0 40px;
+  caret-color: #246247;
+}
+
+.sql-editor .cm-line {
+  padding: 0 12px;
+}
+
+.sql-editor .cm-gutters {
+  border-right: 1px solid #e6ebe7;
+  color: #929b95;
+  background: #f6f8f6;
+}
+
+.sql-editor .cm-lineNumbers .cm-gutterElement {
+  min-width: 38px;
+  padding: 0 9px 0 6px;
+}
+
+.sql-editor .cm-activeLine,
+.sql-editor .cm-activeLineGutter {
+  background: #eef4f0;
+}
+
+.sql-editor .cm-selectionBackground,
+.sql-editor .cm-content ::selection {
+  background: #bdd9ca !important;
+}
+
+.sql-editor .cm-focused {
+  outline: none;
+}
+
+.sql-editor .cm-focused .cm-cursor {
+  border-left-color: #246247;
+}
+
+.sql-editor .cm-panels {
+  border-color: #d8ded9;
+  color: #303a33;
+  background: #f2f5f2;
+}
+
+.sql-editor .cm-panel.cm-search {
+  padding: 6px 8px;
+}
+
+.sql-editor .cm-panel input,
+.sql-editor .cm-panel button {
+  border: 1px solid #c8d0ca;
+  border-radius: 4px;
+  color: inherit;
+  background: #ffffff;
+  font: inherit;
+  letter-spacing: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sql-editor,
+  .sql-editor .cm-editor {
+    color: #dce3de;
+    background: #1d211e;
+  }
+
+  .sql-editor .cm-content {
+    caret-color: #78b994;
+  }
+
+  .sql-editor .cm-gutters {
+    border-color: #363d38;
+    color: #7d8981;
+    background: #191d1a;
+  }
+
+  .sql-editor .cm-activeLine,
+  .sql-editor .cm-activeLineGutter {
+    background: #252c27;
+  }
+
+  .sql-editor .cm-selectionBackground,
+  .sql-editor .cm-content ::selection {
+    background: #315943 !important;
+  }
+
+  .sql-editor .cm-focused .cm-cursor {
+    border-left-color: #78b994;
+  }
+
+  .sql-editor .cm-panels {
+    border-color: #3b443e;
+    color: #dce3de;
+    background: #222823;
+  }
+
+  .sql-editor .cm-panel input,
+  .sql-editor .cm-panel button {
+    border-color: #4a554d;
+    background: #191d1a;
+  }
+}

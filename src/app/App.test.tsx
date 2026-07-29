@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { EditorView } from "codemirror";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { ConnectionProfile } from "../features/connections/connection";
@@ -20,6 +21,20 @@ const savedProfile: ConnectionProfile = {
   createdAt: 1,
   updatedAt: 1,
 };
+
+async function replaceEditorText(value: string) {
+  const editor = await screen.findByRole("textbox", {
+    name: "SQL query workspace",
+  });
+  const view = EditorView.findFromDOM(editor);
+  if (!view) throw new Error("Expected a mounted CodeMirror editor");
+  act(() => {
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: value },
+    });
+  });
+  return editor;
+}
 
 describe("App sidebar", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -209,6 +224,10 @@ describe("App sidebar", () => {
       "true",
     );
     expect(screen.getByText("Local saved / postgres")).toBeVisible();
+    expect(
+      await screen.findByRole("textbox", { name: "SQL query workspace" }),
+    ).toBeVisible();
+    await replaceEditorText("select * from users;");
 
     fireEvent.click(screen.getByRole("button", { name: "New query" }));
     const secondQuery = screen.getByRole("tab", { name: "Query 2" });
@@ -227,6 +246,9 @@ describe("App sidebar", () => {
       "aria-selected",
       "true",
     );
+    expect(
+      screen.getByRole("textbox", { name: "SQL query workspace" }),
+    ).toHaveTextContent("select * from users;");
   });
 
   it("keeps a query tab offline and reuses its profile context after reconnect", async () => {
@@ -258,10 +280,18 @@ describe("App sidebar", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
     await screen.findByText("PostgreSQL 18.0");
     fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select current_database();");
 
     fireEvent.click(screen.getByRole("button", { name: "Connection actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Disconnect" }));
-    expect(await screen.findByText("Connection unavailable")).toBeVisible();
+    expect(
+      await screen.findByText(
+        "Connection unavailable; the query draft remains editable.",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("textbox", { name: "SQL query workspace" }),
+    ).toHaveTextContent("select current_database();");
     expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -275,6 +305,9 @@ describe("App sidebar", () => {
       "true",
     );
     expect(await screen.findByText("Local saved / postgres")).toBeVisible();
+    expect(
+      screen.getByRole("textbox", { name: "SQL query workspace" }),
+    ).toHaveTextContent("select current_database();");
   });
 
   it("supports roving keyboard focus across workspace tabs", async () => {

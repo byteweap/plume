@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useReducer,
@@ -56,6 +58,11 @@ const defaultSidebarWidth = 286;
 const minimumSidebarWidth = 220;
 const maximumSidebarWidth = 560;
 const sidebarKeyboardStep = 16;
+const SqlEditor = lazy(() =>
+  import("../features/sql-editor/SqlEditor").then((module) => ({
+    default: module.SqlEditor,
+  })),
+);
 
 function clampSidebarWidth(width: number) {
   return Math.min(
@@ -652,20 +659,32 @@ export function App() {
           >
             {activeTab.kind === "welcome" || !activeProfile ? (
               <WelcomeWorkspace onNewConnection={() => setDialogProfile(null)} />
+            ) : activeTab.kind === "query" ? (
+              <QueryWorkspace
+                tab={activeTab}
+                profile={activeProfile}
+                connection={activeConnection}
+                state={activeSession?.state ?? "disconnected"}
+                error={activeSession?.error}
+                onReconnect={() => void connectProfile(activeProfile, false)}
+                onSqlChange={(sql) =>
+                  dispatchWorkspaceTabs({
+                    type: "update-query",
+                    tabId: activeTab.id,
+                    sql,
+                  })
+                }
+              />
             ) : activeSession?.state === "error" ? (
               <ConnectionErrorWorkspace
                 message={activeSession.error ?? t("connection.state.error")}
                 onReconnect={() => void reconnectProfile(activeProfile, false)}
               />
             ) : activeConnection ? (
-              activeTab.kind === "query" ? (
-                <QueryWorkspace tab={activeTab} connection={activeConnection} />
-              ) : (
-                <ConnectedWorkspace
-                  connection={activeConnection}
-                  onNewQuery={() => openQueryWorkspace(activeTab)}
-                />
-              )
+              <ConnectedWorkspace
+                connection={activeConnection}
+                onNewQuery={() => openQueryWorkspace(activeTab)}
+              />
             ) : (
               <UnavailableWorkspace
                 state={activeSession?.state ?? "disconnected"}
@@ -799,31 +818,72 @@ function ConnectedWorkspace({
 
 function QueryWorkspace({
   tab,
+  profile,
   connection,
+  state,
+  error,
+  onReconnect,
+  onSqlChange,
 }: {
   tab: Extract<WorkspaceTab, { kind: "query" }>;
-  connection: ActiveConnection;
+  profile: ConnectionProfile;
+  connection?: ActiveConnection;
+  state: ConnectionLifecycleState;
+  error?: string;
+  onReconnect: () => void;
+  onSqlChange: (sql: string) => void;
 }) {
   const { t } = useI18n();
+  const transitioning = isTransitioning(state);
   return (
-    <div className="query-workspace">
+    <div
+      className={`query-workspace ${connection ? "" : "query-workspace-offline"}`}
+    >
       <header className="query-contextbar">
         <div>
           <strong>{tab.title}</strong>
           <span>
-            {connection.name} / {tab.database}
+            {profile.name} / {tab.database}
             {tab.schema ? ` / ${tab.schema}` : ""}
           </span>
         </div>
         <span className="query-connection-state">
-          <span className="status-dot status-dot-online" />
-          {t("status.ready")}
+          <span
+            className={`status-dot ${connection ? "status-dot-online" : state === "error" ? "status-dot-error" : ""}`}
+          />
+          {connection ? t("status.ready") : t(`connection.state.${state}`)}
         </span>
       </header>
-      <div className="query-canvas" aria-label={t("workspace.queryArea")}>
-        <span aria-hidden="true">1</span>
-        <div />
-      </div>
+      {!connection && (
+        <div className="query-offline-notice" role="status">
+          <span>{error ?? t("workspace.offlineEditing")}</span>
+          <button
+            className="button button-secondary button-compact"
+            type="button"
+            disabled={transitioning}
+            onClick={onReconnect}
+          >
+            {transitioning
+              ? t(`connection.state.${state}`)
+              : t("connection.reconnect")}
+          </button>
+        </div>
+      )}
+      <Suspense
+        fallback={
+          <div
+            className="sql-editor-loading"
+            role="status"
+            aria-label={t("workspace.editorLoading")}
+          />
+        }
+      >
+        <SqlEditor
+          label={t("workspace.queryArea")}
+          value={tab.sql}
+          onChange={onSqlChange}
+        />
+      </Suspense>
     </div>
   );
 }

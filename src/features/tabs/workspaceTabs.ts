@@ -19,6 +19,7 @@ export interface QueryTab extends WorkspaceContext {
   id: string;
   kind: "query";
   title: string;
+  sql: string;
 }
 
 export type WorkspaceTab = WelcomeTab | ConnectionTab | QueryTab;
@@ -35,6 +36,7 @@ export type WorkspaceTabsAction =
   | ({ type: "open-query"; titlePrefix: string } & WorkspaceContext)
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
+  | { type: "update-query"; tabId: string; sql: string }
   | { type: "close"; tabId: string }
   | { type: "close-profile"; profileId: string };
 
@@ -96,6 +98,7 @@ export function workspaceTabsReducer(
         database: action.database,
         schema: action.schema,
         title: `${action.titlePrefix} ${state.nextQueryNumber}`,
+        sql: "",
       };
       return {
         ...state,
@@ -121,6 +124,15 @@ export function workspaceTabsReducer(
         ),
       };
     }
+    case "update-query":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "query"
+            ? { ...tab, sql: action.sql }
+            : tab,
+        ),
+      };
     case "close":
       if (action.tabId === welcomeTab.id) return state;
       return removeTabs(state, (tab) => tab.id === action.tabId);

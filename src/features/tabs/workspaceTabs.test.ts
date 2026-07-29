@@ -42,13 +42,43 @@ describe("workspaceTabsReducer", () => {
     });
 
     expect(state.tabs.slice(1)).toEqual([
-      expect.objectContaining({ title: "Query 1", ...context }),
+      expect.objectContaining({ title: "Query 1", sql: "", ...context }),
       expect.objectContaining({
         title: "Query 2",
         profileId: "profile-2",
         database: "analytics",
       }),
     ]);
+  });
+
+  it("keeps SQL drafts isolated by query tab", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const firstQueryId = state.activeTabId;
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const secondQueryId = state.activeTabId;
+    state = workspaceTabsReducer(state, {
+      type: "update-query",
+      tabId: firstQueryId,
+      sql: "select * from users;",
+    });
+
+    expect(state.tabs.find((tab) => tab.id === firstQueryId)).toMatchObject({
+      kind: "query",
+      sql: "select * from users;",
+    });
+    expect(state.tabs.find((tab) => tab.id === secondQueryId)).toMatchObject({
+      kind: "query",
+      sql: "",
+    });
   });
 
   it("renames tabs and selects an adjacent tab when closing the active tab", () => {

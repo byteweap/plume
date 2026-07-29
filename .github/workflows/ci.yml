@@ -60,6 +60,9 @@ jobs:
       - name: Check frontend
         run: npm run check
 
+      - name: Benchmark SQL editor
+        run: npm run benchmark:editor
+
       - name: Check Rust
         run: npm run check:rust
 

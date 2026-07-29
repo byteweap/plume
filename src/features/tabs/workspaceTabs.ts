@@ -1,3 +1,10 @@
+import type { CommandError } from "../../platform/tauri";
+import type {
+  QueryExecutionResult,
+  QueryExecutionState,
+} from "../query-execution/queryExecution";
+import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
+
 export interface WorkspaceContext {
   profileId: string;
   database: string;
@@ -22,6 +29,7 @@ export interface QueryTab extends WorkspaceContext {
   sql: string;
   draftState: "unsaved" | "saving" | "saved" | "error";
   updatedAt?: number;
+  execution?: QueryExecutionState;
 }
 
 export type WorkspaceTab = WelcomeTab | ConnectionTab | QueryTab;
@@ -49,6 +57,23 @@ export type WorkspaceTabsAction =
       updatedAt: number;
     }
   | { type: "draft-failed"; tabId: string; title: string; sql: string }
+  | {
+      type: "query-started";
+      tabId: string;
+      queryId: string;
+      target: SqlExecutionTarget;
+    }
+  | {
+      type: "query-succeeded";
+      tabId: string;
+      result: QueryExecutionResult;
+    }
+  | {
+      type: "query-failed";
+      tabId: string;
+      queryId: string;
+      error: CommandError;
+    }
   | { type: "close"; tabId: string }
   | { type: "close-profile"; profileId: string };
 
@@ -185,6 +210,42 @@ export function workspaceTabsReducer(
             ? "error"
             : "unsaved",
       }));
+    case "query-started":
+      return updateQueryTab(state, action.tabId, () => ({
+        execution: {
+          status: "running",
+          queryId: action.queryId,
+          target: action.target,
+        },
+      }));
+    case "query-succeeded":
+      return updateRunningQuery(
+        state,
+        action.tabId,
+        action.result.queryId,
+        (execution) => ({
+          execution: {
+            status: "succeeded",
+            queryId: action.result.queryId,
+            target: execution.target,
+            result: action.result,
+          },
+        }),
+      );
+    case "query-failed":
+      return updateRunningQuery(
+        state,
+        action.tabId,
+        action.queryId,
+        (execution) => ({
+          execution: {
+            status: "failed",
+            queryId: action.queryId,
+            target: execution.target,
+            error: action.error,
+          },
+        }),
+      );
     case "close":
       if (action.tabId === welcomeTab.id) return state;
       return removeTabs(state, (tab) => tab.id === action.tabId);
@@ -194,6 +255,43 @@ export function workspaceTabsReducer(
         (tab) => tab.kind !== "welcome" && tab.profileId === action.profileId,
       );
   }
+}
+
+const idleQueryExecution: QueryExecutionState = { status: "idle" };
+
+export function getQueryExecution(tab: QueryTab): QueryExecutionState {
+  return tab.execution ?? idleQueryExecution;
+}
+
+function updateRunningQuery(
+  state: WorkspaceTabsState,
+  tabId: string,
+  queryId: string,
+  update: (
+    execution: Extract<QueryExecutionState, { status: "running" }>,
+  ) => Partial<QueryTab>,
+): WorkspaceTabsState {
+  return updateQueryTab(state, tabId, (tab) => {
+    const execution = getQueryExecution(tab);
+    return execution.status === "running" && execution.queryId === queryId
+      ? update(execution)
+      : {};
+  });
+}
+
+function updateQueryTab(
+  state: WorkspaceTabsState,
+  tabId: string,
+  update: (tab: QueryTab) => Partial<QueryTab>,
+): WorkspaceTabsState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.id === tabId && tab.kind === "query"
+        ? { ...tab, ...update(tab) }
+        : tab,
+    ),
+  };
 }
 
 function updateQueryDraftState(

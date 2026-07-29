@@ -553,6 +553,14 @@
   grid-template-rows: 46px auto minmax(0, 1fr);
 }
 
+.query-workspace-with-execution {
+  grid-template-rows: 46px auto minmax(0, 1fr);
+}
+
+.query-workspace-offline.query-workspace-with-execution {
+  grid-template-rows: 46px auto auto minmax(0, 1fr);
+}
+
 .query-contextbar {
   display: flex;
   min-width: 0;
@@ -607,10 +615,32 @@
   color: #91651f;
 }
 
-.icon-button.query-save-button {
+.icon-button.query-save-button,
+.icon-button.query-run-button {
   width: 28px;
   height: 28px;
   flex-basis: 28px;
+}
+
+.query-execution-notice {
+  overflow: hidden;
+  border-bottom: 1px solid #dce2de;
+  padding: 7px 14px;
+  color: #526058;
+  background: #f4f7f5;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query-execution-notice-running {
+  color: #315f7a;
+  background: #edf6fa;
+}
+
+.query-execution-notice-failed {
+  color: #923a39;
+  background: #fff1f0;
 }
 
 .query-connection-state {
@@ -707,6 +737,22 @@
     border-color: #594b2d;
     color: #dbc58f;
     background: #2c281f;
+  }
+
+  .query-execution-notice {
+    border-color: #363d38;
+    color: #bdc7c0;
+    background: #242925;
+  }
+
+  .query-execution-notice-running {
+    color: #a8d2e8;
+    background: #202c32;
+  }
+
+  .query-execution-notice-failed {
+    color: #f0aaa5;
+    background: #342322;
   }
 
   .query-draft-state {

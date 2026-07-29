@@ -16,8 +16,10 @@ import {
   Database,
   FileText,
   Globe2,
+  ListStart,
   PanelLeftClose,
   PanelLeftOpen,
+  Play,
   Plus,
   Search,
   Save,
@@ -40,8 +42,18 @@ import {
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import {
+  createQueryId,
+  type QueryExecutionState,
+} from "../features/query-execution/queryExecution";
+import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
+import type {
+  SqlEditorController,
+  SqlExecutionTarget,
+} from "../features/sql-editor/SqlEditor";
+import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
+  getQueryExecution,
   workspaceTabsReducer,
   type QueryTab,
   type WorkspaceTab,
@@ -103,6 +115,7 @@ export function App() {
     new Map<string, { timeout: number; title: string; sql: string }>(),
   );
   const discardedDraftIds = useRef(new Set<string>());
+  const executingProfiles = useRef(new Set<string>());
 
   const activeTab = getActiveWorkspaceTab(workspaceTabs);
   const activeProfile =
@@ -188,6 +201,58 @@ export function App() {
       }
     }
   }, []);
+
+  async function executeQuery(
+    tab: QueryTab,
+    sessionId: string,
+    target: SqlExecutionTarget,
+  ) {
+    if (executingProfiles.current.has(tab.profileId)) return;
+
+    const queryId = createQueryId();
+    executingProfiles.current.add(tab.profileId);
+    dispatchWorkspaceTabs({
+      type: "query-started",
+      tabId: tab.id,
+      queryId,
+      target,
+    });
+    dispatchSession({ type: "begin-work", profileId: tab.profileId });
+
+    try {
+      const result = await queryExecutionApi.execute({
+        queryId,
+        sessionId,
+        database: tab.database,
+        sql: target.sql,
+      });
+      dispatchWorkspaceTabs({
+        type: "query-succeeded",
+        tabId: tab.id,
+        result,
+      });
+      dispatchSession({ type: "ready", profileId: tab.profileId });
+    } catch (error) {
+      const commandError = toCommandError(error);
+      dispatchWorkspaceTabs({
+        type: "query-failed",
+        tabId: tab.id,
+        queryId,
+        error: commandError,
+      });
+      if (isConnectionQueryError(commandError.code)) {
+        dispatchSession({
+          type: "failed",
+          profileId: tab.profileId,
+          error: commandError.message,
+        });
+      } else {
+        dispatchSession({ type: "ready", profileId: tab.profileId });
+      }
+    } finally {
+      executingProfiles.current.delete(tab.profileId);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -820,6 +885,19 @@ export function App() {
                 error={activeSession?.error}
                 onReconnect={() => void connectProfile(activeProfile, false)}
                 onSave={() => void saveQueryDraft(activeTab)}
+                onExecute={(target) => {
+                  if (
+                    !activeConnection ||
+                    activeSession?.state !== "connected"
+                  ) {
+                    return;
+                  }
+                  void executeQuery(
+                    activeTab,
+                    activeConnection.sessionId,
+                    target,
+                  );
+                }}
                 onSqlChange={(sql) =>
                   dispatchWorkspaceTabs({
                     type: "update-query",
@@ -977,6 +1055,7 @@ function QueryWorkspace({
   error,
   onReconnect,
   onSave,
+  onExecute,
   onSqlChange,
 }: {
   tab: Extract<WorkspaceTab, { kind: "query" }>;
@@ -986,13 +1065,21 @@ function QueryWorkspace({
   error?: string;
   onReconnect: () => void;
   onSave: () => void;
+  onExecute: (target: SqlExecutionTarget) => void;
   onSqlChange: (sql: string) => void;
 }) {
   const { t } = useI18n();
+  const editorRef = useRef<SqlEditorController>(null);
+  const execution = getQueryExecution(tab);
   const transitioning = isTransitioning(state);
+  const canExecute =
+    Boolean(connection) &&
+    state === "connected" &&
+    execution.status !== "running" &&
+    tab.sql.trim().length > 0;
   return (
     <div
-      className={`query-workspace ${connection ? "" : "query-workspace-offline"}`}
+      className={`query-workspace ${connection ? "" : "query-workspace-offline"} ${execution.status === "idle" ? "" : "query-workspace-with-execution"}`}
     >
       <header className="query-contextbar">
         <div className="query-context-title">
@@ -1003,6 +1090,28 @@ function QueryWorkspace({
           </span>
         </div>
         <div className="query-context-actions">
+          <IconButton
+            className="query-run-button"
+            label={t("query.runCurrent")}
+            disabled={!canExecute}
+            onClick={() => {
+              const target = editorRef.current?.getExecutionTarget();
+              if (target) onExecute(target);
+            }}
+          >
+            <Play size={14} />
+          </IconButton>
+          <IconButton
+            className="query-run-button"
+            label={t("query.runAll")}
+            disabled={!canExecute}
+            onClick={() => {
+              const target = editorRef.current?.getExecutionTarget("all");
+              if (target) onExecute(target);
+            }}
+          >
+            <ListStart size={14} />
+          </IconButton>
           <span
             className={`query-draft-state query-draft-state-${tab.draftState}`}
             role="status"
@@ -1040,6 +1149,9 @@ function QueryWorkspace({
           </button>
         </div>
       )}
+      {execution.status !== "idle" && (
+        <QueryExecutionNotice execution={execution} />
+      )}
       <Suspense
         fallback={
           <div
@@ -1050,11 +1162,35 @@ function QueryWorkspace({
         }
       >
         <SqlEditor
+          ref={editorRef}
           label={t("workspace.queryArea")}
           value={tab.sql}
           onChange={onSqlChange}
         />
       </Suspense>
+    </div>
+  );
+}
+
+function QueryExecutionNotice({
+  execution,
+}: {
+  execution: Exclude<QueryExecutionState, { status: "idle" }>;
+}) {
+  const { t } = useI18n();
+  const message =
+    execution.status === "running"
+      ? t("query.running")
+      : execution.status === "succeeded"
+        ? t("query.completed")
+        : execution.error.message;
+
+  return (
+    <div
+      className={`query-execution-notice query-execution-notice-${execution.status}`}
+      role={execution.status === "failed" ? "alert" : "status"}
+    >
+      {message}
     </div>
   );
 }
@@ -1104,4 +1240,12 @@ function getWorkspaceTabTitle(
     profiles.find((profile) => profile.id === tab.profileId)?.name ??
     tab.database
   );
+}
+
+function isConnectionQueryError(code: string) {
+  return [
+    "connection_failed",
+    "session_not_found",
+    "ssh_tunnel_disconnected",
+  ].includes(code);
 }

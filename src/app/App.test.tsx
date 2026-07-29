@@ -6,6 +6,7 @@ import type { ConnectionProfile } from "../features/connections/connection";
 import { connectionApi } from "../features/connections/connectionApi";
 import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
+import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
 import { App } from "./App";
 
 const savedProfile: ConnectionProfile = {
@@ -46,6 +47,21 @@ describe("App sidebar", () => {
       updatedAt: 2,
     }));
     vi.spyOn(queryDraftApi, "delete").mockResolvedValue();
+    vi.spyOn(queryExecutionApi, "execute").mockImplementation(
+      async (request) => ({
+        queryId: request.queryId,
+        status: "succeeded",
+        results: [
+          {
+            kind: "rows",
+            columns: [{ name: "value", ordinal: 0 }],
+            rows: [["2"]],
+            rowCount: 1,
+            truncated: false,
+          },
+        ],
+      }),
+    );
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -513,5 +529,90 @@ describe("App sidebar", () => {
       "true",
     );
     expect(screen.getByText("Local saved / postgres")).toBeVisible();
+  });
+
+  it("executes the cursor statement and all SQL with connection ownership", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    const editor = await replaceEditorText("select 1;\nselect 2;");
+    const view = EditorView.findFromDOM(editor)!;
+    act(() => {
+      view.dispatch({ selection: { anchor: view.state.doc.length - 2 } });
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Run selection or current statement",
+      }),
+    );
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(1));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: "select 2;",
+    });
+    expect(await screen.findByText("Query completed")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Run all SQL" }));
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: "select 1;\nselect 2;",
+    });
+  });
+
+  it("reports query errors without marking a healthy session disconnected", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    vi.mocked(queryExecutionApi.execute).mockRejectedValue({
+      code: "query_failed",
+      message: "syntax error at or near select",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select from;");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Run selection or current statement",
+      }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "syntax error at or near select",
+    );
+    expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
   });
 });

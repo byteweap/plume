@@ -20,8 +20,10 @@ use commands::{
         list_connection_profiles, rename_connection_profile, set_connection_favorite,
         update_connection_profile,
     },
+    queries::execute_query,
 };
 use credentials::platform_credential_store;
+use database::query::QueryRegistry;
 use database::session::ConnectionRegistry;
 use drafts::QueryDraftService;
 use profiles::ConnectionProfileService;
@@ -32,6 +34,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .manage(ConnectionRegistry::default())
+        .manage(QueryRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("plume.sqlite3");
             let profiles =
@@ -64,7 +67,8 @@ pub fn run() {
             get_database_collection_items,
             get_schema_objects,
             get_catalog_tree,
-            get_catalog_collection_items
+            get_catalog_collection_items,
+            execute_query
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
+  getQueryExecution,
   workspaceTabsReducer,
 } from "./workspaceTabs";
 
@@ -141,6 +142,62 @@ describe("workspaceTabsReducer", () => {
     expect(state.tabs.find((tab) => tab.id === tabId)).toMatchObject({
       sql: "select 2;",
       draftState: "unsaved",
+    });
+  });
+
+  it("keeps query execution state isolated and ignores stale responses", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-query",
+      titlePrefix: "Query",
+      ...context,
+    });
+    const tabId = state.activeTabId;
+    const target = {
+      sql: "select 1;",
+      from: 0,
+      to: 9,
+      source: "statement" as const,
+    };
+    state = workspaceTabsReducer(state, {
+      type: "query-started",
+      tabId,
+      queryId: "query-2",
+      target,
+    });
+    state = workspaceTabsReducer(state, {
+      type: "query-succeeded",
+      tabId,
+      result: { queryId: "query-1", status: "succeeded", results: [] },
+    });
+
+    const runningTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    if (!runningTab || runningTab.kind !== "query") {
+      throw new Error("Expected the running query tab");
+    }
+    expect(getQueryExecution(runningTab)).toMatchObject({
+      status: "running",
+      queryId: "query-2",
+    });
+
+    state = workspaceTabsReducer(state, {
+      type: "query-failed",
+      tabId,
+      queryId: "query-2",
+      error: { code: "query_failed", message: "syntax error" },
+    });
+    const failedTab = state.tabs.find(
+      (tab) => tab.id === tabId && tab.kind === "query",
+    );
+    if (!failedTab || failedTab.kind !== "query") {
+      throw new Error("Expected the failed query tab");
+    }
+    expect(getQueryExecution(failedTab)).toMatchObject({
+      status: "failed",
+      queryId: "query-2",
+      error: { code: "query_failed", message: "syntax error" },
     });
   });
 

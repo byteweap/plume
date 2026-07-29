@@ -73,6 +73,7 @@ src-tauri/src/
 │   ├── connection.rs  PostgreSQL and TLS connection setup
 │   ├── ssh.rs         SSH authentication, verification, and forwarding
 │   ├── session.rs     Server sessions and per-database clients
+│   ├── query.rs       Query protocol and active-query ownership
 │   └── metadata.rs    Read-only PostgreSQL catalog queries
 ├── error.rs       Stable errors safe to return to the UI
 ├── profiles.rs    Versioned connection-profile repository
@@ -100,9 +101,28 @@ The command boundary converts internal failures into stable codes such as `authe
 7. Safe reconnect opens and registers the replacement before removing the old
    session. It never replays the operation that detected the failure.
 
-Profiles survive application restarts; PostgreSQL sessions do not. Query
-ownership and cancellation will continue to extend the registry boundary rather
-than adding mutable session state to command modules.
+Profiles survive application restarts; PostgreSQL sessions do not. The frontend
+creates an opaque query ID before execution, and the Rust active-query registry
+binds it to a session and database until the command succeeds or fails. Query
+cancellation will extend this ownership boundary rather than adding mutable
+session state to command modules.
+
+## Query Execution Boundary
+
+The query workspace sends only the plain SQL resolved by the statement-boundary
+module, a query ID, a session ID, and a database. Rust uses PostgreSQL's Simple
+Query protocol, so a current target can contain a PostgreSQL function body and
+the all-document target remains compatible with multiple statements. Responses
+preserve statement framing, column names, text-form values, nulls, actual row
+counts, and affected-row counts. Each execution retains at most 10,000 rows in
+memory; excess rows are drained from the protocol stream and marked truncated.
+The response echoes the query ID, and the frontend accepts it only for the
+matching request that is still running in that tab.
+
+Execution results live only for the query-tab lifecycle and are not persisted in
+drafts. Type metadata and batch contracts, configurable result limits,
+virtualized rendering, and confirmed cancellation remain follow-up work in
+P0-F01, P0-F04, P0-F02, and P0-E04 respectively.
 
 ## Lazy Metadata Navigation
 
@@ -191,7 +211,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
-- Query execution, cancellation, result streaming, and transaction ownership are not implemented.
+- Query cancellation, incrementally consumable result streaming, and transaction ownership are not implemented.
 - Data browsing, editing, export, and object actions are not implemented.
 - Linux packaging is not part of the first release target.
 

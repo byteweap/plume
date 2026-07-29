@@ -1,7 +1,7 @@
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{drafts::DraftError, profiles::ProfileError};
+use crate::{database::query::QueryError, drafts::DraftError, profiles::ProfileError};
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
@@ -218,6 +218,48 @@ impl From<DraftError> for CommandError {
     }
 }
 
+impl From<QueryError> for CommandError {
+    fn from(error: QueryError) -> Self {
+        match error {
+            QueryError::Invalid(message) => Self {
+                code: "invalid_query",
+                message,
+                detail: None,
+            },
+            QueryError::AlreadyRunning(_) => Self {
+                code: "query_already_running",
+                message: "This query is already running.".to_owned(),
+                detail: None,
+            },
+            QueryError::Database(error) => Self::from(error),
+            QueryError::Postgres(ref postgres_error) => {
+                if let Some(database_error) = postgres_error.as_db_error() {
+                    Self {
+                        code: "query_failed",
+                        message: database_error.message().to_owned(),
+                        detail: Some(error.to_string()),
+                    }
+                } else {
+                    Self {
+                        code: if postgres_error.is_closed() {
+                            "connection_failed"
+                        } else {
+                            "query_failed"
+                        },
+                        message: if postgres_error.is_closed() {
+                            "The PostgreSQL connection closed while executing the query."
+                        } else {
+                            "PostgreSQL could not execute the query."
+                        }
+                        .to_owned(),
+                        detail: Some(error.to_string()),
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn classify_postgres_error(error: &tokio_postgres::Error) -> &'static str {
     match error.as_db_error().map(|db_error| db_error.code().code()) {
         Some("28P01" | "28000") => "authentication_failed",
@@ -233,6 +275,7 @@ mod tests {
     use std::io;
 
     use super::{CommandError, DatabaseError};
+    use crate::database::query::QueryError;
 
     #[test]
     fn configuration_errors_are_stable_and_safe() {
@@ -320,6 +363,27 @@ mod tests {
             let json = serde_json::to_value(CommandError::from(error))
                 .expect("command error should serialize");
             assert_eq!(json["code"], expected_code);
+        }
+    }
+
+    #[test]
+    fn query_request_errors_have_stable_codes() {
+        let cases = [
+            (
+                QueryError::Invalid("SQL is required.".to_owned()),
+                "invalid_query",
+            ),
+            (
+                QueryError::AlreadyRunning("query-1".to_owned()),
+                "query_already_running",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let json = serde_json::to_value(CommandError::from(error))
+                .expect("command error should serialize");
+            assert_eq!(json["code"], expected_code);
+            assert!(json.get("detail").is_none());
         }
     }
 }

@@ -128,6 +128,14 @@ stored execution state; terminal states freeze the duration. Successful
 multi-statement responses summarize returned rows, affected rows, and whether
 any statement was truncated.
 
+PostgreSQL query failures cross the command boundary as a user-facing message
+plus structured diagnostics: SQLSTATE, severity, and optional detail, hint, and
+original-query position. Internal-query positions are not exposed. PostgreSQL's
+one-based Unicode character position is mapped to CodeMirror's UTF-16 offsets
+within the executed selection, statement, or document. The editor selects and
+reveals the failing character only while that executed SQL still matches the
+current document; the notice separately presents copyable technical details.
+
 Execution results live only for the query-tab lifecycle and are not persisted in
 drafts. Type metadata and batch contracts, configurable result limits,
 and virtualized rendering remain follow-up work in P0-F01, P0-F04, and P0-F02

@@ -23,6 +23,7 @@ const savedProfile: ConnectionProfile = {
   createdAt: 1,
   updatedAt: 1,
 };
+const clipboardWrite = vi.fn<(text: string) => Promise<void>>();
 
 async function replaceEditorText(value: string) {
   const editor = await screen.findByRole("textbox", {
@@ -40,6 +41,12 @@ async function replaceEditorText(value: string) {
 
 describe("App sidebar", () => {
   beforeEach(() => {
+    clipboardWrite.mockReset();
+    clipboardWrite.mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: clipboardWrite },
+    });
     vi.spyOn(queryDraftApi, "list").mockResolvedValue([]);
     vi.spyOn(queryDraftApi, "save").mockImplementation(async (request) => ({
       ...request,
@@ -68,7 +75,10 @@ describe("App sidebar", () => {
     }));
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
 
   it("resizes by dragging the right divider", () => {
     render(
@@ -598,6 +608,13 @@ describe("App sidebar", () => {
     vi.mocked(queryExecutionApi.execute).mockRejectedValue({
       code: "query_failed",
       message: "syntax error at or near select",
+      detail: "PostgreSQL detail",
+      diagnostic: {
+        sqlState: "42601",
+        severity: "ERROR",
+        hint: "Check the statement",
+        position: 8,
+      },
     });
 
     render(
@@ -609,7 +626,7 @@ describe("App sidebar", () => {
     fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
     await screen.findByText("PostgreSQL 18.0");
     fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
-    await replaceEditorText("select from;");
+    const editor = await replaceEditorText("select from;");
     fireEvent.click(
       screen.getByRole("button", {
         name: "Run selection or current statement",
@@ -619,6 +636,33 @@ describe("App sidebar", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "syntax error at or near select",
     );
+    expect(screen.getByText("42601")).toBeVisible();
+    expect(screen.getByText("ERROR")).toBeVisible();
+    expect(screen.getByText("PostgreSQL detail")).toBeVisible();
+    expect(screen.getByText("Check the statement")).toBeVisible();
+    await waitFor(() => {
+      expect(EditorView.findFromDOM(editor)?.state.selection.main).toMatchObject({
+        from: 7,
+        to: 8,
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy error details" }));
+    await waitFor(() =>
+      expect(clipboardWrite).toHaveBeenCalledWith(
+        [
+          "Message: syntax error at or near select",
+          "SQLSTATE: 42601",
+          "Severity: ERROR",
+          "Position: 8",
+          "Detail: PostgreSQL detail",
+          "Hint: Check the statement",
+        ].join("\n"),
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "Error details copied" }),
+    ).toBeVisible();
     expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
   });
 

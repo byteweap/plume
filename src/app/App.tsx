@@ -13,6 +13,8 @@ import {
 } from "react";
 import {
   Braces,
+  Check,
+  Copy,
   Database,
   FileText,
   Globe2,
@@ -49,6 +51,7 @@ import {
   type QueryExecutionState,
 } from "../features/query-execution/queryExecution";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
+import { resolveQueryErrorRange } from "../features/query-execution/queryErrorPosition";
 import type {
   SqlEditorController,
   SqlExecutionTarget,
@@ -1130,6 +1133,17 @@ function QueryWorkspace({
     execution.status !== "running" &&
     execution.status !== "cancelling" &&
     tab.sql.trim().length > 0;
+
+  useEffect(() => {
+    if (execution.status !== "failed") return;
+
+    const position = execution.error.diagnostic?.position;
+    if (position === undefined) return;
+
+    const range = resolveQueryErrorRange(tab.sql, execution.target, position);
+    if (range) editorRef.current?.revealError(range);
+  }, [execution, tab.sql]);
+
   return (
     <div
       className={`query-workspace ${connection ? "" : "query-workspace-offline"} ${execution.status === "idle" ? "" : "query-workspace-with-execution"}`}
@@ -1279,6 +1293,13 @@ function QueryExecutionNotice({
             <span key={detail}>{detail}</span>
           ))}
         </span>
+        {execution.status === "failed" &&
+          (execution.error.detail || execution.error.diagnostic) && (
+            <QueryErrorDetails
+              key={execution.queryId}
+              error={execution.error}
+            />
+          )}
       </div>
       {execution.status === "running" && (
         <IconButton
@@ -1289,6 +1310,80 @@ function QueryExecutionNotice({
           <Square size={12} fill="currentColor" />
         </IconButton>
       )}
+    </div>
+  );
+}
+
+function QueryErrorDetails({
+  error,
+}: {
+  error: Extract<QueryExecutionState, { status: "failed" }>["error"];
+}) {
+  const { t } = useI18n();
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  const diagnostic = error.diagnostic;
+  const fields = [
+    diagnostic && {
+      label: t("query.error.sqlState"),
+      value: diagnostic.sqlState,
+    },
+    diagnostic && {
+      label: t("query.error.severity"),
+      value: diagnostic.severity,
+    },
+    diagnostic?.position !== undefined && {
+      label: t("query.error.position"),
+      value: String(diagnostic.position),
+    },
+    error.detail && {
+      label: t("query.error.detail"),
+      value: error.detail,
+    },
+    diagnostic?.hint && {
+      label: t("query.error.hint"),
+      value: diagnostic.hint,
+    },
+  ].filter((field): field is { label: string; value: string } => Boolean(field));
+  const copyLabel =
+    copyStatus === "copied"
+      ? t("query.error.copied")
+      : copyStatus === "failed"
+        ? t("query.error.copyFailed")
+        : t("query.error.copy");
+
+  async function copyDetails() {
+    const text = [
+      `${t("query.error.message")}: ${error.message}`,
+      ...fields.map((field) => `${field.label}: ${field.value}`),
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
+  return (
+    <div className="query-error-technical">
+      <dl className="query-error-fields">
+        {fields.map((field) => (
+          <div key={field.label}>
+            <dt>{field.label}</dt>
+            <dd>{field.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <IconButton
+        className="query-error-copy-button"
+        label={copyLabel}
+        onClick={() => void copyDetails()}
+      >
+        {copyStatus === "copied" ? <Check size={13} /> : <Copy size={13} />}
+      </IconButton>
     </div>
   );
 }

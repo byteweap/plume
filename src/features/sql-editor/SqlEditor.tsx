@@ -38,6 +38,7 @@ export const SqlEditor = forwardRef<SqlEditorController, SqlEditorProps>(
       setValue: (nextValue) => controllerRef.current?.setValue(nextValue),
       replaceSelection: (replacement) =>
         controllerRef.current?.replaceSelection(replacement),
+      revealError: (range) => controllerRef.current?.revealError(range),
       setLabel: (nextLabel) => controllerRef.current?.setLabel(nextLabel),
       focus: () => controllerRef.current?.focus(),
       destroy: () => controllerRef.current?.destroy(),

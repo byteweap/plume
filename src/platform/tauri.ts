@@ -4,6 +4,14 @@ export interface CommandError {
   code: string;
   message: string;
   detail?: string;
+  diagnostic?: QueryDiagnostic;
+}
+
+export interface QueryDiagnostic {
+  sqlState: string;
+  severity: string;
+  hint?: string;
+  position?: number;
 }
 
 export function isTauriRuntime(): boolean {
@@ -33,10 +41,12 @@ export function toCommandError(error: unknown): CommandError {
   ) {
     const candidate = error as Partial<CommandError>;
     if (typeof candidate.code === "string" && typeof candidate.message === "string") {
+      const diagnostic = toQueryDiagnostic(candidate.diagnostic);
       return {
         code: candidate.code,
         message: candidate.message,
         detail: typeof candidate.detail === "string" ? candidate.detail : undefined,
+        diagnostic,
       };
     }
   }
@@ -44,5 +54,29 @@ export function toCommandError(error: unknown): CommandError {
   return {
     code: "unexpected_error",
     message: error instanceof Error ? error.message : "An unexpected error occurred.",
+  };
+}
+
+function toQueryDiagnostic(value: unknown): QueryDiagnostic | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+
+  const candidate = value as Partial<QueryDiagnostic>;
+  if (
+    typeof candidate.sqlState !== "string" ||
+    typeof candidate.severity !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    sqlState: candidate.sqlState,
+    severity: candidate.severity,
+    hint: typeof candidate.hint === "string" ? candidate.hint : undefined,
+    position:
+      typeof candidate.position === "number" &&
+      Number.isInteger(candidate.position) &&
+      candidate.position > 0
+        ? candidate.position
+        : undefined,
   };
 }

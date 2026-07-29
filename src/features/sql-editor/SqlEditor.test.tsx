@@ -1,4 +1,5 @@
 import { act, render, screen } from "@testing-library/react";
+import { EditorView } from "codemirror";
 import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { SqlEditor, type SqlEditorController } from "./SqlEditor";
@@ -39,5 +40,11 @@ describe("SqlEditor", () => {
     expect(controller.current?.getValue()).toBe("select now();");
     expect(screen.getByRole("textbox", { name: "SQL editor" })).toBeVisible();
     expect(onChange).toHaveBeenCalledTimes(1);
+
+    const view = EditorView.findFromDOM(
+      screen.getByRole("textbox", { name: "SQL editor" }),
+    );
+    act(() => controller.current?.revealError({ from: 7, to: 10 }));
+    expect(view?.state.selection.main).toMatchObject({ from: 7, to: 10 });
   });
 });

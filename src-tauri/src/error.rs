@@ -1,5 +1,6 @@
 use serde::Serialize;
 use thiserror::Error;
+use tokio_postgres::error::ErrorPosition;
 
 use crate::{database::query::QueryError, drafts::DraftError, profiles::ProfileError};
 
@@ -52,6 +53,19 @@ pub struct CommandError {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    diagnostic: Option<Box<QueryDiagnostic>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryDiagnostic {
+    sql_state: String,
+    severity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    position: Option<u32>,
 }
 
 impl From<DatabaseError> for CommandError {
@@ -61,6 +75,7 @@ impl From<DatabaseError> for CommandError {
                 code: "invalid_configuration",
                 message,
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::CertificateFile { ref source, .. } => Self {
                 code: if source.kind() == std::io::ErrorKind::NotFound {
@@ -71,79 +86,94 @@ impl From<DatabaseError> for CommandError {
                 message: "A configured certificate or private-key file could not be read."
                     .to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::InvalidCertificate { .. } => Self {
                 code: "certificate_invalid",
                 message: "A configured certificate or private key is invalid.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::HostnameMismatch(_) => Self {
                 code: "hostname_mismatch",
                 message: "The server certificate does not match the requested host.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::TlsHandshake(_) => Self {
                 code: "tls_handshake_failed",
                 message: "The secure connection could not be established.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::SshConfiguration(message) => Self {
                 code: "ssh_invalid_configuration",
                 message,
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::SshUnknownHostKey => Self {
                 code: "ssh_unknown_host_key",
                 message: "The SSH server is not trusted by the configured known_hosts file."
                     .to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::SshHostKeyMismatch => Self {
                 code: "ssh_host_key_mismatch",
                 message: "The SSH server host key has changed.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::SshKnownHosts(_) => Self {
                 code: "ssh_known_hosts_error",
                 message: "The SSH known_hosts file could not be checked.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::SshAuthentication => Self {
                 code: "ssh_authentication_failed",
                 message: "The SSH server rejected the configured credentials.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::SshPrivateKey { .. } => Self {
                 code: "ssh_private_key_error",
                 message: "The SSH private key could not be loaded.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::SshConnection(_) => Self {
                 code: "ssh_connection_failed",
                 message: "Plume could not establish the SSH connection.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::SshForward(_) => Self {
                 code: "ssh_forward_failed",
                 message: "The SSH server could not forward the database connection.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::SshDisconnected => Self {
                 code: "ssh_tunnel_disconnected",
                 message: "The SSH tunnel is no longer available. Reconnect and try again."
                     .to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::SessionNotFound(_) => Self {
                 code: "session_not_found",
                 message: "The database connection is no longer available. Reconnect and try again."
                     .to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DatabaseError::UnexpectedMetadata(_) => Self {
                 code: "metadata_error",
                 message: "Plume could not understand the PostgreSQL object metadata.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             DatabaseError::Postgres(ref postgres_error) => {
                 let code = classify_postgres_error(postgres_error);
@@ -157,6 +187,7 @@ impl From<DatabaseError> for CommandError {
                     code,
                     message: message.to_owned(),
                     detail: Some(error.to_string()),
+                    diagnostic: None,
                 }
             }
         }
@@ -170,27 +201,32 @@ impl From<ProfileError> for CommandError {
                 code: "profile_not_found",
                 message: "The saved connection no longer exists.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             ProfileError::Invalid(ref message) => Self {
                 code: "invalid_profile",
                 message: message.clone(),
                 detail: None,
+                diagnostic: None,
             },
             ProfileError::Credential(_) => Self {
                 code: "credential_error",
                 message: "The password could not be accessed in the system credential store."
                     .to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             ProfileError::UnsupportedSchema(_) => Self {
                 code: "storage_version_error",
                 message: "This Plume version cannot read the local profile database.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             ProfileError::Storage(_) | ProfileError::Directory(_) | ProfileError::Lock => Self {
                 code: "storage_error",
                 message: "Plume could not update the local connection profiles.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
         }
     }
@@ -203,16 +239,19 @@ impl From<DraftError> for CommandError {
                 code: "invalid_draft",
                 message: message.clone(),
                 detail: None,
+                diagnostic: None,
             },
             DraftError::ProfileNotFound(_) => Self {
                 code: "profile_not_found",
                 message: "The saved connection for this query draft no longer exists.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             DraftError::Storage(_) | DraftError::Lock => Self {
                 code: "storage_error",
                 message: "Plume could not update the local query drafts.".to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
         }
     }
@@ -225,16 +264,19 @@ impl From<QueryError> for CommandError {
                 code: "invalid_query",
                 message,
                 detail: None,
+                diagnostic: None,
             },
             QueryError::AlreadyRunning(_) => Self {
                 code: "query_already_running",
                 message: "This query is already running.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             QueryError::Cancelled => Self {
                 code: "query_cancelled",
                 message: "The query was cancelled by PostgreSQL.".to_owned(),
                 detail: None,
+                diagnostic: None,
             },
             QueryError::CancellationFailed(_) => Self {
                 code: "query_cancellation_failed",
@@ -242,6 +284,7 @@ impl From<QueryError> for CommandError {
                     "The cancellation request could not be sent. The query may still be running."
                         .to_owned(),
                 detail: Some(error.to_string()),
+                diagnostic: None,
             },
             QueryError::Database(error) => Self::from(error),
             QueryError::Postgres(ref postgres_error) => {
@@ -249,7 +292,16 @@ impl From<QueryError> for CommandError {
                     Self {
                         code: "query_failed",
                         message: database_error.message().to_owned(),
-                        detail: Some(error.to_string()),
+                        detail: database_error.detail().map(str::to_owned),
+                        diagnostic: Some(Box::new(QueryDiagnostic {
+                            sql_state: database_error.code().code().to_owned(),
+                            severity: database_error.severity().to_owned(),
+                            hint: database_error.hint().map(str::to_owned),
+                            position: match database_error.position() {
+                                Some(ErrorPosition::Original(position)) => Some(*position),
+                                Some(ErrorPosition::Internal { .. }) | None => None,
+                            },
+                        })),
                     }
                 } else {
                     Self {
@@ -265,6 +317,7 @@ impl From<QueryError> for CommandError {
                         }
                         .to_owned(),
                         detail: Some(error.to_string()),
+                        diagnostic: None,
                     }
                 }
             }
@@ -405,5 +458,39 @@ mod tests {
         .expect("cancellation error should serialize");
         assert_eq!(cancellation_failure["code"], "query_cancellation_failed");
         assert!(cancellation_failure.get("detail").is_some());
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn query_errors_include_structured_postgres_diagnostics() {
+        tauri::async_runtime::block_on(async {
+            let client = crate::database::test_support::connect().await;
+            let syntax_error = client
+                .simple_query("SELECT '😀', FROM;")
+                .await
+                .expect_err("invalid SQL should return a PostgreSQL error");
+            let syntax_json =
+                serde_json::to_value(CommandError::from(QueryError::Postgres(syntax_error)))
+                    .unwrap();
+
+            assert_eq!(syntax_json["code"], "query_failed");
+            assert_eq!(syntax_json["diagnostic"]["sqlState"], "42601");
+            assert_eq!(syntax_json["diagnostic"]["severity"], "ERROR");
+            assert_eq!(syntax_json["diagnostic"]["position"], 13);
+
+            let raised_error = client
+                .simple_query(
+                    "DO $$ BEGIN RAISE EXCEPTION 'boom' USING \
+                     DETAIL = 'row detail', HINT = 'check input'; END $$;",
+                )
+                .await
+                .expect_err("raised exception should return PostgreSQL detail fields");
+            let raised_json =
+                serde_json::to_value(CommandError::from(QueryError::Postgres(raised_error)))
+                    .unwrap();
+
+            assert_eq!(raised_json["detail"], "row detail");
+            assert_eq!(raised_json["diagnostic"]["hint"], "check input");
+        });
     }
 }

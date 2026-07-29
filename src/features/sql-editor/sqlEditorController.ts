@@ -17,6 +17,7 @@ export interface SqlEditorController {
   getExecutionTarget(scope?: SqlExecutionScope): SqlExecutionTarget | null;
   setValue(value: string): void;
   replaceSelection(value: string): void;
+  revealError(range: { from: number; to: number }): void;
   setLabel(label: string): void;
   focus(): void;
   destroy(): void;
@@ -67,6 +68,15 @@ export function createSqlEditor(
     },
     replaceSelection(value) {
       view.dispatch(view.state.replaceSelection(value));
+    },
+    revealError(range) {
+      const from = Math.max(0, Math.min(range.from, view.state.doc.length));
+      const to = Math.max(from, Math.min(range.to, view.state.doc.length));
+      view.dispatch({
+        selection: { anchor: from, head: to },
+        effects: EditorView.scrollIntoView(from, { y: "center" }),
+      });
+      view.focus();
     },
     setLabel(label) {
       view.contentDOM.setAttribute("aria-label", label);

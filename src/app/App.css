@@ -690,8 +690,54 @@
 }
 
 .query-execution-notice-failed {
+  align-items: flex-start;
   color: #923a39;
   background: #fff1f0;
+}
+
+.query-execution-notice-failed .query-execution-content {
+  align-items: flex-start;
+}
+
+.query-error-technical {
+  display: flex;
+  min-width: 0;
+  flex: 1 0 100%;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid rgb(146 58 57 / 20%);
+  padding-top: 7px;
+}
+
+.query-error-fields {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+}
+
+.query-error-fields > div {
+  display: flex;
+  min-width: 0;
+  gap: 5px;
+}
+
+.query-error-fields dt {
+  font-weight: 600;
+}
+
+.query-error-fields dd {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+
+.icon-button.query-error-copy-button {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 }
 
 .query-connection-state {
@@ -813,6 +859,10 @@
   .query-execution-notice-failed {
     color: #f0aaa5;
     background: #342322;
+  }
+
+  .query-error-technical {
+    border-color: rgb(240 170 165 / 24%);
   }
 
   .query-draft-state {

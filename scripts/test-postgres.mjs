@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const certificateDirectory = resolve("tests/postgres/tls/generated");
+const sshFixtureDirectory = resolve("tests/postgres/ssh/generated");
 
 const environment = {
   ...process.env,
@@ -15,6 +16,10 @@ const environment = {
     "postgresql://plume:plume@localhost:55433/plume?sslmode=require",
   PLUME_TEST_TLS_CERTIFICATE_DIR:
     process.env.PLUME_TEST_TLS_CERTIFICATE_DIR ?? certificateDirectory,
+  PLUME_TEST_SSH_FIXTURE_DIR:
+    process.env.PLUME_TEST_SSH_FIXTURE_DIR ?? sshFixtureDirectory,
+  PLUME_TEST_SSH_PORT: process.env.PLUME_TEST_SSH_PORT ?? "55222",
+  PLUME_TEST_SSH_JUMP_PORT: process.env.PLUME_TEST_SSH_JUMP_PORT ?? "55223",
 };
 
 const result = spawnSync(

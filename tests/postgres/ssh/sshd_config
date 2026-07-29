@@ -1,0 +1,14 @@
+Port 22
+ListenAddress 0.0.0.0
+HostKey /ssh-fixtures/host_key
+AuthorizedKeysFile /ssh-fixtures/authorized_keys
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no
+PermitEmptyPasswords no
+AllowTcpForwarding yes
+GatewayPorts no
+StrictModes no
+UsePAM no
+PrintMotd no
+Subsystem sftp internal-sftp

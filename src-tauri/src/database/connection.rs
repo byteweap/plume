@@ -1,4 +1,4 @@
-use std::{error::Error, fs, time::Duration};
+use std::{error::Error, fs, net::IpAddr, time::Duration};
 
 use native_tls::{Certificate, Identity, TlsConnector};
 use postgres_native_tls::MakeTlsConnector;
@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
 use tokio_postgres::{Client, Config, config::SslMode as PostgresSslMode};
 
-use crate::error::DatabaseError;
+use crate::{
+    database::ssh::{ResolvedSshConfig, SshTunnel},
+    error::DatabaseError,
+};
 
 const APPLICATION_NAME: &str = "plume";
 
@@ -23,6 +26,12 @@ pub struct ConnectionTestRequest {
     pub client_certificate_path: Option<String>,
     pub client_key_path: Option<String>,
     pub timeout_seconds: u64,
+    #[serde(skip)]
+    pub ssh_config: Option<ResolvedSshConfig>,
+    #[serde(skip)]
+    pub connect_hostaddr: Option<IpAddr>,
+    #[serde(skip)]
+    pub connect_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -35,7 +44,7 @@ pub enum SslMode {
     VerifyFull,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionTestResult {
     pub database: String,
@@ -44,7 +53,7 @@ pub struct ConnectionTestResult {
     pub transport: Transport,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Transport {
     Plain,
@@ -54,11 +63,18 @@ pub enum Transport {
 pub struct OpenConnection {
     pub client: Client,
     pub result: ConnectionTestResult,
+    pub settings: ConnectionTestRequest,
+    pub tunnel: Option<SshTunnel>,
 }
 
 pub async fn test(request: &ConnectionTestRequest) -> Result<ConnectionTestResult, DatabaseError> {
     let connection = open(request).await?;
-    Ok(connection.result)
+    let result = connection.result;
+    drop(connection.client);
+    if let Some(tunnel) = connection.tunnel {
+        tunnel.close().await;
+    }
+    Ok(result)
 }
 
 pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, DatabaseError> {
@@ -66,11 +82,29 @@ pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, Dat
 
     let started_at = Instant::now();
     let timeout = Duration::from_secs(request.timeout_seconds.clamp(1, 60));
-    let config = build_config(request, timeout);
+    let mut settings = request.clone();
+    let tunnel = if settings.connect_hostaddr.is_none() {
+        match settings.ssh_config.as_ref() {
+            Some(ssh_config) => {
+                let tunnel =
+                    SshTunnel::start(ssh_config, &settings.host, settings.port, timeout).await?;
+                settings.connect_hostaddr = Some(tunnel.local_hostaddr());
+                settings.connect_port = Some(tunnel.local_port());
+                Some(tunnel)
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+    let config = build_config(&settings, timeout);
 
     let (client, transport) = match request.ssl_mode {
         SslMode::Disable => {
-            let (client, connection) = config.connect(tokio_postgres::NoTls).await?;
+            let (client, connection) = config
+                .connect(tokio_postgres::NoTls)
+                .await
+                .map_err(|error| prefer_tunnel_error(&tunnel, DatabaseError::Postgres(error)))?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = connection.await {
                     eprintln!("PostgreSQL connection closed: {error}");
@@ -80,10 +114,9 @@ pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, Dat
         }
         ssl_mode => {
             let connector = build_tls_connector(request)?;
-            let (client, connection) = config
-                .connect(connector)
-                .await
-                .map_err(|error| classify_tls_connection_error(error, ssl_mode))?;
+            let (client, connection) = config.connect(connector).await.map_err(|error| {
+                prefer_tunnel_error(&tunnel, classify_tls_connection_error(error, ssl_mode))
+            })?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = connection.await {
                     eprintln!("PostgreSQL TLS connection closed: {error}");
@@ -99,10 +132,13 @@ pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, Dat
             "SELECT current_database(), current_setting('server_version')",
             &[],
         )
-        .await?;
+        .await
+        .map_err(|error| prefer_tunnel_error(&tunnel, DatabaseError::Postgres(error)))?;
 
     Ok(OpenConnection {
         client,
+        settings,
+        tunnel,
         result: ConnectionTestResult {
             database: row.get(0),
             latency_ms: started_at.elapsed().as_millis(),
@@ -162,7 +198,7 @@ fn build_config(request: &ConnectionTestRequest, timeout: Duration) -> Config {
     let mut config = Config::new();
     config
         .host(&request.host)
-        .port(request.port)
+        .port(request.connect_port.unwrap_or(request.port))
         .dbname(&request.database)
         .user(&request.username)
         .password(&request.password)
@@ -173,6 +209,9 @@ fn build_config(request: &ConnectionTestRequest, timeout: Duration) -> Config {
             SslMode::Prefer => PostgresSslMode::Prefer,
             SslMode::Require | SslMode::VerifyCa | SslMode::VerifyFull => PostgresSslMode::Require,
         });
+    if let Some(hostaddr) = request.connect_hostaddr {
+        config.hostaddr(hostaddr);
+    }
     config
 }
 
@@ -296,12 +335,20 @@ fn error_chain(error: &dyn Error) -> String {
     messages.join(": ")
 }
 
+fn prefer_tunnel_error(tunnel: &Option<SshTunnel>, fallback: DatabaseError) -> DatabaseError {
+    tunnel
+        .as_ref()
+        .and_then(SshTunnel::forward_failure)
+        .map(DatabaseError::SshForward)
+        .unwrap_or(fallback)
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
     use super::{ConnectionTestRequest, SslMode, Transport, test, validate};
-    use crate::database::test_support;
+    use crate::{database::test_support, error::DatabaseError};
 
     fn request(ssl_mode: SslMode) -> ConnectionTestRequest {
         ConnectionTestRequest {
@@ -315,6 +362,9 @@ mod tests {
             client_certificate_path: None,
             client_key_path: None,
             timeout_seconds: 10,
+            ssh_config: None,
+            connect_hostaddr: None,
+            connect_port: None,
         }
     }
 
@@ -458,6 +508,102 @@ mod tests {
                 .await
                 .expect("client certificate authentication should succeed");
             assert!(matches!(result.transport, Transport::Tls));
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local SSH and PostgreSQL integration environment"]
+    fn connects_through_ssh_with_password_and_encrypted_private_key() {
+        tauri::async_runtime::block_on(async {
+            for ssh_config in [
+                test_support::ssh_password_config(),
+                test_support::ssh_private_key_config(),
+            ] {
+                let mut request = test_support::connection_request();
+                request.host = "postgres".to_owned();
+                request.port = 5432;
+                request.ssh_config = Some(ssh_config);
+                let result = test(&request)
+                    .await
+                    .expect("SSH authentication should open a PostgreSQL tunnel");
+                assert!(matches!(result.transport, Transport::Plain));
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local SSH and PostgreSQL integration environment"]
+    fn connects_through_a_single_jump_host() {
+        tauri::async_runtime::block_on(async {
+            let mut request = test_support::connection_request();
+            request.host = "postgres".to_owned();
+            request.port = 5432;
+            request.ssh_config = Some(test_support::ssh_jump_config());
+
+            let result = test(&request)
+                .await
+                .expect("the jump host should reach PostgreSQL through the target SSH server");
+            assert!(matches!(result.transport, Transport::Plain));
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local SSH and PostgreSQL integration environment"]
+    fn ssh_rejects_bad_credentials_and_untrusted_host_keys() {
+        tauri::async_runtime::block_on(async {
+            let mut request = test_support::connection_request();
+            request.host = "postgres".to_owned();
+            request.port = 5432;
+
+            let mut bad_password = test_support::ssh_password_config();
+            bad_password.endpoint.password = Some("incorrect".to_owned());
+            request.ssh_config = Some(bad_password);
+            assert!(matches!(
+                test(&request).await,
+                Err(DatabaseError::SshAuthentication)
+            ));
+
+            let mut unknown = test_support::ssh_password_config();
+            unknown.endpoint.config.known_hosts_path =
+                Some(test_support::ssh_fixture_path("known_hosts_unknown"));
+            request.ssh_config = Some(unknown);
+            assert!(matches!(
+                test(&request).await,
+                Err(DatabaseError::SshUnknownHostKey)
+            ));
+
+            let mut changed = test_support::ssh_password_config();
+            changed.endpoint.config.known_hosts_path =
+                Some(test_support::ssh_fixture_path("known_hosts_changed"));
+            request.ssh_config = Some(changed);
+            assert!(matches!(
+                test(&request).await,
+                Err(DatabaseError::SshHostKeyMismatch)
+            ));
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local SSH and PostgreSQL TLS integration environment"]
+    fn ssh_tunnel_preserves_verify_full_hostname_validation() {
+        tauri::async_runtime::block_on(async {
+            let mut request = test_support::tls_connection_request();
+            request.host = "database.internal".to_owned();
+            request.port = 5432;
+            request.ssl_mode = SslMode::VerifyFull;
+            request.root_certificate_path = Some(test_support::tls_certificate_path("ca.crt"));
+            request.ssh_config = Some(test_support::ssh_password_config());
+
+            let result = test(&request)
+                .await
+                .expect("verify-full should validate the database host through SSH");
+            assert!(matches!(result.transport, Transport::Tls));
+
+            request.host = "postgres-tls".to_owned();
+            let error = test(&request)
+                .await
+                .expect_err("verify-full should still reject a hostname mismatch through SSH");
+            assert!(matches!(error, DatabaseError::HostnameMismatch(_)));
         });
     }
 }

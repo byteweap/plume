@@ -107,15 +107,15 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Start disposable PostgreSQL services
+      - name: Start disposable PostgreSQL and SSH services
         run: npm run postgres:up
 
       - name: Run Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
-      - name: Run PostgreSQL integration tests
+      - name: Run PostgreSQL, TLS, and SSH integration tests
         run: npm run test:postgres
 
-      - name: Stop disposable PostgreSQL services
+      - name: Stop disposable integration services
         if: always()
         run: npm run postgres:down

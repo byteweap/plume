@@ -68,8 +68,8 @@ Server
 |---|---|
 | Direct connection and SSL | Available |
 | Multi-database object navigation | Available |
-| System credential storage | Planned for MVP |
-| SSH Tunnel | Planned for MVP |
+| System credential storage | Available |
+| SSH Tunnel | Available |
 | SQL editor, execution, cancellation | Planned for MVP |
 | Query results and export | Planned for MVP |
 | Table data browsing and safe editing | Planned for MVP |

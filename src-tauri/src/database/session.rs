@@ -6,13 +6,14 @@ use tokio_postgres::Client;
 use uuid::Uuid;
 
 use crate::{
-    database::connection::{ConnectionTestRequest, open},
+    database::connection::{ConnectionTestRequest, OpenConnection, open},
     error::DatabaseError,
 };
 
 struct ServerSession {
     settings: ConnectionTestRequest,
     clients: RwLock<HashMap<String, Arc<Client>>>,
+    tunnel: Option<crate::database::ssh::SshTunnel>,
 }
 
 #[derive(Debug, Serialize)]
@@ -29,12 +30,16 @@ pub struct ConnectionRegistry {
 }
 
 impl ConnectionRegistry {
-    pub async fn insert(&self, settings: ConnectionTestRequest, client: Client) -> String {
+    pub async fn insert(&self, connection: OpenConnection) -> String {
         let session_id = Uuid::new_v4().to_string();
-        let primary_database = settings.database.clone();
+        let primary_database = connection.settings.database.clone();
         let session = ServerSession {
-            settings,
-            clients: RwLock::new(HashMap::from([(primary_database, Arc::new(client))])),
+            settings: connection.settings,
+            clients: RwLock::new(HashMap::from([(
+                primary_database,
+                Arc::new(connection.client),
+            )])),
+            tunnel: connection.tunnel,
         };
 
         self.sessions
@@ -79,6 +84,9 @@ impl ConnectionRegistry {
 
     pub async fn health(&self, session_id: &str) -> Result<SessionHealth, DatabaseError> {
         let session = self.session(session_id).await?;
+        if let Some(tunnel) = session.tunnel.as_ref() {
+            tunnel.health().await?;
+        }
         let client = session
             .clients
             .read()
@@ -97,12 +105,16 @@ impl ConnectionRegistry {
     }
 
     pub async fn remove(&self, session_id: &str) -> Result<(), DatabaseError> {
-        self.sessions
+        let session = self
+            .sessions
             .write()
             .await
             .remove(session_id)
-            .map(drop)
-            .ok_or_else(|| DatabaseError::SessionNotFound(session_id.to_owned()))
+            .ok_or_else(|| DatabaseError::SessionNotFound(session_id.to_owned()))?;
+        if let Some(tunnel) = session.tunnel.as_ref() {
+            tunnel.close().await;
+        }
+        Ok(())
     }
 
     #[cfg(test)]
@@ -161,7 +173,7 @@ mod tests {
                 .await
                 .expect("primary integration test connection should open");
             let registry = ConnectionRegistry::default();
-            let session_id = registry.insert(request, connection.client).await;
+            let session_id = registry.insert(connection).await;
 
             let primary = registry
                 .primary_client(&session_id)
@@ -206,9 +218,7 @@ mod tests {
             let replacement = open(&replacement_request)
                 .await
                 .expect("replacement connection should open");
-            let replacement_id = registry
-                .insert(replacement_request, replacement.client)
-                .await;
+            let replacement_id = registry.insert(replacement).await;
             registry
                 .remove(&session_id)
                 .await
@@ -219,6 +229,40 @@ mod tests {
 
             registry.remove(&replacement_id).await.unwrap();
             assert_eq!(registry.len().await, 0);
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local SSH and PostgreSQL integration environment"]
+    fn manages_a_tunneled_session_and_secondary_database_client() {
+        tauri::async_runtime::block_on(async {
+            let mut request = test_support::connection_request();
+            request.host = "postgres".to_owned();
+            request.port = 5432;
+            request.ssh_config = Some(test_support::ssh_password_config());
+            let connection = open(&request)
+                .await
+                .expect("tunneled integration connection should open");
+            let registry = ConnectionRegistry::default();
+            let session_id = registry.insert(connection).await;
+
+            let secondary = registry
+                .database_client(&session_id, &test_support::secondary_database())
+                .await
+                .expect("secondary client should reuse the existing tunnel endpoint");
+            let database: String = secondary
+                .query_one("SELECT current_database()", &[])
+                .await
+                .expect("secondary database should answer through SSH")
+                .get(0);
+            assert_eq!(database, test_support::secondary_database());
+            assert_eq!(
+                registry.health(&session_id).await.unwrap().database_count,
+                2
+            );
+
+            registry.remove(&session_id).await.unwrap();
+            assert!(registry.health(&session_id).await.is_err());
         });
     }
 }

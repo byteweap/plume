@@ -71,6 +71,7 @@ src-tauri/src/
 ├── credentials.rs  Operating-system credential adapter
 ├── database/
 │   ├── connection.rs  PostgreSQL and TLS connection setup
+│   ├── ssh.rs         SSH authentication, verification, and forwarding
 │   ├── session.rs     Server sessions and per-database clients
 │   └── metadata.rs    Read-only PostgreSQL catalog queries
 ├── error.rs       Stable errors safe to return to the UI
@@ -83,18 +84,19 @@ The command boundary converts internal failures into stable codes such as `authe
 ## Connection and Session Lifecycle
 
 1. React validates the connection form. Rust stores the non-secret profile in
-   SQLite and the password in the operating-system credential store.
+   SQLite and database/SSH secrets in the operating-system credential store.
 2. `test_connection_profile` tests unsaved form changes and resolves an existing
    password from the credential store when the edit form leaves it blank.
-3. `connect_saved_database` resolves the password in Rust, opens the initial
-   client, and registers a server session.
+3. `connect_saved_database` resolves secrets in Rust, starts the optional SSH
+   tunnel, opens the initial client, and registers a server session.
 4. React receives only an opaque session ID and tracks `disconnected`,
    `connecting`, `connected`, `busy`, `reconnecting`, `disconnecting`, and
    `error` states. Application startup restores profiles but never sessions.
 5. Expanding another database asks the registry for a client. The registry
    reuses an existing client or creates one from the in-memory session settings.
-6. `check_database_session` executes a real health query. Explicit disconnect
-   removes every database client owned by the session.
+6. `check_database_session` checks the optional tunnel and executes a real
+   PostgreSQL health query. Explicit disconnect closes the tunnel and removes
+   every database client owned by the session.
 7. Safe reconnect opens and registers the replacement before removing the old
    session. It never replays the operation that detected the failure.
 
@@ -134,6 +136,25 @@ invalid certificate material, hostname mismatches, and other TLS handshake
 failures with separate stable error codes. Neither certificate contents nor
 private-key contents are serialized into profile storage or logs.
 
+## SSH Tunnel Semantics
+
+- Password and encrypted or unencrypted private-key authentication are supported.
+- One optional jump host performs its own SSH handshake, host-key verification,
+  and authentication before opening the target SSH connection.
+- Every endpoint must match the configured `known_hosts` file. When no path is
+  supplied, the platform default `~/.ssh/known_hosts` is used. Unknown and
+  changed host keys are rejected with distinct stable errors.
+- The tunnel binds a random loopback port. PostgreSQL connects to that address,
+  while retaining the original database host as its TLS server name. Therefore
+  `verify-full` continues to validate the database certificate through SSH.
+- A server session owns one tunnel and reuses its local endpoint for additional
+  database clients. Health checks ping both SSH hops, and test/disconnect/drop
+  paths close or abort the tunnel listener.
+
+SSH passwords and private-key passphrases use independent credential-store
+references. Profile responses and SQLite contain only endpoint parameters and
+file paths, never those secrets or private-key contents.
+
 ## Security and Privacy Invariants
 
 - The UI never opens raw PostgreSQL sockets.
@@ -141,14 +162,14 @@ private-key contents are serialized into profile storage or logs.
 - The frontend receives an opaque session ID instead of retained credentials.
 - Metadata queries are parameterized where user-provided identifiers are involved.
 - Browser-only development must fail privileged operations explicitly; it must not fake successful database behavior.
-- Saved passwords use macOS Keychain or Windows Credential Manager and never
-  enter SQLite or serialized profile responses.
+- Saved database/SSH passwords and SSH key passphrases use macOS Keychain or
+  Windows Credential Manager and never enter SQLite or serialized profile responses.
 
 ## Testing Strategy
 
 - **Type and lint checks:** TypeScript strict mode, ESLint, rustfmt, and Clippy with warnings denied.
 - **Current automated tests:** frontend validation, transformations, grouping, and tree interactions, plus Rust error, connection, metadata, and session unit tests.
-- **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Schema fixtures clean themselves up.
+- **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Two OpenSSH services verify password and encrypted-key authentication, one-hop jump hosts, strict host keys, tunnel health/lifecycle, and SSH plus `verify-full`. Schema fixtures clean themselves up.
 - **Planned end-to-end tests:** the ten acceptance scenarios in the product requirements.
 
 The standard local gates are:
@@ -170,7 +191,6 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
-- SSH Tunnel is not implemented; the SSL portion of `P0-A12` and `P0-C07` is implemented and covered by the PostgreSQL 14/16/18 CI matrix.
 - Query execution, cancellation, result streaming, and transaction ownership are not implemented.
 - Data browsing, editing, export, and object actions are not implemented.
 - Linux packaging is not part of the first release target.

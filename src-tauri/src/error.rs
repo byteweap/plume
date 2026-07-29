@@ -20,6 +20,24 @@ pub enum DatabaseError {
     HostnameMismatch(String),
     #[error("The TLS handshake failed: {0}")]
     TlsHandshake(String),
+    #[error("The SSH configuration is invalid: {0}")]
+    SshConfiguration(String),
+    #[error("The SSH host key is unknown.")]
+    SshUnknownHostKey,
+    #[error("The SSH host key does not match the known_hosts entry.")]
+    SshHostKeyMismatch,
+    #[error("The SSH known_hosts file could not be checked: {0}")]
+    SshKnownHosts(String),
+    #[error("The SSH server rejected the configured credentials.")]
+    SshAuthentication,
+    #[error("The SSH private key '{path}' is invalid: {reason}")]
+    SshPrivateKey { path: String, reason: String },
+    #[error("The SSH connection failed: {0}")]
+    SshConnection(String),
+    #[error("The SSH port forward failed: {0}")]
+    SshForward(String),
+    #[error("The SSH tunnel is no longer available.")]
+    SshDisconnected,
     #[error("The database session '{0}' is no longer available.")]
     SessionNotFound(String),
     #[error("PostgreSQL returned an unsupported metadata kind: {0}")]
@@ -68,6 +86,53 @@ impl From<DatabaseError> for CommandError {
                 code: "tls_handshake_failed",
                 message: "The secure connection could not be established.".to_owned(),
                 detail: Some(error.to_string()),
+            },
+            DatabaseError::SshConfiguration(message) => Self {
+                code: "ssh_invalid_configuration",
+                message,
+                detail: None,
+            },
+            DatabaseError::SshUnknownHostKey => Self {
+                code: "ssh_unknown_host_key",
+                message: "The SSH server is not trusted by the configured known_hosts file."
+                    .to_owned(),
+                detail: None,
+            },
+            DatabaseError::SshHostKeyMismatch => Self {
+                code: "ssh_host_key_mismatch",
+                message: "The SSH server host key has changed.".to_owned(),
+                detail: None,
+            },
+            DatabaseError::SshKnownHosts(_) => Self {
+                code: "ssh_known_hosts_error",
+                message: "The SSH known_hosts file could not be checked.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::SshAuthentication => Self {
+                code: "ssh_authentication_failed",
+                message: "The SSH server rejected the configured credentials.".to_owned(),
+                detail: None,
+            },
+            DatabaseError::SshPrivateKey { .. } => Self {
+                code: "ssh_private_key_error",
+                message: "The SSH private key could not be loaded.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::SshConnection(_) => Self {
+                code: "ssh_connection_failed",
+                message: "Plume could not establish the SSH connection.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::SshForward(_) => Self {
+                code: "ssh_forward_failed",
+                message: "The SSH server could not forward the database connection.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::SshDisconnected => Self {
+                code: "ssh_tunnel_disconnected",
+                message: "The SSH tunnel is no longer available. Reconnect and try again."
+                    .to_owned(),
+                detail: None,
             },
             DatabaseError::SessionNotFound(_) => Self {
                 code: "session_not_found",
@@ -185,6 +250,48 @@ mod tests {
                 DatabaseError::TlsHandshake("handshake".to_owned()),
                 "tls_handshake_failed",
             ),
+        ];
+
+        for (error, expected_code) in cases {
+            let json = serde_json::to_value(CommandError::from(error))
+                .expect("command error should serialize");
+            assert_eq!(json["code"], expected_code);
+        }
+    }
+
+    #[test]
+    fn ssh_errors_have_distinct_stable_codes() {
+        let cases = [
+            (
+                DatabaseError::SshConfiguration("missing host".to_owned()),
+                "ssh_invalid_configuration",
+            ),
+            (DatabaseError::SshUnknownHostKey, "ssh_unknown_host_key"),
+            (DatabaseError::SshHostKeyMismatch, "ssh_host_key_mismatch"),
+            (
+                DatabaseError::SshKnownHosts("unreadable".to_owned()),
+                "ssh_known_hosts_error",
+            ),
+            (
+                DatabaseError::SshAuthentication,
+                "ssh_authentication_failed",
+            ),
+            (
+                DatabaseError::SshPrivateKey {
+                    path: "/tmp/id_ed25519".to_owned(),
+                    reason: "invalid".to_owned(),
+                },
+                "ssh_private_key_error",
+            ),
+            (
+                DatabaseError::SshConnection("refused".to_owned()),
+                "ssh_connection_failed",
+            ),
+            (
+                DatabaseError::SshForward("denied".to_owned()),
+                "ssh_forward_failed",
+            ),
+            (DatabaseError::SshDisconnected, "ssh_tunnel_disconnected"),
         ];
 
         for (error, expected_code) in cases {

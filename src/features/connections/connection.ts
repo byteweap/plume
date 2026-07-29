@@ -15,6 +15,8 @@ export const sslModes = [
   "verify-full",
 ] as const;
 
+export const sshAuthentications = ["password", "private-key"] as const;
+
 export const connectionColors = [
   "#2f6d52",
   "#2563a6",
@@ -25,6 +27,7 @@ export const connectionColors = [
 
 export type Environment = (typeof environments)[number];
 export type SslMode = (typeof sslModes)[number];
+export type SshAuthentication = (typeof sshAuthentications)[number];
 
 export const connectionFormSchema = z
   .object({
@@ -40,6 +43,26 @@ export const connectionFormSchema = z
     rootCertificatePath: z.string().trim(),
     clientCertificatePath: z.string().trim(),
     clientKeyPath: z.string().trim(),
+    sshEnabled: z.boolean(),
+    sshHost: z.string().trim(),
+    sshPort: z.coerce.number().int(),
+    sshUsername: z.string().trim(),
+    sshAuthentication: z.enum(sshAuthentications),
+    sshPassword: z.string(),
+    sshPasswordSaved: z.boolean(),
+    sshPrivateKeyPath: z.string().trim(),
+    sshPrivateKeyPassphrase: z.string(),
+    sshKnownHostsPath: z.string().trim(),
+    jumpHostEnabled: z.boolean(),
+    jumpHost: z.string().trim(),
+    jumpPort: z.coerce.number().int(),
+    jumpUsername: z.string().trim(),
+    jumpAuthentication: z.enum(sshAuthentications),
+    jumpPassword: z.string(),
+    jumpPasswordSaved: z.boolean(),
+    jumpPrivateKeyPath: z.string().trim(),
+    jumpPrivateKeyPassphrase: z.string(),
+    jumpKnownHostsPath: z.string().trim(),
   })
   .superRefine((value, context) => {
     const requiresCertificate =
@@ -68,6 +91,62 @@ export const connectionFormSchema = z
         code: "custom",
         message: "clientCertificateSsl",
         path: ["clientCertificatePath"],
+      });
+    }
+    if (!value.sshEnabled) return;
+
+    for (const field of ["sshHost", "sshUsername"] as const) {
+      if (!value[field]) {
+        context.addIssue({ code: "custom", message: "required", path: [field] });
+      }
+    }
+    if (value.sshPort < 1 || value.sshPort > 65535) {
+      context.addIssue({ code: "custom", message: "port", path: ["sshPort"] });
+    }
+    if (
+      value.sshAuthentication === "password" &&
+      !value.sshPassword &&
+      !value.sshPasswordSaved
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "sshPassword",
+        path: ["sshPassword"],
+      });
+    }
+    if (value.sshAuthentication === "private-key" && !value.sshPrivateKeyPath) {
+      context.addIssue({
+        code: "custom",
+        message: "sshPrivateKey",
+        path: ["sshPrivateKeyPath"],
+      });
+    }
+    if (!value.jumpHostEnabled) return;
+
+    for (const field of ["jumpHost", "jumpUsername"] as const) {
+      if (!value[field]) {
+        context.addIssue({ code: "custom", message: "required", path: [field] });
+      }
+    }
+    if (value.jumpPort < 1 || value.jumpPort > 65535) {
+      context.addIssue({ code: "custom", message: "port", path: ["jumpPort"] });
+    }
+    if (
+      value.jumpAuthentication === "password" &&
+      !value.jumpPassword &&
+      !value.jumpPasswordSaved
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "sshPassword",
+        path: ["jumpPassword"],
+      });
+    }
+    if (value.jumpAuthentication === "private-key" && !value.jumpPrivateKeyPath) {
+      context.addIssue({
+        code: "custom",
+        message: "sshPrivateKey",
+        path: ["jumpPrivateKeyPath"],
       });
     }
   });
@@ -111,6 +190,26 @@ export interface ConnectionProfile
     | "rootCertificatePath"
     | "clientCertificatePath"
     | "clientKeyPath"
+    | "sshEnabled"
+    | "sshHost"
+    | "sshPort"
+    | "sshUsername"
+    | "sshAuthentication"
+    | "sshPassword"
+    | "sshPasswordSaved"
+    | "sshPrivateKeyPath"
+    | "sshPrivateKeyPassphrase"
+    | "sshKnownHostsPath"
+    | "jumpHostEnabled"
+    | "jumpHost"
+    | "jumpPort"
+    | "jumpUsername"
+    | "jumpAuthentication"
+    | "jumpPassword"
+    | "jumpPasswordSaved"
+    | "jumpPrivateKeyPath"
+    | "jumpPrivateKeyPassphrase"
+    | "jumpKnownHostsPath"
   > {
   id: string;
   rootCertificatePath?: string;
@@ -129,13 +228,17 @@ export interface ActiveConnection extends ConnectionProfile {
 
 export type SavedConnection = ActiveConnection;
 
-export interface SshConfig {
+export interface SshEndpointConfig {
   host: string;
   port: number;
   username: string;
-  authentication: string;
+  authentication: SshAuthentication;
   privateKeyPath?: string;
-  jumpHost?: string;
+  knownHostsPath?: string;
+}
+
+export interface SshConfig extends SshEndpointConfig {
+  jumpHost?: SshEndpointConfig;
 }
 
 export interface ProfileWriteRequest
@@ -145,6 +248,26 @@ export interface ProfileWriteRequest
     | "rootCertificatePath"
     | "clientCertificatePath"
     | "clientKeyPath"
+    | "sshEnabled"
+    | "sshHost"
+    | "sshPort"
+    | "sshUsername"
+    | "sshAuthentication"
+    | "sshPassword"
+    | "sshPasswordSaved"
+    | "sshPrivateKeyPath"
+    | "sshPrivateKeyPassphrase"
+    | "sshKnownHostsPath"
+    | "jumpHostEnabled"
+    | "jumpHost"
+    | "jumpPort"
+    | "jumpUsername"
+    | "jumpAuthentication"
+    | "jumpPassword"
+    | "jumpPasswordSaved"
+    | "jumpPrivateKeyPath"
+    | "jumpPrivateKeyPassphrase"
+    | "jumpKnownHostsPath"
   > {
   id?: string;
   password?: string;
@@ -152,6 +275,10 @@ export interface ProfileWriteRequest
   clientCertificatePath?: string;
   clientKeyPath?: string;
   sshConfig?: SshConfig;
+  sshPassword?: string;
+  sshPrivateKeyPassphrase?: string;
+  sshJumpPassword?: string;
+  sshJumpPrivateKeyPassphrase?: string;
   favorite: boolean;
 }
 
@@ -168,6 +295,26 @@ export const defaultConnectionFormValue: ConnectionFormValue = {
   rootCertificatePath: "",
   clientCertificatePath: "",
   clientKeyPath: "",
+  sshEnabled: false,
+  sshHost: "",
+  sshPort: 22,
+  sshUsername: "",
+  sshAuthentication: "password",
+  sshPassword: "",
+  sshPasswordSaved: false,
+  sshPrivateKeyPath: "",
+  sshPrivateKeyPassphrase: "",
+  sshKnownHostsPath: "",
+  jumpHostEnabled: false,
+  jumpHost: "",
+  jumpPort: 22,
+  jumpUsername: "",
+  jumpAuthentication: "password",
+  jumpPassword: "",
+  jumpPasswordSaved: false,
+  jumpPrivateKeyPath: "",
+  jumpPrivateKeyPassphrase: "",
+  jumpKnownHostsPath: "",
 };
 
 export function toConnectionTestRequest(
@@ -191,6 +338,29 @@ export function toProfileWriteRequest(
   value: ConnectionFormValue,
   existing?: ConnectionProfile,
 ): ProfileWriteRequest {
+  const jumpHost: SshEndpointConfig | undefined =
+    value.sshEnabled && value.jumpHostEnabled
+      ? {
+          host: value.jumpHost,
+          port: value.jumpPort,
+          username: value.jumpUsername,
+          authentication: value.jumpAuthentication,
+          privateKeyPath: value.jumpPrivateKeyPath || undefined,
+          knownHostsPath: value.jumpKnownHostsPath || undefined,
+        }
+      : undefined;
+  const sshConfig: SshConfig | undefined = value.sshEnabled
+    ? {
+        host: value.sshHost,
+        port: value.sshPort,
+        username: value.sshUsername,
+        authentication: value.sshAuthentication,
+        privateKeyPath: value.sshPrivateKeyPath || undefined,
+        knownHostsPath: value.sshKnownHostsPath || undefined,
+        jumpHost,
+      }
+    : undefined;
+
   return {
     id: existing?.id,
     name: value.name,
@@ -205,7 +375,19 @@ export function toProfileWriteRequest(
     rootCertificatePath: value.rootCertificatePath || undefined,
     clientCertificatePath: value.clientCertificatePath || undefined,
     clientKeyPath: value.clientKeyPath || undefined,
-    sshConfig: existing?.sshConfig,
+    sshConfig,
+    sshPassword: value.sshEnabled ? value.sshPassword || undefined : undefined,
+    sshPrivateKeyPassphrase: value.sshEnabled
+      ? value.sshPrivateKeyPassphrase || undefined
+      : undefined,
+    sshJumpPassword:
+      value.sshEnabled && value.jumpHostEnabled
+        ? value.jumpPassword || undefined
+        : undefined,
+    sshJumpPrivateKeyPassphrase:
+      value.sshEnabled && value.jumpHostEnabled
+        ? value.jumpPrivateKeyPassphrase || undefined
+        : undefined,
     favorite: existing?.favorite ?? false,
   };
 }
@@ -213,6 +395,8 @@ export function toProfileWriteRequest(
 export function profileToFormValue(
   profile: ConnectionProfile,
 ): ConnectionFormValue {
+  const ssh = profile.sshConfig;
+  const jump = ssh?.jumpHost;
   return {
     name: profile.name,
     host: profile.host,
@@ -226,5 +410,25 @@ export function profileToFormValue(
     rootCertificatePath: profile.rootCertificatePath ?? "",
     clientCertificatePath: profile.clientCertificatePath ?? "",
     clientKeyPath: profile.clientKeyPath ?? "",
+    sshEnabled: Boolean(ssh),
+    sshHost: ssh?.host ?? "",
+    sshPort: ssh?.port ?? 22,
+    sshUsername: ssh?.username ?? "",
+    sshAuthentication: ssh?.authentication ?? "password",
+    sshPassword: "",
+    sshPasswordSaved: ssh?.authentication === "password",
+    sshPrivateKeyPath: ssh?.privateKeyPath ?? "",
+    sshPrivateKeyPassphrase: "",
+    sshKnownHostsPath: ssh?.knownHostsPath ?? "",
+    jumpHostEnabled: Boolean(jump),
+    jumpHost: jump?.host ?? "",
+    jumpPort: jump?.port ?? 22,
+    jumpUsername: jump?.username ?? "",
+    jumpAuthentication: jump?.authentication ?? "password",
+    jumpPassword: "",
+    jumpPasswordSaved: jump?.authentication === "password",
+    jumpPrivateKeyPath: jump?.privateKeyPath ?? "",
+    jumpPrivateKeyPassphrase: "",
+    jumpKnownHostsPath: jump?.knownHostsPath ?? "",
   };
 }

@@ -34,3 +34,39 @@ services:
       - ./tests/postgres/init.sql:/docker-entrypoint-initdb.d/10-plume-test.sql:ro
       - ./tests/postgres/tls/configure.sh:/docker-entrypoint-initdb.d/05-plume-tls.sh:ro
       - ./tests/postgres/tls/generated:/plume-tls:ro
+    networks:
+      default:
+        aliases:
+          - database.internal
+
+  ssh-target:
+    build:
+      context: ./tests/postgres/ssh
+    environment:
+      PLUME_SSH_PASSWORD: plume-ssh-password
+    ports:
+      - "${PLUME_SSH_PORT:-55222}:22"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - ./tests/postgres/ssh/generated/authorized_keys:/ssh-fixtures/authorized_keys:ro
+      - ./tests/postgres/ssh/generated/target_host_key:/ssh-fixtures/host_key:ro
+
+  ssh-jump:
+    build:
+      context: ./tests/postgres/ssh
+    environment:
+      PLUME_SSH_PASSWORD: plume-jump-password
+    ports:
+      - "${PLUME_SSH_JUMP_PORT:-55223}:22"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "22"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - ./tests/postgres/ssh/generated/authorized_keys:/ssh-fixtures/authorized_keys:ro
+      - ./tests/postgres/ssh/generated/jump_host_key:/ssh-fixtures/host_key:ro

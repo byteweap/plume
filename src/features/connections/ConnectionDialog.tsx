@@ -10,6 +10,7 @@ import {
   defaultConnectionFormValue,
   environments,
   profileToFormValue,
+  sshAuthentications,
   sslModes,
   toProfileWriteRequest,
   type ConnectedDatabaseResult,
@@ -46,6 +47,8 @@ const validationKeys = {
   rootCertificate: "validation.rootCertificate",
   clientCertificatePair: "validation.clientCertificatePair",
   clientCertificateSsl: "validation.clientCertificateSsl",
+  sshPassword: "validation.sshPassword",
+  sshPrivateKey: "validation.sshPrivateKey",
 } as const satisfies Record<string, TranslationKey>;
 
 function getFieldErrors(
@@ -80,6 +83,10 @@ export function ConnectionDialog({
     status: "idle",
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showSshPassword, setShowSshPassword] = useState(false);
+  const [showSshPassphrase, setShowSshPassphrase] = useState(false);
+  const [showJumpPassword, setShowJumpPassword] = useState(false);
+  const [showJumpPassphrase, setShowJumpPassphrase] = useState(false);
 
   function updateField<Key extends keyof ConnectionFormValue>(
     field: Key,
@@ -103,6 +110,84 @@ export function ConnectionDialog({
       sslMode: undefined,
       clientCertificatePath: undefined,
       clientKeyPath: undefined,
+    }));
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateSshEnabled(sshEnabled: boolean) {
+    setForm((current) => ({
+      ...current,
+      sshEnabled,
+      ...(!sshEnabled
+        ? {
+            sshPassword: "",
+            sshPasswordSaved: false,
+            sshPrivateKeyPassphrase: "",
+            jumpPassword: "",
+            jumpPasswordSaved: false,
+            jumpPrivateKeyPassphrase: "",
+          }
+        : {}),
+    }));
+    setFieldErrors({});
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateJumpHostEnabled(jumpHostEnabled: boolean) {
+    setForm((current) => ({
+      ...current,
+      jumpHostEnabled,
+      ...(!jumpHostEnabled
+        ? {
+            jumpPassword: "",
+            jumpPasswordSaved: false,
+            jumpPrivateKeyPassphrase: "",
+          }
+        : {}),
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      jumpHost: undefined,
+      jumpPort: undefined,
+      jumpUsername: undefined,
+      jumpPassword: undefined,
+      jumpPrivateKeyPath: undefined,
+    }));
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateSshAuthentication(
+    authentication: ConnectionFormValue["sshAuthentication"],
+  ) {
+    setForm((current) => ({
+      ...current,
+      sshAuthentication: authentication,
+      sshPassword: "",
+      sshPasswordSaved: false,
+      sshPrivateKeyPassphrase: "",
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      sshPassword: undefined,
+      sshPrivateKeyPath: undefined,
+    }));
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateJumpAuthentication(
+    authentication: ConnectionFormValue["jumpAuthentication"],
+  ) {
+    setForm((current) => ({
+      ...current,
+      jumpAuthentication: authentication,
+      jumpPassword: "",
+      jumpPasswordSaved: false,
+      jumpPrivateKeyPassphrase: "",
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      jumpPassword: undefined,
+      jumpPrivateKeyPath: undefined,
     }));
     if (requestState.status !== "idle") setRequestState({ status: "idle" });
   }
@@ -395,6 +480,269 @@ export function ConnectionDialog({
               </div>
             </fieldset>
 
+            <fieldset>
+              <legend>{t("connection.section.ssh")}</legend>
+              <label className="toggle-control">
+                <input
+                  type="checkbox"
+                  checked={form.sshEnabled}
+                  onChange={(event) => updateSshEnabled(event.target.checked)}
+                />
+                <span>{t("connection.sshEnabled")}</span>
+              </label>
+
+              {form.sshEnabled ? (
+                <div className="ssh-settings">
+                  <div className="form-grid">
+                    <Field
+                      label={t("connection.sshHost")}
+                      error={fieldErrors.sshHost && t(fieldErrors.sshHost)}
+                    >
+                      <input
+                        value={form.sshHost}
+                        onChange={(event) => updateField("sshHost", event.target.value)}
+                        spellCheck={false}
+                      />
+                    </Field>
+                    <Field
+                      label={t("connection.sshPort")}
+                      error={fieldErrors.sshPort && t(fieldErrors.sshPort)}
+                    >
+                      <input
+                        inputMode="numeric"
+                        value={form.sshPort}
+                        onChange={(event) => updateField("sshPort", Number(event.target.value))}
+                      />
+                    </Field>
+                    <Field
+                      label={t("connection.sshUsername")}
+                      error={fieldErrors.sshUsername && t(fieldErrors.sshUsername)}
+                    >
+                      <input
+                        value={form.sshUsername}
+                        onChange={(event) => updateField("sshUsername", event.target.value)}
+                        autoComplete="username"
+                        spellCheck={false}
+                      />
+                    </Field>
+                    <Field label={t("connection.sshAuthentication")}>
+                      <select
+                        value={form.sshAuthentication}
+                        onChange={(event) =>
+                          updateSshAuthentication(
+                            event.target.value as ConnectionFormValue["sshAuthentication"],
+                          )
+                        }
+                      >
+                        {sshAuthentications.map((authentication) => (
+                          <option key={authentication} value={authentication}>
+                            {t(`ssh.authentication.${authentication}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    {form.sshAuthentication === "password" ? (
+                      <Field
+                        className="form-field-wide"
+                        label={t("connection.sshPassword")}
+                        error={fieldErrors.sshPassword && t(fieldErrors.sshPassword)}
+                      >
+                        <SecretInput
+                          value={form.sshPassword}
+                          visible={showSshPassword}
+                          onChange={(value) => updateField("sshPassword", value)}
+                          onToggle={() => setShowSshPassword((visible) => !visible)}
+                          showLabel={t("connection.passwordShow")}
+                          hideLabel={t("connection.passwordHide")}
+                          autoComplete="current-password"
+                        />
+                      </Field>
+                    ) : (
+                      <>
+                        <Field
+                          label={t("connection.sshPrivateKey")}
+                          error={
+                            fieldErrors.sshPrivateKeyPath &&
+                            t(fieldErrors.sshPrivateKeyPath)
+                          }
+                        >
+                          <input
+                            value={form.sshPrivateKeyPath}
+                            onChange={(event) =>
+                              updateField("sshPrivateKeyPath", event.target.value)
+                            }
+                            placeholder="~/.ssh/id_ed25519"
+                            spellCheck={false}
+                          />
+                        </Field>
+                        <Field label={t("connection.sshPrivateKeyPassphrase")}>
+                          <SecretInput
+                            value={form.sshPrivateKeyPassphrase}
+                            visible={showSshPassphrase}
+                            onChange={(value) => updateField("sshPrivateKeyPassphrase", value)}
+                            onToggle={() => setShowSshPassphrase((visible) => !visible)}
+                            showLabel={t("connection.passwordShow")}
+                            hideLabel={t("connection.passwordHide")}
+                            autoComplete="off"
+                          />
+                        </Field>
+                      </>
+                    )}
+
+                    <Field
+                      className="form-field-wide"
+                      label={t("connection.knownHosts")}
+                      hint={t("connection.knownHostsHint")}
+                    >
+                      <input
+                        value={form.sshKnownHostsPath}
+                        onChange={(event) =>
+                          updateField("sshKnownHostsPath", event.target.value)
+                        }
+                        placeholder="~/.ssh/known_hosts"
+                        spellCheck={false}
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="jump-host-settings">
+                    <label className="toggle-control">
+                      <input
+                        type="checkbox"
+                        checked={form.jumpHostEnabled}
+                        onChange={(event) => updateJumpHostEnabled(event.target.checked)}
+                      />
+                      <span>{t("connection.jumpHostEnabled")}</span>
+                    </label>
+
+                    {form.jumpHostEnabled ? (
+                      <div className="form-grid">
+                        <Field
+                          label={t("connection.jumpHost")}
+                          error={fieldErrors.jumpHost && t(fieldErrors.jumpHost)}
+                        >
+                          <input
+                            value={form.jumpHost}
+                            onChange={(event) => updateField("jumpHost", event.target.value)}
+                            spellCheck={false}
+                          />
+                        </Field>
+                        <Field
+                          label={t("connection.jumpPort")}
+                          error={fieldErrors.jumpPort && t(fieldErrors.jumpPort)}
+                        >
+                          <input
+                            inputMode="numeric"
+                            value={form.jumpPort}
+                            onChange={(event) =>
+                              updateField("jumpPort", Number(event.target.value))
+                            }
+                          />
+                        </Field>
+                        <Field
+                          label={t("connection.jumpUsername")}
+                          error={fieldErrors.jumpUsername && t(fieldErrors.jumpUsername)}
+                        >
+                          <input
+                            value={form.jumpUsername}
+                            onChange={(event) =>
+                              updateField("jumpUsername", event.target.value)
+                            }
+                            autoComplete="username"
+                            spellCheck={false}
+                          />
+                        </Field>
+                        <Field label={t("connection.jumpAuthentication")}>
+                          <select
+                            value={form.jumpAuthentication}
+                            onChange={(event) =>
+                              updateJumpAuthentication(
+                                event.target.value as ConnectionFormValue["jumpAuthentication"],
+                              )
+                            }
+                          >
+                            {sshAuthentications.map((authentication) => (
+                              <option key={authentication} value={authentication}>
+                                {t(`ssh.authentication.${authentication}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+
+                        {form.jumpAuthentication === "password" ? (
+                          <Field
+                            className="form-field-wide"
+                            label={t("connection.jumpPassword")}
+                            error={fieldErrors.jumpPassword && t(fieldErrors.jumpPassword)}
+                          >
+                            <SecretInput
+                              value={form.jumpPassword}
+                              visible={showJumpPassword}
+                              onChange={(value) => updateField("jumpPassword", value)}
+                              onToggle={() => setShowJumpPassword((visible) => !visible)}
+                              showLabel={t("connection.passwordShow")}
+                              hideLabel={t("connection.passwordHide")}
+                              autoComplete="current-password"
+                            />
+                          </Field>
+                        ) : (
+                          <>
+                            <Field
+                              label={t("connection.jumpPrivateKey")}
+                              error={
+                                fieldErrors.jumpPrivateKeyPath &&
+                                t(fieldErrors.jumpPrivateKeyPath)
+                              }
+                            >
+                              <input
+                                value={form.jumpPrivateKeyPath}
+                                onChange={(event) =>
+                                  updateField("jumpPrivateKeyPath", event.target.value)
+                                }
+                                placeholder="~/.ssh/id_ed25519"
+                                spellCheck={false}
+                              />
+                            </Field>
+                            <Field label={t("connection.jumpPrivateKeyPassphrase")}>
+                              <SecretInput
+                                value={form.jumpPrivateKeyPassphrase}
+                                visible={showJumpPassphrase}
+                                onChange={(value) =>
+                                  updateField("jumpPrivateKeyPassphrase", value)
+                                }
+                                onToggle={() =>
+                                  setShowJumpPassphrase((visible) => !visible)
+                                }
+                                showLabel={t("connection.passwordShow")}
+                                hideLabel={t("connection.passwordHide")}
+                                autoComplete="off"
+                              />
+                            </Field>
+                          </>
+                        )}
+
+                        <Field
+                          className="form-field-wide"
+                          label={t("connection.jumpKnownHosts")}
+                          hint={t("connection.knownHostsHint")}
+                        >
+                          <input
+                            value={form.jumpKnownHostsPath}
+                            onChange={(event) =>
+                              updateField("jumpKnownHostsPath", event.target.value)
+                            }
+                            placeholder="~/.ssh/known_hosts"
+                            spellCheck={false}
+                          />
+                        </Field>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </fieldset>
+
           </div>
 
           <footer className="dialog-footer">
@@ -441,6 +789,44 @@ function Field({ label, children, className = "", error, hint }: FieldProps) {
       {error ? <span className="field-error">{error}</span> : null}
       {!error && hint ? <span className="field-hint">{hint}</span> : null}
     </label>
+  );
+}
+
+interface SecretInputProps {
+  value: string;
+  visible: boolean;
+  onChange: (value: string) => void;
+  onToggle: () => void;
+  showLabel: string;
+  hideLabel: string;
+  autoComplete: string;
+}
+
+function SecretInput({
+  value,
+  visible,
+  onChange,
+  onToggle,
+  showLabel,
+  hideLabel,
+  autoComplete,
+}: SecretInputProps) {
+  return (
+    <div className="password-input">
+      <input
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        autoComplete={autoComplete}
+      />
+      <IconButton
+        type="button"
+        label={visible ? hideLabel : showLabel}
+        onClick={onToggle}
+      >
+        {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+      </IconButton>
+    </div>
   );
 }
 

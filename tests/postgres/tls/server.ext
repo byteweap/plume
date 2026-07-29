@@ -1,2 +1,2 @@
-subjectAltName=DNS:localhost
+subjectAltName=DNS:localhost,DNS:database.internal
 extendedKeyUsage=serverAuth

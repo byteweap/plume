@@ -195,6 +195,38 @@
   box-shadow: 0 0 0 2px #263029;
 }
 
+.toggle-control {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 8px;
+  color: #354039;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.toggle-control input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #2f6d52;
+}
+
+.ssh-settings {
+  margin-top: 10px;
+}
+
+.jump-host-settings {
+  margin-top: 16px;
+  border-top: 1px solid #e0e5e1;
+  padding-top: 10px;
+}
+
+.jump-host-settings > .form-grid {
+  margin-top: 10px;
+}
+
 .connection-status {
   display: flex;
   min-width: 0;
@@ -299,8 +331,13 @@
   }
 
   .dialog-title-group h2,
-  .field-label {
+  .field-label,
+  .toggle-control {
     color: #e5e9e6;
+  }
+
+  .jump-host-settings {
+    border-color: #3a423c;
   }
 
   .connection-status-error {

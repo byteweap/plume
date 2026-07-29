@@ -38,11 +38,12 @@ pub async fn connect_saved_database(
         .connection_request(&request.id)
         .map_err(CommandError::from)?;
     let connection = open(&settings).await.map_err(CommandError::from)?;
-    let session_id = registry.insert(settings, connection.client).await;
+    let result = connection.result.clone();
+    let session_id = registry.insert(connection).await;
 
     Ok(ConnectedDatabaseResult {
         session_id,
-        connection: connection.result,
+        connection: result,
     })
 }
 
@@ -91,7 +92,8 @@ pub async fn reconnect_saved_database(
         .connection_request(&request.profile_id)
         .map_err(CommandError::from)?;
     let connection = open(&settings).await.map_err(CommandError::from)?;
-    let session_id = registry.insert(settings, connection.client).await;
+    let result = connection.result.clone();
+    let session_id = registry.insert(connection).await;
 
     // The replacement is already usable before the old session is removed.
     // No database operation from the old session is replayed.
@@ -99,7 +101,7 @@ pub async fn reconnect_saved_database(
 
     Ok(ConnectedDatabaseResult {
         session_id,
-        connection: connection.result,
+        connection: result,
     })
 }
 
@@ -117,10 +119,11 @@ pub async fn connect_database(
     request: ConnectionTestRequest,
 ) -> Result<ConnectedDatabaseResult, CommandError> {
     let connection = open(&request).await.map_err(CommandError::from)?;
-    let session_id = registry.insert(request, connection.client).await;
+    let result = connection.result.clone();
+    let session_id = registry.insert(connection).await;
 
     Ok(ConnectedDatabaseResult {
         session_id,
-        connection: connection.result,
+        connection: result,
     })
 }

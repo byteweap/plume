@@ -37,6 +37,84 @@ describe("ConnectionDialog", () => {
     expect(key).toHaveValue("");
   });
 
+  it("progressively reveals SSH and jump-host controls", () => {
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("textbox", { name: "SSH host" })).toBeNull();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use an SSH tunnel" }));
+    expect(screen.getByRole("textbox", { name: "SSH host" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Jump host" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Connect through a jump host" }),
+    );
+    expect(screen.getByRole("textbox", { name: "Jump host" })).toBeVisible();
+  });
+
+  it("sends SSH and jump-host secrets outside the persisted config", async () => {
+    const testProfile = vi.spyOn(connectionApi, "testProfile").mockResolvedValue({
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Connection name" }), {
+      target: { value: "Tunnel" },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Use an SSH tunnel" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH host" }), {
+      target: { value: "ssh.internal" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "SSH username" }), {
+      target: { value: "plume" },
+    });
+    fireEvent.change(screen.getByLabelText("SSH password"), {
+      target: { value: "ssh-secret" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "Connect through a jump host" }),
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Jump host" }), {
+      target: { value: "jump.internal" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "Jump host username" }), {
+      target: { value: "jump" },
+    });
+    fireEvent.change(screen.getByLabelText("Jump host password"), {
+      target: { value: "jump-secret" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+
+    await waitFor(() => expect(testProfile).toHaveBeenCalledOnce());
+    expect(testProfile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sshConfig: expect.objectContaining({
+          host: "ssh.internal",
+          jumpHost: expect.objectContaining({ host: "jump.internal" }),
+        }),
+        sshPassword: "ssh-secret",
+        sshJumpPassword: "jump-secret",
+      }),
+    );
+  });
+
   it("renders a successful connection test in the fixed footer", async () => {
     vi.spyOn(connectionApi, "testProfile").mockResolvedValue({
       database: "postgres",

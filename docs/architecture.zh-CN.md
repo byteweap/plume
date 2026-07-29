@@ -125,7 +125,7 @@ src-tauri/src/
 
 - **类型与静态检查：** TypeScript 严格模式、ESLint、rustfmt，以及拒绝警告的 Clippy。
 - **现有自动化测试：** 前端校验、转换、分组与对象树交互测试，以及 Rust 错误、连接、元数据和会话单元测试。
-- **计划中的 PostgreSQL 集成测试：** 在隔离测试 Schema 中执行真实系统目录查询，破坏性测试数据必须自行清理。
+- **PostgreSQL 集成测试：** 使用一次性的 `plume` 与 `plume_secondary` 数据库验证真实连接、跨数据库会话和系统目录查询，Schema 测试数据会自行清理。
 - **计划中的端到端测试：** 覆盖产品需求中的十个验收场景。
 
 标准本地门禁：
@@ -138,6 +138,8 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
+
+仓库级 `npm run check:all` 会运行完整本地门禁。隔离数据库测试依次使用 `npm run postgres:up`、`npm run test:postgres` 和 `npm run postgres:down`；CI 还会构建未签名的 macOS/Windows 安装包，并在 PostgreSQL 14、16 和 18 上运行测试矩阵。
 
 ## 当前限制
 

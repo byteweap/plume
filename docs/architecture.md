@@ -125,7 +125,7 @@ Each node owns `idle`, `loading`, `success`, and `error` states. Loaded data rem
 
 - **Type and lint checks:** TypeScript strict mode, ESLint, rustfmt, and Clippy with warnings denied.
 - **Current automated tests:** frontend validation, transformations, grouping, and tree interactions, plus Rust error, connection, metadata, and session unit tests.
-- **Planned PostgreSQL integration tests:** real catalog queries against an isolated test Schema; destructive fixtures must clean themselves up.
+- **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. Schema fixtures clean themselves up.
 - **Planned end-to-end tests:** the ten acceptance scenarios in the product requirements.
 
 The standard local gates are:
@@ -138,6 +138,11 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
+
+The repository-level `npm run check:all` command runs the complete local gate.
+Use `npm run postgres:up`, `npm run test:postgres`, and `npm run postgres:down`
+for the isolated database suite. CI additionally builds unsigned macOS and
+Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 
 ## Current Limitations
 

@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: Desktop (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macOS
+            os: macos-15
+            artifact: plume-macos-unsigned
+            bundle-paths: |
+              src-tauri/target/release/bundle/dmg/*.dmg
+              src-tauri/target/release/bundle/macos/*.app
+          - platform: Windows
+            os: windows-2025
+            artifact: plume-windows-unsigned
+            bundle-paths: |
+              src-tauri/target/release/bundle/msi/*.msi
+              src-tauri/target/release/bundle/nsis/*.exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check frontend
+        run: npm run check
+
+      - name: Check Rust
+        run: npm run check:rust
+
+      - name: Build unsigned desktop bundles
+        run: npm run tauri build
+
+      - name: Upload unsigned desktop bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.bundle-paths }}
+          if-no-files-found: error
+          retention-days: 14
+
+  postgres:
+    name: PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [14, 16, 18]
+
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_DB: plume
+          POSTGRES_PASSWORD: plume
+          POSTGRES_USER: plume
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U plume -d plume"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+
+    env:
+      PLUME_TEST_DATABASE_CONFIG: postgresql://plume:plume@localhost:5432/plume?sslmode=disable
+      PLUME_TEST_SECONDARY_DATABASE: plume_secondary
+      PGPASSWORD: plume
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Create integration fixtures
+        run: psql --host localhost --username plume --dbname plume --file tests/postgres/init.sql
+
+      - name: Run Rust unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Run PostgreSQL integration tests
+        run: npm run test:postgres

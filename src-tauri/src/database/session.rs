@@ -80,7 +80,10 @@ impl ConnectionRegistry {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::ConnectionRegistry;
+    use crate::database::{connection::open, test_support};
 
     #[test]
     fn missing_session_returns_an_explicit_error() {
@@ -92,5 +95,51 @@ mod tests {
         });
 
         assert!(error.to_string().contains("no longer available"));
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn opens_an_independent_client_for_another_database() {
+        tauri::async_runtime::block_on(async {
+            let request = test_support::connection_request();
+            let primary_database = request.database.clone();
+            let connection = open(&request)
+                .await
+                .expect("primary integration test connection should open");
+            let registry = ConnectionRegistry::default();
+            let session_id = registry.insert(request, connection.client).await;
+
+            let primary = registry
+                .primary_client(&session_id)
+                .await
+                .expect("primary client should be registered");
+            let secondary_database = test_support::secondary_database();
+            let secondary = registry
+                .database_client(&session_id, &secondary_database)
+                .await
+                .expect("secondary database client should open");
+            let connected_database: String = secondary
+                .query_one("SELECT current_database()", &[])
+                .await
+                .expect("secondary database should answer")
+                .get(0);
+            let fixture_count: i64 = secondary
+                .query_one("SELECT count(*) FROM plume_fixture.items", &[])
+                .await
+                .expect("secondary fixture data should be available")
+                .get(0);
+
+            assert_eq!(connected_database, secondary_database);
+            assert_eq!(fixture_count, 2);
+            assert!(!Arc::ptr_eq(&primary, &secondary));
+            assert_eq!(
+                primary
+                    .query_one("SELECT current_database()", &[])
+                    .await
+                    .expect("primary database should remain connected")
+                    .get::<_, String>(0),
+                primary_database
+            );
+        });
     }
 }

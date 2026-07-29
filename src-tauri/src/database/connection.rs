@@ -206,7 +206,8 @@ fn add_root_certificate(
 mod tests {
     use serde_json::json;
 
-    use super::{ConnectionTestRequest, SslMode, validate};
+    use super::{ConnectionTestRequest, SslMode, Transport, test, validate};
+    use crate::database::test_support;
 
     fn request(ssl_mode: SslMode) -> ConnectionTestRequest {
         ConnectionTestRequest {
@@ -255,5 +256,20 @@ mod tests {
     #[test]
     fn direct_connection_configuration_is_valid() {
         validate(&request(SslMode::Disable)).expect("direct connection should be valid");
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn connects_to_real_postgres_and_reports_server_metadata() {
+        tauri::async_runtime::block_on(async {
+            let request = test_support::connection_request();
+            let result = test(&request)
+                .await
+                .expect("integration test connection should succeed");
+
+            assert_eq!(result.database, request.database);
+            assert!(!result.server_version.is_empty());
+            assert!(matches!(result.transport, Transport::Plain));
+        });
     }
 }

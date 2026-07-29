@@ -367,7 +367,7 @@ mod tests {
         DatabaseCollectionKind, DatabaseObjectKind, get_database_collection,
         get_database_collections, get_server_overview, list_schema_objects, parse_object_kind,
     };
-    use crate::error::DatabaseError;
+    use crate::{database::test_support, error::DatabaseError};
 
     #[test]
     fn parses_supported_object_kinds() {
@@ -387,22 +387,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires PLUME_TEST_DATABASE_CONFIG and a local PostgreSQL instance"]
+    #[ignore = "requires the local PostgreSQL integration environment"]
     fn loads_the_pgadmin_style_tree_from_postgres() {
         tauri::async_runtime::block_on(async {
-            let config = std::env::var("PLUME_TEST_DATABASE_CONFIG")
-                .expect("PLUME_TEST_DATABASE_CONFIG must contain libpq connection parameters");
-            let config: tokio_postgres::Config =
-                config.parse().expect("database config should be valid");
-            let (client, connection) = config
-                .connect(tokio_postgres::NoTls)
+            let client = test_support::connect().await;
+            let current_database: String = client
+                .query_one("SELECT current_database()", &[])
                 .await
-                .expect("local PostgreSQL should accept the connection");
-            tauri::async_runtime::spawn(async move {
-                connection
-                    .await
-                    .expect("PostgreSQL connection should remain open");
-            });
+                .expect("current database should be available")
+                .get(0);
+            let current_user: String = client
+                .query_one("SELECT current_user", &[])
+                .await
+                .expect("current user should be available")
+                .get(0);
 
             let validation: Result<(), DatabaseError> = async {
                 client
@@ -436,8 +434,13 @@ mod tests {
                     .await?;
 
                 let server = get_server_overview(&client).await?;
-                assert!(server.databases.iter().any(|database| database.name == "postgres"));
-                assert!(server.roles.iter().any(|role| role.name == "root"));
+                assert!(
+                    server
+                        .databases
+                        .iter()
+                        .any(|database| database.name == current_database)
+                );
+                assert!(server.roles.iter().any(|role| role.name == current_user));
 
                 let collections = get_database_collections(&client).await?;
                 assert_eq!(collections.len(), 9);

@@ -130,6 +130,16 @@ npm run check:all
 
 `npm install` 会配置仅作用于当前仓库的 Git hook，并在每次提交前运行同一套检查。若仓库克隆于该配置加入之前，请执行一次 `npm run hooks:install`。
 
+通过一次性本地环境运行 PostgreSQL 集成测试：
+
+```bash
+npm run postgres:up
+npm run test:postgres
+npm run postgres:down
+```
+
+Compose 环境默认监听本机 `55432` 端口，并创建 `plume` 和 `plume_secondary` 两个测试数据库。可通过 `PLUME_POSTGRES_VERSION` 和 `PLUME_POSTGRES_PORT` 调整镜像版本和本地端口；CI 使用同一套用例验证 PostgreSQL 14、16 和 18。
+
 构建桌面安装包：
 
 ```bash
@@ -158,6 +168,8 @@ docs/
 ├── architecture.zh-CN.md 简体中文架构文档
 ├── 产品需求文档.md         产品需求
 └── 开发任务分解.md         按优先级拆分的开发任务
+
+tests/postgres/            可重复运行的 PostgreSQL 集成测试数据
 ```
 
 ## 隐私与安全

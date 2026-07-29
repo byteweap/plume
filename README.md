@@ -132,6 +132,19 @@ npm run check:all
 before each commit. If the repository was cloned before this configuration was
 introduced, run `npm run hooks:install` once.
 
+Run the PostgreSQL integration suite against the disposable local environment:
+
+```bash
+npm run postgres:up
+npm run test:postgres
+npm run postgres:down
+```
+
+The Compose environment listens on local port `55432` by default and creates
+the `plume` and `plume_secondary` test databases. `PLUME_POSTGRES_VERSION` and
+`PLUME_POSTGRES_PORT` can override the image version and local port. CI runs the
+same integration tests against PostgreSQL 14, 16, and 18.
+
 Build a desktop bundle with:
 
 ```bash
@@ -160,6 +173,8 @@ docs/
 ├── architecture.zh-CN.md Architecture guide in Simplified Chinese
 ├── 产品需求文档.md         Product requirements
 └── 开发任务分解.md         Prioritized engineering backlog
+
+tests/postgres/            Repeatable PostgreSQL integration fixtures
 ```
 
 ## Privacy and Security

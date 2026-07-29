@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../i18n/I18nProvider";
 import type { ConnectionProfile } from "../features/connections/connection";
 import { connectionApi } from "../features/connections/connectionApi";
+import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
 import { App } from "./App";
 
 const savedProfile: ConnectionProfile = {
@@ -303,5 +304,46 @@ describe("App sidebar", () => {
       "aria-selected",
       "true",
     );
+  });
+
+  it("keeps the active query tab while refreshing connection objects", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    const getServerTree = vi
+      .spyOn(databaseTreeApi, "getServerTree")
+      .mockResolvedValue({ databases: [], roles: [], tablespaces: [] });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Local saved/ }),
+    );
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /^Local saved/ }));
+    await screen.findByRole("button", { name: "Databases" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Refresh connection objects Local saved",
+      }),
+    );
+    await waitFor(() => expect(getServerTree).toHaveBeenCalledTimes(2));
+
+    expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("Local saved / postgres")).toBeVisible();
   });
 });

@@ -76,8 +76,9 @@ export interface DatabaseObject extends NamedObject {
 export type LoadState<Value> =
   | { status: "idle" }
   | { status: "loading" }
+  | { status: "refreshing"; value: Value }
   | { status: "success"; value: Value }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string; value?: Value };
 
 export const databaseObjectKinds: DatabaseObjectKind[] = [
   "table",

@@ -179,24 +179,12 @@ export function ConnectionTreeItem({
     state === "busy";
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [overview, setOverview] = useState<LoadState<ServerOverview>>({
-    status: "idle",
-  });
-
-  async function loadOverview() {
-    if (!activeSessionId) return;
-    setOverview({ status: "loading" });
-    try {
-      setOverview({
-        status: "success",
-        value: await databaseTreeApi.getServerTree(activeSessionId),
-      });
-    } catch (error) {
-      const message = toCommandError(error).message;
-      setOverview({ status: "error", message });
-      onSessionError?.(message);
+  const overviewLoader = useTreeLoader<ServerOverview>(() => {
+    if (!activeSessionId) {
+      throw new Error("The database connection is no longer available.");
     }
-  }
+    return databaseTreeApi.getServerTree(activeSessionId);
+  }, onSessionError);
 
   function toggleConnection() {
     onSelect();
@@ -211,7 +199,9 @@ export function ConnectionTreeItem({
     }
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && overview.status === "idle") void loadOverview();
+    if (nextExpanded && overviewLoader.state.status === "idle") {
+      void overviewLoader.load();
+    }
   }
 
   function runMenuAction(action: () => void) {
@@ -219,7 +209,7 @@ export function ConnectionTreeItem({
     action();
   }
 
-  const hasActions = Boolean(
+  const hasMenuActions = Boolean(
     onConnect ||
       onReconnect ||
       onDisconnect ||
@@ -227,8 +217,10 @@ export function ConnectionTreeItem({
       onEdit ||
       onDuplicate ||
       onRename ||
-      onDelete ||
-      onToggleFavorite,
+      onDelete,
+  );
+  const hasActions = Boolean(
+    activeSessionId || onToggleFavorite || hasMenuActions,
   );
 
   return (
@@ -256,6 +248,21 @@ export function ConnectionTreeItem({
         </button>
         {hasActions && (
           <div className="connection-menu-wrap">
+            {activeSessionId && (
+              <button
+                className="connection-row-action tree-refresh-button"
+                type="button"
+                aria-label={`${t("tree.refreshConnection")} ${connection.name}`}
+                title={t("tree.refreshConnection")}
+                disabled={transitioning || overviewLoader.loading}
+                onClick={() => void overviewLoader.load(true)}
+              >
+                <RefreshCw
+                  className={overviewLoader.loading ? "spin" : ""}
+                  size={13}
+                />
+              </button>
+            )}
             {onToggleFavorite && (
               <button
                 className="connection-row-action"
@@ -270,16 +277,18 @@ export function ConnectionTreeItem({
                 <Star size={13} fill={connection.favorite ? "currentColor" : "none"} />
               </button>
             )}
-            <button
-              className="connection-row-action"
-              type="button"
-              aria-label={t("connection.actions")}
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen((open) => !open)}
-            >
-              <MoreHorizontal size={15} />
-            </button>
-            {menuOpen && (
+            {hasMenuActions && (
+              <button
+                className="connection-row-action"
+                type="button"
+                aria-label={t("connection.actions")}
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen((open) => !open)}
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            )}
+            {hasMenuActions && menuOpen && (
               <div className="connection-menu" role="menu">
                 {state === "disconnected" && onConnect && (
                   <MenuAction icon={PlugZap} label={t("connection.connect")} onClick={() => runMenuAction(onConnect)} />
@@ -305,7 +314,10 @@ export function ConnectionTreeItem({
 
       {expanded && activeSessionId && (
         <div className="tree-level" role="group">
-          <AsyncTreeContent state={overview} onRetry={() => void loadOverview()}>
+          <AsyncTreeContent
+            state={overviewLoader.state}
+            onRetry={() => void overviewLoader.load(true)}
+          >
             {(server) => (
               <>
                 <StaticCollectionNode
@@ -315,9 +327,10 @@ export function ConnectionTreeItem({
                 >
                   {server.databases.map((database) => (
                     <DatabaseTreeItem
-                      key={database.name}
+                      key={`${database.name}:${overviewLoader.revision}`}
                       database={database}
                       sessionId={activeSessionId}
+                      onSessionError={onSessionError}
                     />
                   ))}
                 </StaticCollectionNode>
@@ -381,33 +394,26 @@ function MenuAction({
 function DatabaseTreeItem({
   database,
   sessionId,
+  onSessionError,
 }: {
   database: DatabaseSummary;
   sessionId: string;
+  onSessionError?: (message: string) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const [collections, setCollections] = useState<
-    LoadState<DatabaseCollectionSummary[]>
-  >({ status: "idle" });
-
-  async function loadCollections() {
-    setCollections({ status: "loading" });
-    try {
-      setCollections({
-        status: "success",
-        value: await databaseTreeApi.getDatabaseTree(sessionId, database.name),
-      });
-    } catch (error) {
-      setCollections({ status: "error", message: toCommandError(error).message });
-    }
-  }
+  const collectionsLoader = useTreeLoader<DatabaseCollectionSummary[]>(
+    () => databaseTreeApi.getDatabaseTree(sessionId, database.name),
+    onSessionError,
+  );
 
   function toggleDatabase() {
     if (!database.allowConnections) return;
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && collections.status === "idle") void loadCollections();
+    if (nextExpanded && collectionsLoader.state.status === "idle") {
+      void collectionsLoader.load();
+    }
   }
 
   return (
@@ -417,6 +423,12 @@ function DatabaseTreeItem({
         label={database.name}
         expanded={expanded}
         onToggle={toggleDatabase}
+        onRefresh={
+          database.allowConnections
+            ? () => void collectionsLoader.load(true)
+            : undefined
+        }
+        refreshing={collectionsLoader.loading}
         muted={!database.allowConnections}
         title={
           database.allowConnections
@@ -427,17 +439,18 @@ function DatabaseTreeItem({
       {expanded && (
         <div className="tree-level" role="group">
           <AsyncTreeContent
-            state={collections}
-            onRetry={() => void loadCollections()}
+            state={collectionsLoader.state}
+            onRetry={() => void collectionsLoader.load(true)}
           >
             {(loadedCollections) => (
               <>
                 {loadedCollections.map((collection) => (
                   <DatabaseCollectionNode
-                    key={collection.kind}
+                    key={`${collection.kind}:${collectionsLoader.revision}`}
                     collection={collection}
                     database={database.name}
                     sessionId={sessionId}
+                    onSessionError={onSessionError}
                   />
                 ))}
               </>
@@ -453,43 +466,34 @@ function DatabaseCollectionNode({
   collection,
   database,
   sessionId,
+  onSessionError,
 }: {
   collection: DatabaseCollectionSummary;
   database: string;
   sessionId: string;
+  onSessionError?: (message: string) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const [items, setItems] = useState<LoadState<NamedObject[]>>({
-    status: "idle",
-  });
   const presentation = databaseCollectionPresentation[collection.kind];
-
-  async function loadItems() {
-    if (collection.count === 0) {
-      setItems({ status: "success", value: [] });
-      return;
-    }
-
-    setItems({ status: "loading" });
-    try {
-      setItems({
-        status: "success",
-        value: await databaseTreeApi.getDatabaseCollectionItems(
-          sessionId,
-          database,
-          collection.kind,
-        ),
-      });
-    } catch (error) {
-      setItems({ status: "error", message: toCommandError(error).message });
-    }
-  }
+  const itemsLoader = useTreeLoader<NamedObject[]>(
+    () =>
+      collection.count === 0
+        ? Promise.resolve([])
+        : databaseTreeApi.getDatabaseCollectionItems(
+            sessionId,
+            database,
+            collection.kind,
+          ),
+    onSessionError,
+  );
 
   function toggleCollection() {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && items.status === "idle") void loadItems();
+    if (nextExpanded && itemsLoader.state.status === "idle") {
+      void itemsLoader.load();
+    }
   }
 
   return (
@@ -500,10 +504,15 @@ function DatabaseCollectionNode({
         count={collection.count}
         expanded={expanded}
         onToggle={toggleCollection}
+        onRefresh={() => void itemsLoader.load(true)}
+        refreshing={itemsLoader.loading}
       />
       {expanded && (
         <div className="tree-level" role="group">
-          <AsyncTreeContent state={items} onRetry={() => void loadItems()}>
+          <AsyncTreeContent
+            state={itemsLoader.state}
+            onRetry={() => void itemsLoader.load(true)}
+          >
             {(loadedItems) =>
               loadedItems.length === 0 ? (
                 <TreeEmpty />
@@ -511,10 +520,11 @@ function DatabaseCollectionNode({
                 <>
                   {loadedItems.map((catalog) => (
                     <CatalogTreeItem
-                      key={catalog.name}
+                      key={`${catalog.name}:${itemsLoader.revision}`}
                       catalog={catalog}
                       database={database}
                       sessionId={sessionId}
+                      onSessionError={onSessionError}
                     />
                   ))}
                 </>
@@ -522,10 +532,11 @@ function DatabaseCollectionNode({
                 <>
                   {loadedItems.map((schema) => (
                     <SchemaTreeItem
-                      key={schema.name}
+                      key={`${schema.name}:${itemsLoader.revision}`}
                       database={database}
                       schema={schema}
                       sessionId={sessionId}
+                      onSessionError={onSessionError}
                     />
                   ))}
                 </>
@@ -548,38 +559,27 @@ function CatalogTreeItem({
   catalog,
   database,
   sessionId,
+  onSessionError,
 }: {
   catalog: NamedObject;
   database: string;
   sessionId: string;
+  onSessionError?: (message: string) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const [collections, setCollections] = useState<
-    LoadState<CatalogCollectionSummary[]>
-  >({ status: "idle" });
   const labelKey = catalogPresentation[catalog.name];
-
-  async function loadCollections() {
-    setCollections({ status: "loading" });
-    try {
-      setCollections({
-        status: "success",
-        value: await databaseTreeApi.getCatalogTree(
-          sessionId,
-          database,
-          catalog.name,
-        ),
-      });
-    } catch (error) {
-      setCollections({ status: "error", message: toCommandError(error).message });
-    }
-  }
+  const collectionsLoader = useTreeLoader<CatalogCollectionSummary[]>(
+    () => databaseTreeApi.getCatalogTree(sessionId, database, catalog.name),
+    onSessionError,
+  );
 
   function toggleCatalog() {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && collections.status === "idle") void loadCollections();
+    if (nextExpanded && collectionsLoader.state.status === "idle") {
+      void collectionsLoader.load();
+    }
   }
 
   return (
@@ -589,21 +589,24 @@ function CatalogTreeItem({
         label={labelKey ? t(labelKey) : catalog.name}
         expanded={expanded}
         onToggle={toggleCatalog}
+        onRefresh={() => void collectionsLoader.load(true)}
+        refreshing={collectionsLoader.loading}
       />
       {expanded && (
         <div className="tree-level" role="group">
           <AsyncTreeContent
-            state={collections}
-            onRetry={() => void loadCollections()}
+            state={collectionsLoader.state}
+            onRetry={() => void collectionsLoader.load(true)}
           >
             {(loadedCollections) =>
               loadedCollections.map((collection) => (
                 <CatalogCollectionNode
-                  key={collection.kind}
+                  key={`${collection.kind}:${collectionsLoader.revision}`}
                   catalog={catalog.name}
                   collection={collection}
                   database={database}
                   sessionId={sessionId}
+                  onSessionError={onSessionError}
                 />
               ))
             }
@@ -619,43 +622,36 @@ function CatalogCollectionNode({
   collection,
   database,
   sessionId,
+  onSessionError,
 }: {
   catalog: string;
   collection: CatalogCollectionSummary;
   database: string;
   sessionId: string;
+  onSessionError?: (message: string) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
-  const [items, setItems] = useState<LoadState<NamedObject[]>>({ status: "idle" });
   const presentation = catalogCollectionPresentation[collection.kind];
-
-  async function loadItems() {
-    if (collection.count === 0) {
-      setItems({ status: "success", value: [] });
-      return;
-    }
-
-    setItems({ status: "loading" });
-    try {
-      setItems({
-        status: "success",
-        value: await databaseTreeApi.getCatalogCollectionItems(
-          sessionId,
-          database,
-          catalog,
-          collection.kind,
-        ),
-      });
-    } catch (error) {
-      setItems({ status: "error", message: toCommandError(error).message });
-    }
-  }
+  const itemsLoader = useTreeLoader<NamedObject[]>(
+    () =>
+      collection.count === 0
+        ? Promise.resolve([])
+        : databaseTreeApi.getCatalogCollectionItems(
+            sessionId,
+            database,
+            catalog,
+            collection.kind,
+          ),
+    onSessionError,
+  );
 
   function toggleCollection() {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && items.status === "idle") void loadItems();
+    if (nextExpanded && itemsLoader.state.status === "idle") {
+      void itemsLoader.load();
+    }
   }
 
   return (
@@ -667,10 +663,15 @@ function CatalogCollectionNode({
         showZeroCount
         expanded={expanded}
         onToggle={toggleCollection}
+        onRefresh={() => void itemsLoader.load(true)}
+        refreshing={itemsLoader.loading}
       />
       {expanded && (
         <div className="tree-level" role="group">
-          <AsyncTreeContent state={items} onRetry={() => void loadItems()}>
+          <AsyncTreeContent
+            state={itemsLoader.state}
+            onRetry={() => void itemsLoader.load(true)}
+          >
             {(loadedItems) =>
               loadedItems.length === 0 ? (
                 <TreeEmpty />
@@ -693,36 +694,25 @@ function SchemaTreeItem({
   database,
   schema,
   sessionId,
+  onSessionError,
 }: {
   database: string;
   schema: NamedObject;
   sessionId: string;
+  onSessionError?: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [objects, setObjects] = useState<LoadState<DatabaseObject[]>>({
-    status: "idle",
-  });
-
-  async function loadObjects() {
-    setObjects({ status: "loading" });
-    try {
-      setObjects({
-        status: "success",
-        value: await databaseTreeApi.getSchemaObjects(
-          sessionId,
-          database,
-          schema.name,
-        ),
-      });
-    } catch (error) {
-      setObjects({ status: "error", message: toCommandError(error).message });
-    }
-  }
+  const objectsLoader = useTreeLoader<DatabaseObject[]>(
+    () => databaseTreeApi.getSchemaObjects(sessionId, database, schema.name),
+    onSessionError,
+  );
 
   function toggleSchema() {
     const nextExpanded = !expanded;
     setExpanded(nextExpanded);
-    if (nextExpanded && objects.status === "idle") void loadObjects();
+    if (nextExpanded && objectsLoader.state.status === "idle") {
+      void objectsLoader.load();
+    }
   }
 
   return (
@@ -732,10 +722,15 @@ function SchemaTreeItem({
         label={schema.name}
         expanded={expanded}
         onToggle={toggleSchema}
+        onRefresh={() => void objectsLoader.load(true)}
+        refreshing={objectsLoader.loading}
       />
       {expanded && (
         <div className="tree-level" role="group">
-          <AsyncTreeContent state={objects} onRetry={() => void loadObjects()}>
+          <AsyncTreeContent
+            state={objectsLoader.state}
+            onRetry={() => void objectsLoader.load(true)}
+          >
             {(loadedObjects) =>
               loadedObjects.length === 0 ? (
                 <TreeEmpty />
@@ -817,6 +812,8 @@ function ToggleRow({
   count,
   expanded,
   onToggle,
+  onRefresh,
+  refreshing = false,
   muted = false,
   showZeroCount = false,
   title,
@@ -826,6 +823,8 @@ function ToggleRow({
   count?: number;
   expanded: boolean;
   onToggle: () => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
   muted?: boolean;
   showZeroCount?: boolean;
   title?: string;
@@ -833,19 +832,38 @@ function ToggleRow({
   const visibleCount =
     count !== undefined && (showZeroCount || count > 0) ? count : undefined;
 
+  const { t } = useI18n();
+
   return (
-    <button
-      className={`tree-row tree-toggle-row ${muted ? "tree-row-muted" : ""}`}
-      type="button"
-      onClick={onToggle}
-      title={title}
-      aria-label={visibleCount === undefined ? label : `${label} (${visibleCount})`}
-    >
-      <TreeChevron expanded={expanded} />
-      <Icon size={14} />
-      <span className="tree-row-label">{label}</span>
-      {visibleCount !== undefined && <small>({visibleCount})</small>}
-    </button>
+    <div className="tree-row-wrap">
+      <button
+        className={`tree-row tree-toggle-row ${muted ? "tree-row-muted" : ""}`}
+        type="button"
+        disabled={muted}
+        onClick={onToggle}
+        title={title}
+        aria-label={
+          visibleCount === undefined ? label : `${label} (${visibleCount})`
+        }
+      >
+        <TreeChevron expanded={expanded} />
+        <Icon size={14} />
+        <span className="tree-row-label">{label}</span>
+        {visibleCount !== undefined && <small>({visibleCount})</small>}
+      </button>
+      {onRefresh && (
+        <button
+          className="tree-node-refresh"
+          type="button"
+          aria-label={`${t("tree.refresh")} ${label}`}
+          title={t("tree.refresh")}
+          disabled={refreshing}
+          onClick={onRefresh}
+        >
+          <RefreshCw className={refreshing ? "spin" : ""} size={12} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -900,17 +918,72 @@ function AsyncTreeContent<Value>({
     );
   }
 
+  if (state.status === "refreshing") {
+    return children(state.value);
+  }
+
   if (state.status === "error") {
     return (
-      <div className="tree-error" role="alert">
-        <span>{state.message}</span>
-        <button type="button" onClick={onRetry}>
-          <RefreshCw size={12} />
-          {t("tree.retry")}
-        </button>
-      </div>
+      <>
+        {state.value !== undefined && children(state.value)}
+        <div className="tree-error" role="alert">
+          <span>{state.message}</span>
+          <button type="button" onClick={onRetry}>
+            <RefreshCw size={12} />
+            {t("tree.retry")}
+          </button>
+        </div>
+      </>
     );
   }
 
   return children(state.value);
+}
+
+const sessionUnavailableCodes = new Set([
+  "connection_failed",
+  "session_not_found",
+  "ssh_connection_failed",
+  "ssh_tunnel_disconnected",
+]);
+
+function useTreeLoader<Value>(
+  loadValue: () => Promise<Value>,
+  onSessionError?: (message: string) => void,
+) {
+  const [state, setState] = useState<LoadState<Value>>({ status: "idle" });
+  const [revision, setRevision] = useState(0);
+  const loading = state.status === "loading" || state.status === "refreshing";
+
+  async function load(refresh = false) {
+    if (loading) return;
+
+    const cachedValue = getLoadStateValue(state);
+    setState(
+      refresh && cachedValue !== undefined
+        ? { status: "refreshing", value: cachedValue }
+        : { status: "loading" },
+    );
+
+    try {
+      setState({ status: "success", value: await loadValue() });
+      if (refresh) setRevision((current) => current + 1);
+    } catch (error) {
+      const commandError = toCommandError(error);
+      setState({
+        status: "error",
+        message: commandError.message,
+        value: cachedValue,
+      });
+      if (sessionUnavailableCodes.has(commandError.code)) {
+        onSessionError?.(commandError.message);
+      }
+    }
+  }
+
+  return { state, load, loading, revision };
+}
+
+function getLoadStateValue<Value>(state: LoadState<Value>) {
+  return "value" in state ? state.value : undefined;
 }

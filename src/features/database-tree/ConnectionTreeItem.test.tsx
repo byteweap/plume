@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SavedConnection } from "../connections/connection";
 import { I18nProvider } from "../../i18n/I18nProvider";
@@ -61,7 +61,7 @@ describe("ConnectionTreeItem", () => {
     );
 
     expect(getServerTree).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /Local/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
 
     const databasesButton = await screen.findByRole("button", {
       name: /Databases/,
@@ -76,7 +76,7 @@ describe("ConnectionTreeItem", () => {
     fireEvent.click(databaseButton);
 
     const schemasButton = await screen.findByRole("button", {
-      name: /Schemas/,
+      name: "Schemas (1)",
     });
     expect(getDatabaseTree).toHaveBeenCalledWith("session-1", "postgres");
     fireEvent.click(schemasButton);
@@ -134,7 +134,7 @@ describe("ConnectionTreeItem", () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Local/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Databases/ }));
     fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
 
@@ -206,7 +206,7 @@ describe("ConnectionTreeItem", () => {
       </I18nProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Local/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
     fireEvent.click(await screen.findByRole("button", { name: /Databases/ }));
     fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
     fireEvent.click(await screen.findByRole("button", { name: "Catalogs (2)" }));
@@ -247,5 +247,179 @@ describe("ConnectionTreeItem", () => {
       "pg_catalog",
       "aggregates",
     );
+  });
+
+  it("refreshes a connection without collapsing its top-level collection", async () => {
+    const getServerTree = vi
+      .spyOn(databaseTreeApi, "getServerTree")
+      .mockResolvedValueOnce({
+        databases: [
+          { name: "postgres", owner: "root", allowConnections: true },
+        ],
+        roles: [],
+        tablespaces: [],
+      })
+      .mockResolvedValueOnce({
+        databases: [
+          { name: "postgres", owner: "root", allowConnections: true },
+          { name: "analytics", owner: "root", allowConnections: true },
+        ],
+        roles: [],
+        tablespaces: [],
+      });
+
+    render(
+      <I18nProvider>
+        <ConnectionTreeItem
+          connection={connection}
+          environmentClassName="environment-development"
+          selected
+          onSelect={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Databases (1)" }));
+    expect(await screen.findByRole("button", { name: "postgres" })).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Refresh connection objects Local",
+      }),
+    );
+
+    expect(await screen.findByRole("button", { name: "analytics" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Databases (2)" })).toBeVisible();
+    expect(getServerTree).toHaveBeenCalledTimes(2);
+  });
+
+  it("refreshes schema, collection, and database caches independently", async () => {
+    vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
+      databases: [
+        { name: "postgres", owner: "root", allowConnections: true },
+      ],
+      roles: [],
+      tablespaces: [],
+    });
+    const getDatabaseTree = vi
+      .spyOn(databaseTreeApi, "getDatabaseTree")
+      .mockResolvedValueOnce([{ kind: "schemas", count: 1 }])
+      .mockResolvedValueOnce([{ kind: "schemas", count: 2 }]);
+    const getDatabaseCollectionItems = vi
+      .spyOn(databaseTreeApi, "getDatabaseCollectionItems")
+      .mockResolvedValueOnce([{ name: "public" }])
+      .mockResolvedValueOnce([{ name: "public" }, { name: "audit" }]);
+    const getSchemaObjects = vi
+      .spyOn(databaseTreeApi, "getSchemaObjects")
+      .mockResolvedValueOnce([{ name: "users", kind: "table" }])
+      .mockResolvedValueOnce([{ name: "orders", kind: "table" }]);
+
+    render(
+      <I18nProvider>
+        <ConnectionTreeItem
+          connection={connection}
+          environmentClassName="environment-development"
+          selected
+          onSelect={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Databases (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Schemas (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "public" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tables (1)" }));
+    expect(await screen.findByText("users")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh public" }));
+    expect(await screen.findByText("orders")).toBeVisible();
+    expect(screen.queryByText("users")).toBeNull();
+    expect(getSchemaObjects).toHaveBeenCalledTimes(2);
+    expect(getDatabaseCollectionItems).toHaveBeenCalledTimes(1);
+    expect(getDatabaseTree).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Schemas" }));
+    expect(await screen.findByRole("button", { name: "audit" })).toBeVisible();
+    expect(getDatabaseCollectionItems).toHaveBeenCalledTimes(2);
+    expect(getDatabaseTree).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Refresh postgres" }));
+    expect(
+      await screen.findByRole("button", { name: "Schemas (2)" }),
+    ).toBeVisible();
+    expect(getDatabaseTree).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps cached objects during refresh and reports an unavailable session", async () => {
+    vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
+      databases: [
+        { name: "postgres", owner: "root", allowConnections: true },
+      ],
+      roles: [],
+      tablespaces: [],
+    });
+    vi.spyOn(databaseTreeApi, "getDatabaseTree").mockResolvedValue([
+      { kind: "schemas", count: 1 },
+    ]);
+    vi.spyOn(databaseTreeApi, "getDatabaseCollectionItems").mockResolvedValue([
+      { name: "public" },
+    ]);
+    let rejectRefresh: (reason: unknown) => void = () => undefined;
+    const getSchemaObjects = vi
+      .spyOn(databaseTreeApi, "getSchemaObjects")
+      .mockResolvedValueOnce([{ name: "users", kind: "table" }])
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectRefresh = reject;
+          }),
+      )
+      .mockResolvedValueOnce([{ name: "orders", kind: "table" }]);
+    const onSessionError = vi.fn();
+
+    render(
+      <I18nProvider>
+        <ConnectionTreeItem
+          connection={connection}
+          environmentClassName="environment-development"
+          selected
+          onSelect={() => undefined}
+          onSessionError={onSessionError}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /^Local/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Databases (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Schemas (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "public" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tables (1)" }));
+    expect(await screen.findByText("users")).toBeVisible();
+
+    const refresh = screen.getByRole("button", { name: "Refresh public" });
+    fireEvent.click(refresh);
+    expect(screen.getByText("users")).toBeVisible();
+    expect(refresh).toBeDisabled();
+
+    await act(async () => {
+      rejectRefresh({
+        code: "session_not_found",
+        message: "The session expired.",
+      });
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The session expired.",
+    );
+    expect(screen.getByText("users")).toBeVisible();
+    expect(onSessionError).toHaveBeenCalledWith("The session expired.");
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("orders")).toBeVisible();
+    await waitFor(() => expect(getSchemaObjects).toHaveBeenCalledTimes(3));
   });
 });

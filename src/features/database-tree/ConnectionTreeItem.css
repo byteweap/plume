@@ -46,6 +46,12 @@
   background: rgb(255 255 255 / 68%);
 }
 
+.connection-row-action:disabled,
+.tree-node-refresh:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .connection-menu {
   display: flex;
   position: absolute;
@@ -99,6 +105,44 @@
   background: transparent;
   font-size: 11px;
   text-align: left;
+}
+
+.tree-row-wrap {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.tree-row-wrap > .tree-row {
+  width: auto;
+  flex: 1;
+}
+
+.tree-node-refresh {
+  display: inline-flex;
+  width: 24px;
+  height: 25px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  color: #657068;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tree-row-wrap:hover .tree-node-refresh,
+.tree-row-wrap:focus-within .tree-node-refresh,
+.tree-node-refresh:disabled {
+  opacity: 1;
+}
+
+.tree-node-refresh:hover:not(:disabled) {
+  color: #263029;
+  background: #e8ece9;
 }
 
 .tree-toggle-row {
@@ -197,6 +241,11 @@
   }
 
   .tree-toggle-row:hover {
+    color: #e5e9e6;
+    background: #2a302b;
+  }
+
+  .tree-node-refresh:hover:not(:disabled) {
     color: #e5e9e6;
     background: #2a302b;
   }

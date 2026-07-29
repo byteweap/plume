@@ -330,7 +330,8 @@
 
 .tabbar {
   display: flex;
-  align-items: end;
+  min-width: 0;
+  align-items: stretch;
   border-bottom: 1px solid #d8ded9;
   background: #f5f7f5;
 }
@@ -343,31 +344,95 @@
   border-radius: 0;
 }
 
-.tab {
-  display: inline-flex;
-  min-width: 132px;
-  max-width: 220px;
-  height: 35px;
-  align-items: center;
-  gap: 7px;
-  border: 0;
-  border-right: 1px solid #d8ded9;
-  padding: 0 12px;
-  overflow: hidden;
-  color: #5d675f;
-  background: transparent;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.tab-list {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
-.tab-active {
+.tab-shell {
+  display: flex;
+  min-width: 112px;
+  max-width: 220px;
+  flex: 0 1 190px;
+  height: 35px;
+  align-items: center;
+  border-right: 1px solid #d8ded9;
+  color: #5d675f;
+  background: transparent;
+}
+
+.tab-shell-active {
   color: #283029;
   background: #ffffff;
 }
 
+.tab {
+  display: inline-flex;
+  min-width: 0;
+  height: 100%;
+  align-items: center;
+  flex: 1;
+  gap: 7px;
+  border: 0;
+  padding: 0 5px 0 11px;
+  overflow: hidden;
+  color: inherit;
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tab > svg {
+  flex: 0 0 auto;
+}
+
+.tab > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button.tab-close {
+  width: 27px;
+  height: 34px;
+  flex: 0 0 27px;
+  border-radius: 0;
+  opacity: 0.45;
+}
+
+.tab-shell:hover .tab-close,
+.tab-shell-active .tab-close,
+.tab-close:focus-visible {
+  opacity: 1;
+}
+
+.icon-button.tabbar-new-query {
+  width: 36px;
+  height: 35px;
+  flex: 0 0 36px;
+  border-left: 1px solid #d8ded9;
+  border-radius: 0;
+}
+
+.icon-button.tabbar-new-query:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.workspace-tabpanel {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .welcome-workspace {
   display: flex;
+  height: 100%;
   min-height: 0;
   align-items: center;
   justify-content: center;
@@ -405,6 +470,7 @@
 }
 
 .connected-workspace {
+  height: 100%;
   min-height: 0;
   overflow: auto;
 }
@@ -447,6 +513,7 @@
 
 .connection-error-workspace {
   display: flex;
+  height: 100%;
   min-height: 320px;
   align-items: center;
   justify-content: center;
@@ -470,6 +537,81 @@
   line-height: 1.5;
 }
 
+.workspace-unavailable h1 {
+  color: #313a34;
+}
+
+.query-workspace {
+  display: grid;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: 46px minmax(0, 1fr);
+}
+
+.query-contextbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e6e3;
+  padding: 0 14px;
+}
+
+.query-contextbar > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.query-contextbar strong,
+.query-contextbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query-contextbar strong {
+  flex: 0 1 auto;
+  font-size: 12px;
+}
+
+.query-contextbar > div > span {
+  min-width: 0;
+  color: #737d76;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+
+.query-connection-state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: #667068;
+  font-size: 10px;
+}
+
+.query-canvas {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: 42px minmax(0, 1fr);
+  background: #fbfcfb;
+}
+
+.query-canvas > span {
+  padding: 14px 10px 0 0;
+  border-right: 1px solid #edf0ed;
+  color: #a0a8a2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-align: right;
+  user-select: none;
+}
+
 .statusbar {
   display: flex;
   align-items: center;
@@ -489,7 +631,7 @@
 @media (prefers-color-scheme: dark) {
   .app-shell,
   .workspace,
-  .tab-active {
+  .tab-shell-active {
     background: #1d211e;
   }
 
@@ -503,7 +645,7 @@
   .sidebar,
   .workspace,
   .tabbar,
-  .tab,
+  .tab-shell,
   .statusbar {
     border-color: #363d38;
   }
@@ -518,7 +660,20 @@
   .brand strong,
   .welcome-workspace h1,
   .connection-overview h1,
-  .tab-active {
+  .tab-shell-active {
+    color: #e5e9e6;
+  }
+
+  .query-canvas {
+    background: #1d211e;
+  }
+
+  .query-contextbar,
+  .query-canvas > span {
+    border-color: #363d38;
+  }
+
+  .workspace-unavailable h1 {
     color: #e5e9e6;
   }
 

@@ -18,6 +18,7 @@ import {
   Plus,
   Search,
   Table2,
+  X,
 } from "lucide-react";
 import plumeMark from "../assets/plume-mark.svg";
 import { ConnectionDialog } from "../features/connections/ConnectionDialog";
@@ -33,6 +34,12 @@ import {
   type ConnectionLifecycleState,
 } from "../features/connections/connectionSession";
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
+import {
+  createInitialWorkspaceTabsState,
+  getActiveWorkspaceTab,
+  workspaceTabsReducer,
+  type WorkspaceTab,
+} from "../features/tabs/workspaceTabs";
 import { useI18n } from "../i18n/I18nContext";
 import { toCommandError } from "../platform/tauri";
 import { IconButton } from "../shared/IconButton";
@@ -64,6 +71,11 @@ export function App() {
   >(undefined);
   const [profiles, setProfiles] = useState<ConnectionProfile[]>([]);
   const [sessions, dispatchSession] = useReducer(connectionSessionReducer, {});
+  const [workspaceTabs, dispatchWorkspaceTabs] = useReducer(
+    workspaceTabsReducer,
+    undefined,
+    createInitialWorkspaceTabsState,
+  );
   const [selectedProfileId, setSelectedProfileId] = useState<string>();
   const [profileError, setProfileError] = useState<string>();
   const [filter, setFilter] = useState("");
@@ -76,23 +88,32 @@ export function App() {
     width: number;
   } | null>(null);
 
-  const selectedProfile = profiles.find(
-    (profile) => profile.id === selectedProfileId,
-  );
-  const selectedSession = selectedProfile
-    ? getConnectionSession(sessions, selectedProfile.id)
+  const activeTab = getActiveWorkspaceTab(workspaceTabs);
+  const activeProfile =
+    activeTab.kind === "welcome"
+      ? undefined
+      : profiles.find((profile) => profile.id === activeTab.profileId);
+  const activeSession = activeProfile
+    ? getConnectionSession(sessions, activeProfile.id)
     : undefined;
+  const highlightedProfileId =
+    activeTab.kind === "welcome" ? selectedProfileId : activeTab.profileId;
   const activeConnection = useMemo<ActiveConnection | undefined>(() => {
-    if (!selectedProfile) return undefined;
-    const session = getConnectionSession(sessions, selectedProfile.id);
-    return session.sessionId && session.serverVersion
+    if (!activeProfile) return undefined;
+    const session = getConnectionSession(sessions, activeProfile.id);
+    const usable = session.state === "connected" || session.state === "busy";
+    return usable && session.sessionId && session.serverVersion
       ? {
-          ...selectedProfile,
+          ...activeProfile,
+          database:
+            activeTab.kind === "welcome"
+              ? activeProfile.database
+              : activeTab.database,
           sessionId: session.sessionId,
           serverVersion: session.serverVersion,
         }
       : undefined;
-  }, [selectedProfile, sessions]);
+  }, [activeProfile, activeTab, sessions]);
   const visibleConnections = useMemo(() => {
     const query = filter.trim().toLowerCase();
     if (!query) return profiles;
@@ -183,25 +204,103 @@ export function App() {
     setDialogProfile(profile);
   }
 
+  function openConnectionWorkspace(profile: ConnectionProfile) {
+    dispatchWorkspaceTabs({
+      type: "open-connection",
+      profileId: profile.id,
+      database: profile.database,
+    });
+  }
+
+  function openQueryWorkspace(tab: WorkspaceTab = activeTab) {
+    if (tab.kind === "welcome") return;
+    const session = getConnectionSession(sessions, tab.profileId);
+    if (session.state !== "connected" && session.state !== "busy") return;
+
+    dispatchWorkspaceTabs({
+      type: "open-query",
+      profileId: tab.profileId,
+      database: tab.database,
+      schema: tab.schema,
+      titlePrefix: t("workspace.query"),
+    });
+  }
+
+  function renameWorkspaceTab(tab: WorkspaceTab) {
+    if (tab.kind === "welcome") return;
+    const currentTitle = getWorkspaceTabTitle(
+      tab,
+      profiles,
+      t("workspace.welcomeTab"),
+    );
+    const title = window.prompt(t("workspace.renameTabPrompt"), currentTitle);
+    if (!title?.trim() || title.trim() === currentTitle) return;
+    dispatchWorkspaceTabs({ type: "rename", tabId: tab.id, title });
+  }
+
+  function navigateWorkspaceTabs(
+    event: KeyboardEvent<HTMLButtonElement>,
+    tab: WorkspaceTab,
+  ) {
+    if (event.key === "F2") {
+      event.preventDefault();
+      renameWorkspaceTab(tab);
+      return;
+    }
+
+    const tabs = Array.from(
+      event.currentTarget
+        .closest('[role="tablist"]')
+        ?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? [],
+    );
+    const currentIndex = tabs.indexOf(event.currentTarget);
+    let nextIndex: number | undefined;
+    if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % tabs.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    }
+    if (nextIndex === undefined) return;
+    const nextTab = tabs[nextIndex];
+    if (!nextTab) return;
+
+    event.preventDefault();
+    const nextTabId = nextTab.dataset.tabId;
+    if (nextTabId) {
+      dispatchWorkspaceTabs({ type: "activate", tabId: nextTabId });
+      nextTab.focus();
+    }
+  }
+
   function handleConnected(
     profile: ConnectionProfile,
     result: ConnectedDatabaseResult,
+    activateWorkspace = true,
   ) {
     updateProfile(profile);
     dispatchSession({ type: "connected", profileId: profile.id, result });
     setSelectedProfileId(profile.id);
+    if (activateWorkspace) openConnectionWorkspace(profile);
     setDialogProfile(undefined);
     setProfileError(undefined);
   }
 
-  async function connectProfile(profile: ConnectionProfile) {
+  async function connectProfile(
+    profile: ConnectionProfile,
+    activateWorkspace = true,
+  ) {
     const session = getConnectionSession(sessions, profile.id);
     if (session.state === "connected" || session.state === "busy") {
       setSelectedProfileId(profile.id);
+      openConnectionWorkspace(profile);
       return;
     }
     if (session.state === "error" && session.sessionId) {
-      await reconnectProfile(profile);
+      await reconnectProfile(profile, activateWorkspace);
       return;
     }
     if (isTransitioning(session.state)) return;
@@ -210,7 +309,11 @@ export function App() {
     setSelectedProfileId(profile.id);
     setProfileError(undefined);
     try {
-      handleConnected(profile, await connectionApi.connectSaved(profile.id));
+      handleConnected(
+        profile,
+        await connectionApi.connectSaved(profile.id),
+        activateWorkspace,
+      );
     } catch (error) {
       dispatchSession({
         type: "failed",
@@ -220,10 +323,13 @@ export function App() {
     }
   }
 
-  async function reconnectProfile(profile: ConnectionProfile) {
+  async function reconnectProfile(
+    profile: ConnectionProfile,
+    activateWorkspace = true,
+  ) {
     const session = getConnectionSession(sessions, profile.id);
     if (!session.sessionId) {
-      await connectProfile(profile);
+      await connectProfile(profile, activateWorkspace);
       return;
     }
     if (isTransitioning(session.state)) return;
@@ -234,6 +340,7 @@ export function App() {
       handleConnected(
         profile,
         await connectionApi.reconnectSaved(profile.id, session.sessionId),
+        activateWorkspace,
       );
     } catch (error) {
       dispatchSession({
@@ -328,6 +435,7 @@ export function App() {
       await connectionApi.deleteProfile(profile.id);
       setProfiles((current) => current.filter((item) => item.id !== profile.id));
       dispatchSession({ type: "remove", profileId: profile.id });
+      dispatchWorkspaceTabs({ type: "close-profile", profileId: profile.id });
       if (selectedProfileId === profile.id) setSelectedProfileId(undefined);
     } catch (error) {
       setProfileError(toCommandError(error).message);
@@ -412,7 +520,7 @@ export function App() {
                 sessionId={getConnectionSession(sessions, connection.id).sessionId}
                 lifecycleState={getConnectionSession(sessions, connection.id).state}
                 environmentClassName={environmentClass[connection.environment]}
-                selected={selectedProfileId === connection.id}
+                selected={highlightedProfileId === connection.id}
                 onSelect={() => setSelectedProfileId(connection.id)}
                 onConnect={() => void connectProfile(connection)}
                 onReconnect={() => void reconnectProfile(connection)}
@@ -457,7 +565,7 @@ export function App() {
         )}
 
         <section className="workspace">
-          <div className="tabbar" role="tablist">
+          <div className="tabbar">
             {sidebarCollapsed && (
               <IconButton
                 className="sidebar-expand-button"
@@ -467,34 +575,116 @@ export function App() {
                 <PanelLeftOpen size={16} />
               </IconButton>
             )}
-            <button className="tab tab-active" type="button" role="tab">
-              <FileText size={14} />
-              {selectedProfile?.name ?? "Welcome"}
-            </button>
+            <div
+              className="tab-list"
+              role="tablist"
+              aria-label={t("workspace.tabs")}
+            >
+              {workspaceTabs.tabs.map((tab) => {
+                const active = tab.id === workspaceTabs.activeTabId;
+                const title = getWorkspaceTabTitle(
+                  tab,
+                  profiles,
+                  t("workspace.welcomeTab"),
+                );
+                return (
+                  <div
+                    className={`tab-shell ${active ? "tab-shell-active" : ""}`}
+                    key={tab.id}
+                  >
+                    <button
+                      id={`workspace-tab-${tab.id}`}
+                      className="tab"
+                      type="button"
+                      role="tab"
+                      aria-controls="workspace-tabpanel"
+                      aria-selected={active}
+                      data-tab-id={tab.id}
+                      tabIndex={active ? 0 : -1}
+                      title={title}
+                      onClick={() =>
+                        dispatchWorkspaceTabs({
+                          type: "activate",
+                          tabId: tab.id,
+                        })
+                      }
+                      onDoubleClick={() => renameWorkspaceTab(tab)}
+                      onKeyDown={(event) => navigateWorkspaceTabs(event, tab)}
+                    >
+                      <WorkspaceTabIcon tab={tab} />
+                      <span>{title}</span>
+                    </button>
+                    {tab.kind !== "welcome" && (
+                      <IconButton
+                        className="tab-close"
+                        label={`${t("workspace.closeTab")} ${title}`}
+                        onClick={() =>
+                          dispatchWorkspaceTabs({ type: "close", tabId: tab.id })
+                        }
+                      >
+                        <X size={13} />
+                      </IconButton>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <IconButton
+              className="tabbar-new-query"
+              label={t("app.newQuery")}
+              disabled={
+                activeTab.kind === "welcome" ||
+                !activeSession ||
+                (activeSession.state !== "connected" &&
+                  activeSession.state !== "busy")
+              }
+              onClick={() => openQueryWorkspace()}
+            >
+              <Plus size={16} />
+            </IconButton>
           </div>
 
-          {selectedProfile && selectedSession?.state === "error" ? (
-            <ConnectionErrorWorkspace
-              message={selectedSession.error ?? t("connection.state.error")}
-              onReconnect={() => void reconnectProfile(selectedProfile)}
-            />
-          ) : activeConnection ? (
-            <ConnectedWorkspace connection={activeConnection} />
-          ) : (
-            <WelcomeWorkspace onNewConnection={() => setDialogProfile(null)} />
-          )}
+          <div
+            id="workspace-tabpanel"
+            className="workspace-tabpanel"
+            role="tabpanel"
+            aria-labelledby={`workspace-tab-${activeTab.id}`}
+          >
+            {activeTab.kind === "welcome" || !activeProfile ? (
+              <WelcomeWorkspace onNewConnection={() => setDialogProfile(null)} />
+            ) : activeSession?.state === "error" ? (
+              <ConnectionErrorWorkspace
+                message={activeSession.error ?? t("connection.state.error")}
+                onReconnect={() => void reconnectProfile(activeProfile, false)}
+              />
+            ) : activeConnection ? (
+              activeTab.kind === "query" ? (
+                <QueryWorkspace tab={activeTab} connection={activeConnection} />
+              ) : (
+                <ConnectedWorkspace
+                  connection={activeConnection}
+                  onNewQuery={() => openQueryWorkspace(activeTab)}
+                />
+              )
+            ) : (
+              <UnavailableWorkspace
+                state={activeSession?.state ?? "disconnected"}
+                onReconnect={() => void connectProfile(activeProfile, false)}
+              />
+            )}
+          </div>
         </section>
       </div>
 
       <footer className="statusbar">
         <span
-          className={`status-dot ${selectedSession?.state === "connected" ? "status-dot-online" : ""} ${selectedSession?.state === "error" ? "status-dot-error" : ""}`}
+          className={`status-dot ${activeSession?.state === "connected" ? "status-dot-online" : ""} ${activeSession?.state === "error" ? "status-dot-error" : ""}`}
         />
         <span>
           {profileError
             ? profileError
-            : selectedProfile && selectedSession
-            ? `${t(`connection.state.${selectedSession.state}`)} · ${selectedProfile.host}:${selectedProfile.port} / ${selectedProfile.database}`
+            : activeProfile && activeSession
+            ? `${t(`connection.state.${activeSession.state}`)} · ${activeProfile.host}:${activeProfile.port} / ${activeTab.kind === "welcome" ? activeProfile.database : activeTab.database}`
             : t("status.disconnected")}
         </span>
         <span className="status-spacer" />
@@ -574,7 +764,13 @@ function WelcomeWorkspace({ onNewConnection }: { onNewConnection: () => void }) 
   );
 }
 
-function ConnectedWorkspace({ connection }: { connection: ActiveConnection }) {
+function ConnectedWorkspace({
+  connection,
+  onNewQuery,
+}: {
+  connection: ActiveConnection;
+  onNewQuery: () => void;
+}) {
   const { t } = useI18n();
   return (
     <div className="connected-workspace">
@@ -584,7 +780,11 @@ function ConnectedWorkspace({ connection }: { connection: ActiveConnection }) {
           <h1>{connection.database}</h1>
           <p>PostgreSQL {connection.serverVersion}</p>
         </div>
-        <button className="button button-primary" type="button">
+        <button
+          className="button button-primary"
+          type="button"
+          onClick={onNewQuery}
+        >
           <Braces size={16} />
           {t("app.newQuery")}
         </button>
@@ -594,5 +794,83 @@ function ConnectedWorkspace({ connection }: { connection: ActiveConnection }) {
         <span>{t("workspace.selectObject")}</span>
       </div>
     </div>
+  );
+}
+
+function QueryWorkspace({
+  tab,
+  connection,
+}: {
+  tab: Extract<WorkspaceTab, { kind: "query" }>;
+  connection: ActiveConnection;
+}) {
+  const { t } = useI18n();
+  return (
+    <div className="query-workspace">
+      <header className="query-contextbar">
+        <div>
+          <strong>{tab.title}</strong>
+          <span>
+            {connection.name} / {tab.database}
+            {tab.schema ? ` / ${tab.schema}` : ""}
+          </span>
+        </div>
+        <span className="query-connection-state">
+          <span className="status-dot status-dot-online" />
+          {t("status.ready")}
+        </span>
+      </header>
+      <div className="query-canvas" aria-label={t("workspace.queryArea")}>
+        <span aria-hidden="true">1</span>
+        <div />
+      </div>
+    </div>
+  );
+}
+
+function UnavailableWorkspace({
+  state,
+  onReconnect,
+}: {
+  state: ConnectionLifecycleState;
+  onReconnect: () => void;
+}) {
+  const { t } = useI18n();
+  const transitioning = isTransitioning(state);
+  return (
+    <div className="connection-error-workspace workspace-unavailable">
+      <Database size={24} strokeWidth={1.5} />
+      <h1>{t("workspace.connectionUnavailable")}</h1>
+      <p>{t("workspace.connectionUnavailableBody")}</p>
+      <button
+        className="button button-primary"
+        type="button"
+        disabled={transitioning}
+        onClick={onReconnect}
+      >
+        {transitioning
+          ? t(`connection.state.${state}`)
+          : t("connection.reconnect")}
+      </button>
+    </div>
+  );
+}
+
+function WorkspaceTabIcon({ tab }: { tab: WorkspaceTab }) {
+  if (tab.kind === "connection") return <Database size={14} />;
+  if (tab.kind === "query") return <Braces size={14} />;
+  return <FileText size={14} />;
+}
+
+function getWorkspaceTabTitle(
+  tab: WorkspaceTab,
+  profiles: ConnectionProfile[],
+  welcomeTitle: string,
+) {
+  if (tab.kind === "welcome") return welcomeTitle;
+  if (tab.title) return tab.title;
+  return (
+    profiles.find((profile) => profile.id === tab.profileId)?.name ??
+    tab.database
   );
 }

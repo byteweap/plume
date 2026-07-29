@@ -181,4 +181,127 @@ describe("App sidebar", () => {
     await waitFor(() => expect(disconnect).toHaveBeenCalledWith("session-2"));
     expect(await screen.findByText(/Disconnected · localhost:5432/)).toBeVisible();
   });
+
+  it("creates, switches, renames, and closes connection-bound query tabs", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    vi.spyOn(window, "prompt").mockReturnValue("Audit users");
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("Local saved / postgres")).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "New query" }));
+    const secondQuery = screen.getByRole("tab", { name: "Query 2" });
+    fireEvent.doubleClick(secondQuery);
+    expect(window.prompt).toHaveBeenCalledWith(
+      "Enter a new tab name",
+      "Query 2",
+    );
+    expect(screen.getByRole("tab", { name: "Audit users" })).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Close tab Audit users" }),
+    );
+    expect(screen.queryByRole("tab", { name: "Audit users" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
+  it("keeps a query tab offline and reuses its profile context after reconnect", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    const connectSaved = vi
+      .spyOn(connectionApi, "connectSaved")
+      .mockResolvedValueOnce({
+        sessionId: "session-1",
+        database: "postgres",
+        latencyMs: 12,
+        serverVersion: "18.0",
+        transport: "plain",
+      })
+      .mockResolvedValueOnce({
+        sessionId: "session-2",
+        database: "postgres",
+        latencyMs: 8,
+        serverVersion: "18.1",
+        transport: "plain",
+      });
+    vi.spyOn(connectionApi, "disconnect").mockResolvedValue();
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+
+    fireEvent.click(screen.getByRole("button", { name: "Connection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Disconnect" }));
+    expect(await screen.findByText("Connection unavailable")).toBeVisible();
+    expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect" }));
+    await waitFor(() => expect(connectSaved).toHaveBeenCalledTimes(2));
+    expect(connectSaved).toHaveBeenLastCalledWith("profile-1");
+    expect(screen.getByRole("tab", { name: "Query 1" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(await screen.findByText("Local saved / postgres")).toBeVisible();
+  });
+
+  it("supports roving keyboard focus across workspace tabs", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    const connectionTab = screen.getByRole("tab", { name: "Local saved" });
+    connectionTab.focus();
+    fireEvent.keyDown(connectionTab, { key: "Home" });
+
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
 });

@@ -43,8 +43,10 @@ export interface QueryDataType {
 
 export interface QueryRowBatch {
   offset: number;
-  rows: Array<Array<string | null>>;
+  rows: QueryValue[][];
 }
+
+export type QueryValue = string | null;
 
 export interface QueryStatementResult {
   statementIndex: number;

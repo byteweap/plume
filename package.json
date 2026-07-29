@@ -8,6 +8,7 @@
     "prepare": "node scripts/install-git-hooks.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "benchmark:grid": "node --expose-gc scripts/benchmark-data-grid.mjs",
     "benchmark:editor": "node --expose-gc scripts/benchmark-sql-editor.mjs",
     "check": "npm run typecheck && npm run lint && npm run test",
     "check:all": "npm run check && npm run build && npm run check:rust",
@@ -35,6 +36,7 @@
     "codemirror": "^6.0.2",
     "lucide-react": "^1.27.0",
     "react": "^19.1.0",
+    "react-data-grid": "7.0.0-beta.57",
     "react-dom": "^19.1.0",
     "zod": "^4.4.3"
   },

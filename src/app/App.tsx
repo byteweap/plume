@@ -80,10 +80,18 @@ const defaultSidebarWidth = 286;
 const minimumSidebarWidth = 220;
 const maximumSidebarWidth = 560;
 const sidebarKeyboardStep = 16;
+const defaultQueryResultHeight = 260;
+const minimumQueryResultHeight = 120;
+const minimumQueryEditorHeight = 150;
+const queryResultResizerSize = 7;
+const queryResultKeyboardStep = 20;
 const SqlEditor = lazy(() =>
   import("../features/sql-editor/SqlEditor").then((module) => ({
     default: module.SqlEditor,
   })),
+);
+const QueryResultPanel = lazy(
+  () => import("../features/query-results/QueryResultPanel"),
 );
 
 function clampSidebarWidth(width: number) {
@@ -91,6 +99,14 @@ function clampSidebarWidth(width: number) {
     maximumSidebarWidth,
     Math.max(minimumSidebarWidth, Math.round(width)),
   );
+}
+
+function clampQueryResultHeight(height: number, workspaceHeight: number) {
+  const maximumHeight = Math.max(
+    minimumQueryResultHeight,
+    workspaceHeight - minimumQueryEditorHeight - queryResultResizerSize,
+  );
+  return Math.min(maximumHeight, Math.max(minimumQueryResultHeight, height));
 }
 
 export function App() {
@@ -1125,7 +1141,17 @@ function QueryWorkspace({
 }) {
   const { t } = useI18n();
   const editorRef = useRef<SqlEditorController>(null);
+  const workspaceMainRef = useRef<HTMLDivElement>(null);
+  const resultResizeStart = useRef<{
+    pointerId: number;
+    pointerY: number;
+    height: number;
+  } | null>(null);
+  const [resultHeight, setResultHeight] = useState(defaultQueryResultHeight);
+  const [workspaceHeight, setWorkspaceHeight] = useState(0);
+  const [resizingResult, setResizingResult] = useState(false);
   const execution = getQueryExecution(tab);
+  const result = execution.status === "succeeded" ? execution.result : undefined;
   const transitioning = isTransitioning(state);
   const canExecute =
     Boolean(connection) &&
@@ -1143,6 +1169,89 @@ function QueryWorkspace({
     const range = resolveQueryErrorRange(tab.sql, execution.target, position);
     if (range) editorRef.current?.revealError(range);
   }, [execution, tab.sql]);
+
+  useEffect(() => {
+    const element = workspaceMainRef.current;
+    if (!element || !result) return;
+
+    const updateHeight = () => setWorkspaceHeight(element.clientHeight);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [result]);
+
+  function currentWorkspaceHeight() {
+    const measuredHeight =
+      workspaceHeight || workspaceMainRef.current?.clientHeight || 0;
+    return measuredHeight > 0
+      ? measuredHeight
+      : minimumQueryEditorHeight +
+          queryResultResizerSize +
+          defaultQueryResultHeight;
+  }
+
+  function startResultResize(event: PointerEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+
+    resultResizeStart.current = {
+      pointerId: event.pointerId,
+      pointerY: event.clientY,
+      height: effectiveResultHeight,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizingResult(true);
+  }
+
+  function resizeResult(event: PointerEvent<HTMLDivElement>) {
+    const start = resultResizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    setResultHeight(
+      clampQueryResultHeight(
+        start.height + start.pointerY - event.clientY,
+        currentWorkspaceHeight(),
+      ),
+    );
+  }
+
+  function stopResultResize(event: PointerEvent<HTMLDivElement>) {
+    const start = resultResizeStart.current;
+    if (!start || start.pointerId !== event.pointerId) return;
+
+    resultResizeStart.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setResizingResult(false);
+  }
+
+  function resizeResultWithKeyboard(event: KeyboardEvent<HTMLDivElement>) {
+    const direction =
+      event.key === "ArrowUp" ? 1 : event.key === "ArrowDown" ? -1 : 0;
+    if (direction === 0) return;
+
+    event.preventDefault();
+    setResultHeight(
+      clampQueryResultHeight(
+        effectiveResultHeight + direction * queryResultKeyboardStep,
+        currentWorkspaceHeight(),
+      ),
+    );
+  }
+
+  const renderedWorkspaceHeight =
+    workspaceHeight ||
+    minimumQueryEditorHeight +
+      queryResultResizerSize +
+      defaultQueryResultHeight;
+  const effectiveResultHeight = clampQueryResultHeight(
+    resultHeight,
+    renderedWorkspaceHeight,
+  );
+  const workspaceMainStyle = {
+    "--query-result-height": `${effectiveResultHeight}px`,
+  } as CSSProperties;
 
   return (
     <div
@@ -1219,31 +1328,72 @@ function QueryWorkspace({
       {execution.status !== "idle" && (
         <QueryExecutionNotice execution={execution} onCancel={onCancel} />
       )}
-      <Suspense
-        fallback={
-          <div
-            className="sql-editor-loading"
-            role="status"
-            aria-label={t("workspace.editorLoading")}
-          />
-        }
+      <div
+        ref={workspaceMainRef}
+        className={`query-workspace-main ${result ? "query-workspace-main-with-results" : ""} ${resizingResult ? "query-workspace-main-resizing" : ""}`}
+        style={workspaceMainStyle}
       >
-        <SqlEditor
-          ref={editorRef}
-          label={t("workspace.queryArea")}
-          value={tab.sql}
-          completionConnection={
-            connection
-              ? {
-                  sessionId: connection.sessionId,
-                  database: tab.database,
-                  defaultSchema: tab.schema ?? "public",
-                }
-              : undefined
+        <Suspense
+          fallback={
+            <div
+              className="sql-editor-loading"
+              role="status"
+              aria-label={t("workspace.editorLoading")}
+            />
           }
-          onChange={onSqlChange}
-        />
-      </Suspense>
+        >
+          <SqlEditor
+            ref={editorRef}
+            label={t("workspace.queryArea")}
+            value={tab.sql}
+            completionConnection={
+              connection
+                ? {
+                    sessionId: connection.sessionId,
+                    database: tab.database,
+                    defaultSchema: tab.schema ?? "public",
+                  }
+                : undefined
+            }
+            onChange={onSqlChange}
+          />
+        </Suspense>
+        {result && (
+          <>
+            <div
+              className="query-result-resizer"
+              role="separator"
+              aria-label={t("query.results.resize")}
+              aria-orientation="horizontal"
+              aria-valuemin={minimumQueryResultHeight}
+              aria-valuemax={Math.max(
+                minimumQueryResultHeight,
+                renderedWorkspaceHeight -
+                  minimumQueryEditorHeight -
+                  queryResultResizerSize,
+              )}
+              aria-valuenow={effectiveResultHeight}
+              tabIndex={0}
+              onKeyDown={resizeResultWithKeyboard}
+              onPointerDown={startResultResize}
+              onPointerMove={resizeResult}
+              onPointerUp={stopResultResize}
+              onPointerCancel={stopResultResize}
+            />
+            <Suspense
+              fallback={
+                <div
+                  className="query-result-loading"
+                  role="status"
+                  aria-label={t("query.results.loading")}
+                />
+              }
+            >
+              <QueryResultPanel key={result.queryId} result={result} />
+            </Suspense>
+          </>
+        )}
+      </div>
     </div>
   );
 }

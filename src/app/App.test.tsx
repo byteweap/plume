@@ -606,6 +606,16 @@ describe("App sidebar", () => {
     expect(await screen.findByText("Query completed")).toBeVisible();
     expect(screen.getByText("Rows returned 1")).toBeVisible();
     expect(screen.getByText(/^Duration /)).toBeVisible();
+    expect(
+      await screen.findByRole("grid", { name: "Result 1" }),
+    ).toHaveTextContent("2");
+
+    const resultResizer = screen.getByRole("separator", {
+      name: "Resize query results",
+    });
+    expect(resultResizer).toHaveAttribute("aria-valuenow", "260");
+    fireEvent.keyDown(resultResizer, { key: "ArrowDown" });
+    expect(resultResizer).toHaveAttribute("aria-valuenow", "240");
 
     fireEvent.click(screen.getByRole("button", { name: "Run all SQL" }));
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));

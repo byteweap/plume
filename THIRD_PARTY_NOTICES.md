@@ -13,6 +13,7 @@ inventory for a particular source revision:
 |---|---|---|
 | `@tauri-apps/api`, `@tauri-apps/plugin-opener` | Desktop IPC and platform integration | Apache-2.0 OR MIT |
 | `react`, `react-dom` | User interface | MIT |
+| `react-data-grid` | Virtualized query-result grid, keyboard navigation, selection, and column resizing | MIT |
 | `codemirror`, `@codemirror/autocomplete`, `@codemirror/lang-sql` | SQL editing, asynchronous completion, and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
 | `lucide-react` | Interface icons | ISC |
 | `zod` | Runtime validation | MIT |

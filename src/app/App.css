@@ -561,6 +561,65 @@
   grid-template-rows: 46px auto auto minmax(0, 1fr);
 }
 
+.query-workspace-main {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.query-workspace-main-with-results {
+  grid-template-rows:
+    minmax(150px, 1fr) 7px
+    minmax(120px, var(--query-result-height));
+}
+
+.query-workspace-main-resizing,
+.query-workspace-main-resizing * {
+  cursor: row-resize;
+  user-select: none;
+}
+
+.query-workspace-main-resizing > .sql-editor,
+.query-workspace-main-resizing > .query-results {
+  pointer-events: none;
+}
+
+.query-result-resizer {
+  position: relative;
+  z-index: 4;
+  min-height: 7px;
+  border: 0;
+  outline: 0;
+  background: #f5f7f5;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.query-result-resizer::after {
+  position: absolute;
+  top: 3px;
+  right: 0;
+  left: 0;
+  height: 1px;
+  background: #d8ded9;
+  content: "";
+  transition: background 120ms ease;
+}
+
+.query-result-resizer:hover::after,
+.query-result-resizer:focus-visible::after,
+.query-workspace-main-resizing .query-result-resizer::after {
+  background: #5f9077;
+}
+
+.query-result-loading {
+  min-width: 0;
+  min-height: 0;
+  background: #ffffff;
+}
+
 .query-contextbar {
   display: flex;
   min-width: 0;
@@ -876,6 +935,15 @@
 
   .sql-editor-loading {
     background: #1d211e;
+  }
+
+  .query-result-resizer,
+  .query-result-loading {
+    background: #1d211e;
+  }
+
+  .query-result-resizer::after {
+    background: #363d38;
   }
 
   .workspace-unavailable h1 {

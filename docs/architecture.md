@@ -142,8 +142,11 @@ reveals the failing character only while that executed SQL still matches the
 current document; the notice separately presents copyable technical details.
 
 Execution results live only for the query-tab lifecycle and are not persisted in
-drafts. The result protocol is defined by P0-F01; configurable result limits and
-virtualized rendering remain follow-up work in P0-F04 and P0-F02.
+drafts. P0-F01 defines the result protocol, and P0-F02 renders its retained
+batches through a lazily loaded React Data Grid adapter with fixed row heights,
+row and column virtualization, resizable columns, keyboard navigation,
+rectangular selection, and tab-separated copy. Configurable result limits remain
+P0-F04 work; richer type rendering and row/header copy remain P0-F03 and P0-F05.
 
 ## SQL Completion Boundary
 

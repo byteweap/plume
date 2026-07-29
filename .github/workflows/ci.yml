@@ -63,6 +63,9 @@ jobs:
       - name: Benchmark SQL editor
         run: npm run benchmark:editor
 
+      - name: Benchmark data grid
+        run: npm run benchmark:grid
+
       - name: Check Rust
         run: npm run check:rust
 

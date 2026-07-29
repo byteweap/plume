@@ -16,7 +16,7 @@ reverse or that establish boundaries shared by several modules.
 |---|---|---|
 | [0001](0001-desktop-runtime-and-boundaries.md) | Accepted | Desktop runtime and module boundaries |
 | [0002](0002-local-storage-and-credentials.md) | Proposed | Local storage and operating-system credentials |
-| [0003](0003-sql-editor-and-data-grid.md) | Proposed | SQL editor and virtualized data grid |
+| [0003](0003-sql-editor-and-data-grid.md) | Accepted | CodeMirror SQL editor and React Data Grid result grid |
 
 Proposed ADRs must be resolved before implementation crosses their decision
 gate. A code change that alters an accepted architectural boundary must update

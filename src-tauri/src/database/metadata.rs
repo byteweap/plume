@@ -104,6 +104,36 @@ pub enum DatabaseObjectKind {
     Type,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SqlCompletionCatalog {
+    pub schemas: Vec<SqlCompletionSchema>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SqlCompletionSchema {
+    pub name: String,
+    pub relations: Vec<SqlCompletionRelation>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SqlCompletionRelation {
+    pub name: String,
+    pub kind: SqlCompletionRelationKind,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SqlCompletionRelationKind {
+    Table,
+    ForeignTable,
+    View,
+    MaterializedView,
+}
+
 pub async fn get_server_overview(client: &Client) -> Result<ServerOverview, DatabaseError> {
     let database_rows = client
         .query(
@@ -343,6 +373,86 @@ pub async fn list_schema_objects(
         .collect()
 }
 
+pub async fn get_sql_completion_catalog(
+    client: &Client,
+) -> Result<SqlCompletionCatalog, DatabaseError> {
+    let rows = client
+        .query(
+            "SELECT namespace.nspname,
+                    relation.relname,
+                    relation.relkind::text,
+                    attribute.attname
+               FROM pg_catalog.pg_namespace namespace
+               LEFT JOIN pg_catalog.pg_class relation
+                 ON relation.relnamespace = namespace.oid
+                AND relation.relkind IN ('r', 'p', 'f', 'v', 'm')
+               LEFT JOIN pg_catalog.pg_attribute attribute
+                 ON attribute.attrelid = relation.oid
+                AND attribute.attnum > 0
+                AND NOT attribute.attisdropped
+              WHERE namespace.nspname NOT LIKE 'pg\\_%' ESCAPE '\\'
+                AND namespace.nspname <> 'information_schema'
+                AND pg_catalog.has_schema_privilege(namespace.oid, 'USAGE')
+              ORDER BY namespace.nspname, relation.relname, attribute.attnum",
+            &[],
+        )
+        .await?;
+
+    let mut schemas: Vec<SqlCompletionSchema> = Vec::new();
+    for row in rows {
+        let schema_name: String = row.get(0);
+        if schemas
+            .last()
+            .is_none_or(|schema| schema.name != schema_name)
+        {
+            schemas.push(SqlCompletionSchema {
+                name: schema_name,
+                relations: Vec::new(),
+            });
+        }
+
+        let schema = schemas.last_mut().expect("a schema was inserted above");
+        let Some(relation_name) = row.get::<_, Option<String>>(1) else {
+            continue;
+        };
+        if schema
+            .relations
+            .last()
+            .is_none_or(|relation| relation.name != relation_name)
+        {
+            let relation_kind: String = row
+                .get::<_, Option<String>>(2)
+                .expect("relations returned for completion have a kind");
+            schema.relations.push(SqlCompletionRelation {
+                name: relation_name,
+                kind: parse_completion_relation_kind(&relation_kind)?,
+                columns: Vec::new(),
+            });
+        }
+
+        if let Some(column) = row.get::<_, Option<String>>(3) {
+            schema
+                .relations
+                .last_mut()
+                .expect("a relation was inserted above")
+                .columns
+                .push(column);
+        }
+    }
+
+    Ok(SqlCompletionCatalog { schemas })
+}
+
+fn parse_completion_relation_kind(kind: &str) -> Result<SqlCompletionRelationKind, DatabaseError> {
+    match kind {
+        "r" | "p" => Ok(SqlCompletionRelationKind::Table),
+        "f" => Ok(SqlCompletionRelationKind::ForeignTable),
+        "v" => Ok(SqlCompletionRelationKind::View),
+        "m" => Ok(SqlCompletionRelationKind::MaterializedView),
+        unexpected => Err(DatabaseError::UnexpectedMetadata(unexpected.to_owned())),
+    }
+}
+
 fn parse_object_kind(kind: &str) -> Result<DatabaseObjectKind, DatabaseError> {
     match kind {
         "table" => Ok(DatabaseObjectKind::Table),
@@ -365,7 +475,8 @@ mod tests {
 
     use super::{
         DatabaseCollectionKind, DatabaseObjectKind, get_database_collection,
-        get_database_collections, get_server_overview, list_schema_objects, parse_object_kind,
+        get_database_collections, get_server_overview, get_sql_completion_catalog,
+        list_schema_objects, parse_object_kind,
     };
     use crate::{database::test_support, error::DatabaseError};
 
@@ -407,7 +518,10 @@ mod tests {
                     .batch_execute(
                         "DROP SCHEMA IF EXISTS plume_navigation_test CASCADE;
                          CREATE SCHEMA plume_navigation_test;
-                         CREATE TABLE plume_navigation_test.items (id bigint PRIMARY KEY);
+                         CREATE TABLE plume_navigation_test.items (
+                           id bigint PRIMARY KEY,
+                           display_name text NOT NULL
+                         );
                          CREATE VIEW plume_navigation_test.item_view AS
                            SELECT id FROM plume_navigation_test.items;
                          CREATE MATERIALIZED VIEW plume_navigation_test.item_snapshot AS
@@ -546,6 +660,25 @@ mod tests {
                         "missing object kind: {expected_kind}"
                     );
                 }
+
+                let completion_catalog = get_sql_completion_catalog(&client).await?;
+                let completion_schema = completion_catalog
+                    .schemas
+                    .iter()
+                    .find(|schema| schema.name == "plume_navigation_test")
+                    .expect("completion schema should be present");
+                let items = completion_schema
+                    .relations
+                    .iter()
+                    .find(|relation| relation.name == "items")
+                    .expect("completion relation should be present");
+                assert_eq!(items.columns, ["id", "display_name"]);
+                assert!(
+                    completion_schema
+                        .relations
+                        .iter()
+                        .any(|relation| relation.name == "item_view")
+                );
 
                 Ok(())
             }

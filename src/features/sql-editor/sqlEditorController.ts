@@ -1,6 +1,12 @@
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import { basicSetup, EditorView } from "codemirror";
 import {
+  buildPostgreSqlKeywordCompletion,
+  createSqlCompletionExtensions,
+  type SqlCompletionConnection,
+} from "./sqlCompletion";
+import { sqlCompletionCatalogCache } from "./sqlCompletionApi";
+import {
   resolveSqlExecutionTarget,
   type SqlExecutionScope,
   type SqlExecutionTarget,
@@ -18,6 +24,7 @@ export interface SqlEditorController {
   setValue(value: string): void;
   replaceSelection(value: string): void;
   revealError(range: { from: number; to: number }): void;
+  setCompletionConnection(connection?: SqlCompletionConnection): void;
   setLabel(label: string): void;
   focus(): void;
   destroy(): void;
@@ -26,6 +33,7 @@ export interface SqlEditorController {
 export interface SqlEditorOptions {
   label: string;
   value: string;
+  completionConnection?: SqlCompletionConnection;
   onChange: (value: string) => void;
 }
 
@@ -34,12 +42,20 @@ export function createSqlEditor(
   options: SqlEditorOptions,
 ): SqlEditorController {
   let notifyChanges = true;
+  let completionConnection = options.completionConnection;
   const view = new EditorView({
     doc: options.value,
     parent,
     extensions: [
       basicSetup,
-      sql({ dialect: PostgreSQL }),
+      sql({
+        dialect: PostgreSQL,
+        keywordCompletion: buildPostgreSqlKeywordCompletion,
+      }),
+      createSqlCompletionExtensions(
+        () => completionConnection,
+        (connection) => sqlCompletionCatalogCache.load(connection),
+      ),
       EditorView.contentAttributes.of({
         "aria-label": options.label,
         "aria-multiline": "true",
@@ -77,6 +93,9 @@ export function createSqlEditor(
         effects: EditorView.scrollIntoView(from, { y: "center" }),
       });
       view.focus();
+    },
+    setCompletionConnection(connection) {
+      completionConnection = connection;
     },
     setLabel(label) {
       view.contentDOM.setAttribute("aria-label", label);

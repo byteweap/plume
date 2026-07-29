@@ -13,7 +13,7 @@ inventory for a particular source revision:
 |---|---|---|
 | `@tauri-apps/api`, `@tauri-apps/plugin-opener` | Desktop IPC and platform integration | Apache-2.0 OR MIT |
 | `react`, `react-dom` | User interface | MIT |
-| `codemirror`, `@codemirror/lang-sql` | SQL editing and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
+| `codemirror`, `@codemirror/autocomplete`, `@codemirror/lang-sql` | SQL editing, asynchronous completion, and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
 | `lucide-react` | Interface icons | ISC |
 | `zod` | Runtime validation | MIT |
 | `tauri`, `tauri-plugin-opener` | Desktop application runtime | Apache-2.0 OR MIT |

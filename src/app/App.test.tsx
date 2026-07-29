@@ -1,3 +1,4 @@
+import { startCompletion } from "@codemirror/autocomplete";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { EditorView } from "codemirror";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,6 +8,10 @@ import { connectionApi } from "../features/connections/connectionApi";
 import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
+import {
+  sqlCompletionApi,
+  sqlCompletionCatalogCache,
+} from "../features/sql-editor/sqlCompletionApi";
 import { App } from "./App";
 
 const savedProfile: ConnectionProfile = {
@@ -41,6 +46,7 @@ async function replaceEditorText(value: string) {
 
 describe("App sidebar", () => {
   beforeEach(() => {
+    sqlCompletionCatalogCache.clear();
     clipboardWrite.mockReset();
     clipboardWrite.mockResolvedValue();
     Object.defineProperty(navigator, "clipboard", {
@@ -73,6 +79,7 @@ describe("App sidebar", () => {
       queryId: request.queryId,
       status: "requested",
     }));
+    vi.spyOn(sqlCompletionApi, "getCatalog").mockResolvedValue({ schemas: [] });
   });
 
   afterEach(() => {
@@ -664,6 +671,42 @@ describe("App sidebar", () => {
       screen.getByRole("button", { name: "Error details copied" }),
     ).toBeVisible();
     expect(screen.getByText(/Connected · localhost:5432/)).toBeVisible();
+  });
+
+  it("loads SQL completion metadata for the active session and database", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    const editor = await replaceEditorText("select * from ite");
+    const view = EditorView.findFromDOM(editor)!;
+
+    act(() => {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      startCompletion(view);
+    });
+
+    await waitFor(() =>
+      expect(sqlCompletionApi.getCatalog).toHaveBeenCalledWith({
+        sessionId: "session-1",
+        database: "postgres",
+        defaultSchema: "public",
+      }),
+    );
   });
 
   it("waits for PostgreSQL confirmation before showing a query as cancelled", async () => {

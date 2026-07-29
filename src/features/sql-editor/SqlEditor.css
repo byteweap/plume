@@ -78,6 +78,36 @@
   letter-spacing: 0;
 }
 
+.sql-editor .cm-tooltip-autocomplete {
+  overflow: hidden;
+  border: 1px solid #c8d0ca;
+  border-radius: 4px;
+  color: #303a33;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(24 37 29 / 14%);
+}
+
+.sql-editor .cm-tooltip-autocomplete > ul {
+  max-height: min(320px, 45vh);
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.sql-editor .cm-tooltip-autocomplete > ul > li {
+  min-height: 24px;
+  padding: 3px 8px;
+}
+
+.sql-editor .cm-tooltip-autocomplete > ul > li[aria-selected] {
+  color: #173d2b;
+  background: #dcece3;
+}
+
+.sql-editor .cm-completionDetail {
+  color: #778179;
+  font-style: normal;
+}
+
 @media (prefers-color-scheme: dark) {
   .sql-editor,
   .sql-editor .cm-editor {
@@ -119,5 +149,21 @@
   .sql-editor .cm-panel button {
     border-color: #4a554d;
     background: #191d1a;
+  }
+
+  .sql-editor .cm-tooltip-autocomplete {
+    border-color: #4a554d;
+    color: #dce3de;
+    background: #222823;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 30%);
+  }
+
+  .sql-editor .cm-tooltip-autocomplete > ul > li[aria-selected] {
+    color: #e5eee8;
+    background: #315943;
+  }
+
+  .sql-editor .cm-completionDetail {
+    color: #9da9a1;
   }
 }

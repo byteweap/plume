@@ -141,6 +141,22 @@ drafts. Type metadata and batch contracts, configurable result limits,
 and virtualized rendering remain follow-up work in P0-F01, P0-F04, and P0-F02
 respectively.
 
+## SQL Completion Boundary
+
+CodeMirror combines local PostgreSQL keyword and common-function completions
+with an asynchronous database catalog source. Rust returns only non-system
+Schemas for which the current user has `USAGE`, plus their tables, foreign
+tables, views, materialized views, and visible columns. The frontend caches one
+in-flight or completed catalog request per session and database; failed loads
+are removed so a later completion can retry.
+
+Catalog loading never blocks editor transactions. Static candidates can appear
+while the database request is pending, and CodeMirror resolves qualified names
+and table aliases against the returned schema tree. Before applying an
+asynchronous response, the adapter verifies that the editor still targets the
+same session and database, preventing a reconnect or tab switch from exposing
+stale candidates.
+
 ## Lazy Metadata Navigation
 
 Metadata is loaded by level:

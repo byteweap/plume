@@ -13,7 +13,7 @@ use commands::{
     drafts::{delete_query_draft, list_query_drafts, save_query_draft},
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
-        get_database_tree, get_schema_objects, get_server_tree,
+        get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
     },
     profiles::{
         create_connection_profile, delete_connection_profile, duplicate_connection_profile,
@@ -66,6 +66,7 @@ pub fn run() {
             get_database_tree,
             get_database_collection_items,
             get_schema_objects,
+            get_sql_completions,
             get_catalog_tree,
             get_catalog_collection_items,
             execute_query,

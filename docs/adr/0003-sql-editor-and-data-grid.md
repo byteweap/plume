@@ -41,12 +41,15 @@ the editor and parser cost.
 
 Business state stores SQL as plain strings. The adapter in
 `src/features/sql-editor` exposes value, selection replacement, execution
-target resolution, label, focus, and lifecycle operations. Execution targets
-contain only the selected, current-statement, or full-document SQL string,
-its plain numeric range, and its source. CodeMirror `EditorState`,
-`EditorView`, syntax-tree, and transaction types must not enter workspace tabs,
-draft persistence, or future query execution protocols. This boundary
-resolution does not itself execute SQL.
+target resolution, error revealing, completion-context updates, label, focus,
+and lifecycle operations. Execution targets contain only the selected,
+current-statement, or full-document SQL string, its plain numeric range, and
+its source. Completion receives only an opaque session ID, database, and
+optional default Schema; database catalog loading remains asynchronous and
+cached outside editor state. CodeMirror `EditorState`, `EditorView`,
+syntax-tree, and transaction types must not enter workspace tabs, draft
+persistence, or query execution protocols. This boundary resolution does not
+itself execute SQL.
 
 The data-grid library is not selected by this decision.
 
@@ -85,6 +88,6 @@ by `package-lock.json` and is summarized in `THIRD_PARTY_NOTICES.md`.
 CI executes the same benchmark, component tests, frontend checks, and unsigned
 desktop build on macOS and Windows. This provides a repeatable Windows gate but
 does not replace the release candidate's manual Windows WebView2 visual and
-keyboard smoke test. That smoke test, editor diagnostics, asynchronous
-completion, query execution, and the separate data-grid decision remain
-follow-up work.
+keyboard smoke test. Editor diagnostics, asynchronous completion, and query
+execution now have automated coverage; the manual smoke test and separate
+data-grid decision remain follow-up work.

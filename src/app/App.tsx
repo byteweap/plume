@@ -1232,6 +1232,15 @@ function QueryWorkspace({
           ref={editorRef}
           label={t("workspace.queryArea")}
           value={tab.sql}
+          completionConnection={
+            connection
+              ? {
+                  sessionId: connection.sessionId,
+                  database: tab.database,
+                  defaultSchema: tab.schema ?? "public",
+                }
+              : undefined
+          }
           onChange={onSqlChange}
         />
       </Suspense>

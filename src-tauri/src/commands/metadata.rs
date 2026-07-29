@@ -8,7 +8,8 @@ use crate::{
         },
         metadata::{
             DatabaseCollectionKind, DatabaseCollectionSummary, DatabaseObject, NamedObject,
-            ServerOverview, get_database_collection, get_database_collections, get_server_overview,
+            ServerOverview, SqlCompletionCatalog, get_database_collection,
+            get_database_collections, get_server_overview, get_sql_completion_catalog,
             list_schema_objects,
         },
         session::ConnectionRegistry,
@@ -73,6 +74,21 @@ pub async fn get_schema_objects(
         .await
         .map_err(CommandError::from)?;
     list_schema_objects(&client, &schema)
+        .await
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn get_sql_completions(
+    registry: State<'_, ConnectionRegistry>,
+    session_id: String,
+    database: String,
+) -> Result<SqlCompletionCatalog, CommandError> {
+    let client = registry
+        .database_client(&session_id, &database)
+        .await
+        .map_err(CommandError::from)?;
+    get_sql_completion_catalog(&client)
         .await
         .map_err(CommandError::from)
 }

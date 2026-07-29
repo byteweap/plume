@@ -16,3 +16,21 @@ services:
       retries: 15
     volumes:
       - ./tests/postgres/init.sql:/docker-entrypoint-initdb.d/10-plume-test.sql:ro
+
+  postgres-tls:
+    image: postgres:${PLUME_POSTGRES_VERSION:-18}
+    environment:
+      POSTGRES_DB: plume
+      POSTGRES_PASSWORD: plume
+      POSTGRES_USER: plume
+    ports:
+      - "${PLUME_POSTGRES_TLS_PORT:-55433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plume -d plume"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    volumes:
+      - ./tests/postgres/init.sql:/docker-entrypoint-initdb.d/10-plume-test.sql:ro
+      - ./tests/postgres/tls/configure.sh:/docker-entrypoint-initdb.d/05-plume-tls.sh:ro
+      - ./tests/postgres/tls/generated:/plume-tls:ro

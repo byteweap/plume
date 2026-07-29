@@ -7,14 +7,19 @@ use crate::profiles::ProfileError;
 pub enum DatabaseError {
     #[error("The connection configuration is invalid: {0}")]
     InvalidConfiguration(String),
-    #[error("Unable to read certificate file '{path}': {source}")]
+    #[error("Unable to read {kind} file '{path}': {source}")]
     CertificateFile {
         path: String,
+        kind: &'static str,
         #[source]
         source: std::io::Error,
     },
-    #[error("TLS configuration failed: {0}")]
-    Tls(String),
+    #[error("The certificate file '{path}' is invalid: {reason}")]
+    InvalidCertificate { path: String, reason: String },
+    #[error("The server certificate does not match the requested host: {0}")]
+    HostnameMismatch(String),
+    #[error("The TLS handshake failed: {0}")]
+    TlsHandshake(String),
     #[error("The database session '{0}' is no longer available.")]
     SessionNotFound(String),
     #[error("PostgreSQL returned an unsupported metadata kind: {0}")]
@@ -39,13 +44,28 @@ impl From<DatabaseError> for CommandError {
                 message,
                 detail: None,
             },
-            DatabaseError::CertificateFile { .. } => Self {
-                code: "certificate_error",
-                message: "The root certificate could not be read.".to_owned(),
+            DatabaseError::CertificateFile { ref source, .. } => Self {
+                code: if source.kind() == std::io::ErrorKind::NotFound {
+                    "certificate_missing"
+                } else {
+                    "certificate_unreadable"
+                },
+                message: "A configured certificate or private-key file could not be read."
+                    .to_owned(),
                 detail: Some(error.to_string()),
             },
-            DatabaseError::Tls(_) => Self {
-                code: "tls_error",
+            DatabaseError::InvalidCertificate { .. } => Self {
+                code: "certificate_invalid",
+                message: "A configured certificate or private key is invalid.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::HostnameMismatch(_) => Self {
+                code: "hostname_mismatch",
+                message: "The server certificate does not match the requested host.".to_owned(),
+                detail: Some(error.to_string()),
+            },
+            DatabaseError::TlsHandshake(_) => Self {
+                code: "tls_handshake_failed",
                 message: "The secure connection could not be established.".to_owned(),
                 detail: Some(error.to_string()),
             },
@@ -123,6 +143,8 @@ fn classify_postgres_error(error: &tokio_postgres::Error) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::{CommandError, DatabaseError};
 
     #[test]
@@ -135,5 +157,40 @@ mod tests {
         assert_eq!(json["code"], "invalid_configuration");
         assert_eq!(json["message"], "Host is required.");
         assert!(json.get("detail").is_none());
+    }
+
+    #[test]
+    fn tls_errors_have_distinct_stable_codes() {
+        let cases = [
+            (
+                DatabaseError::CertificateFile {
+                    path: "/missing/ca.crt".to_owned(),
+                    kind: "root certificate",
+                    source: io::Error::new(io::ErrorKind::NotFound, "missing"),
+                },
+                "certificate_missing",
+            ),
+            (
+                DatabaseError::InvalidCertificate {
+                    path: "/tmp/ca.crt".to_owned(),
+                    reason: "invalid PEM".to_owned(),
+                },
+                "certificate_invalid",
+            ),
+            (
+                DatabaseError::HostnameMismatch("mismatch".to_owned()),
+                "hostname_mismatch",
+            ),
+            (
+                DatabaseError::TlsHandshake("handshake".to_owned()),
+                "tls_handshake_failed",
+            ),
+        ];
+
+        for (error, expected_code) in cases {
+            let json = serde_json::to_value(CommandError::from(error))
+                .expect("command error should serialize");
+            assert_eq!(json["code"], expected_code);
+        }
     }
 }

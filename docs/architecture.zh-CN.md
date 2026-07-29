@@ -113,7 +113,12 @@ src-tauri/src/
 | `verify-ca` | 必须使用 TLS | 是 | 否 |
 | `verify-full` | 必须使用 TLS | 是 | 是 |
 
-`verify-ca` 和 `verify-full` 要求提供 PEM 根证书路径。React 校验 Schema 与 Rust 连接服务会分别进行校验。
+`verify-ca` 和 `verify-full` 要求提供 PEM 根证书路径。任意 TLS 模式还可使用
+PEM 客户端证书链及其匹配的、未加密 PKCS#8 PEM 私钥，两个客户端路径必须同时提供。
+React、Rust 配置仓库与连接服务会分别独立执行这些校验。
+
+命令边界会使用不同的稳定错误码区分证书文件缺失或不可读、证书内容无效、主机名不匹配
+和其他 TLS 握手失败。证书内容与私钥内容不会被序列化到配置存储或写入日志。
 
 ## 安全与隐私不变量
 
@@ -128,7 +133,7 @@ src-tauri/src/
 
 - **类型与静态检查：** TypeScript 严格模式、ESLint、rustfmt，以及拒绝警告的 Clippy。
 - **现有自动化测试：** 前端校验、转换、分组与对象树交互测试，以及 Rust 错误、连接、元数据和会话单元测试。
-- **PostgreSQL 集成测试：** 使用一次性的 `plume` 与 `plume_secondary` 数据库验证真实连接、跨数据库会话和系统目录查询，Schema 测试数据会自行清理。
+- **PostgreSQL 集成测试：** 使用一次性的 `plume` 与 `plume_secondary` 数据库验证真实连接、跨数据库会话和系统目录查询；第二套启用 TLS 的服务验证明文回退、加密协商、CA 与主机名校验及客户端证书认证，Schema 测试数据会自行清理。
 - **计划中的端到端测试：** 覆盖产品需求中的十个验收场景。
 
 标准本地门禁：
@@ -147,7 +152,7 @@ cargo test
 ## 当前限制
 
 - PostgreSQL 会话只保存在内存中，重连始终由用户明确触发。
-- 尚未实现 SSH Tunnel。
+- 尚未实现 SSH Tunnel；`P0-A12` 的 SSL 部分和 `P0-C07` 已实现，并纳入 PostgreSQL 14/16/18 CI 矩阵。
 - 尚未实现查询执行、取消、结果流与事务所有权。
 - 尚未实现数据浏览、编辑、导出和对象操作。
 - Linux 打包不在首个版本目标内。

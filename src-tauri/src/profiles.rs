@@ -496,6 +496,8 @@ impl ConnectionProfileService {
             password,
             ssl_mode: profile.ssl_mode,
             root_certificate_path: profile.root_certificate_path,
+            client_certificate_path: profile.client_certificate_path,
+            client_key_path: profile.client_key_path,
             timeout_seconds: 10,
         })
     }
@@ -524,6 +526,9 @@ impl ConnectionProfileService {
             ssl_mode: request.ssl_mode,
             root_certificate_path: clean_optional(&request.root_certificate_path)
                 .map(str::to_owned),
+            client_certificate_path: clean_optional(&request.client_certificate_path)
+                .map(str::to_owned),
+            client_key_path: clean_optional(&request.client_key_path).map(str::to_owned),
             timeout_seconds: 10,
         })
     }
@@ -560,6 +565,25 @@ fn validate_request(request: &ProfileWriteRequest) -> Result<(), ProfileError> {
     if request.port == 0 {
         return Err(ProfileError::Invalid(
             "Port must be between 1 and 65535.".to_owned(),
+        ));
+    }
+    if matches!(request.ssl_mode, SslMode::VerifyCa | SslMode::VerifyFull)
+        && clean_optional(&request.root_certificate_path).is_none()
+    {
+        return Err(ProfileError::Invalid(
+            "A root certificate is required for the selected SSL mode.".to_owned(),
+        ));
+    }
+    let client_certificate = clean_optional(&request.client_certificate_path);
+    let client_key = clean_optional(&request.client_key_path);
+    if client_certificate.is_some() != client_key.is_some() {
+        return Err(ProfileError::Invalid(
+            "Client certificate and private key paths must be provided together.".to_owned(),
+        ));
+    }
+    if matches!(request.ssl_mode, SslMode::Disable) && client_certificate.is_some() {
+        return Err(ProfileError::Invalid(
+            "Client certificates require an SSL connection mode.".to_owned(),
         ));
     }
     Ok(())
@@ -648,6 +672,20 @@ mod tests {
         fn delete(&self, reference: &str) -> Result<(), CredentialError> {
             self.0.delete(reference)
         }
+    }
+
+    #[test]
+    fn profile_validation_enforces_ssl_certificate_requirements() {
+        let mut value = request("");
+        value.ssl_mode = SslMode::VerifyFull;
+        assert!(validate_request(&value).is_err());
+
+        value.root_certificate_path = Some("/tmp/ca.crt".to_owned());
+        value.client_certificate_path = Some("/tmp/client.crt".to_owned());
+        assert!(validate_request(&value).is_err());
+
+        value.client_key_path = Some("/tmp/client.key".to_owned());
+        validate_request(&value).expect("a complete TLS profile should be valid");
     }
 
     #[test]

@@ -7,6 +7,36 @@ import { connectionApi } from "./connectionApi";
 describe("ConnectionDialog", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("enables client certificate inputs only for SSL modes", () => {
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    const sslMode = screen.getByRole("combobox", { name: "SSL mode" });
+    const certificate = screen.getByRole("textbox", {
+      name: /^Client certificate path/,
+    });
+    const key = screen.getByRole("textbox", {
+      name: /^Client private key path/,
+    });
+    expect(certificate).toBeEnabled();
+    expect(key).toBeEnabled();
+
+    fireEvent.change(certificate, { target: { value: "/tmp/client.crt" } });
+    fireEvent.change(key, { target: { value: "/tmp/client.key" } });
+    fireEvent.change(sslMode, { target: { value: "disable" } });
+    expect(certificate).toBeDisabled();
+    expect(key).toBeDisabled();
+    expect(certificate).toHaveValue("");
+    expect(key).toHaveValue("");
+  });
+
   it("renders a successful connection test in the fixed footer", async () => {
     vi.spyOn(connectionApi, "testProfile").mockResolvedValue({
       database: "postgres",

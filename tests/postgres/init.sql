@@ -1,4 +1,5 @@
 CREATE DATABASE plume_secondary;
+CREATE ROLE plume_client LOGIN;
 
 \connect plume
 

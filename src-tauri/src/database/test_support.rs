@@ -4,6 +4,8 @@ use crate::database::connection::{ConnectionTestRequest, SslMode};
 
 pub const TEST_DATABASE_CONFIG_ENV: &str = "PLUME_TEST_DATABASE_CONFIG";
 pub const TEST_SECONDARY_DATABASE_ENV: &str = "PLUME_TEST_SECONDARY_DATABASE";
+pub const TEST_TLS_DATABASE_CONFIG_ENV: &str = "PLUME_TEST_TLS_DATABASE_CONFIG";
+pub const TEST_TLS_CERTIFICATE_DIR_ENV: &str = "PLUME_TEST_TLS_CERTIFICATE_DIR";
 
 pub fn config() -> Config {
     std::env::var(TEST_DATABASE_CONFIG_ENV)
@@ -13,7 +15,28 @@ pub fn config() -> Config {
 }
 
 pub fn connection_request() -> ConnectionTestRequest {
-    let config = config();
+    request_from_config(config(), SslMode::Disable)
+}
+
+pub fn tls_connection_request() -> ConnectionTestRequest {
+    let config = std::env::var(TEST_TLS_DATABASE_CONFIG_ENV)
+        .unwrap_or_else(|_| panic!("{TEST_TLS_DATABASE_CONFIG_ENV} must contain a PostgreSQL URL"))
+        .parse()
+        .expect("TLS integration test database config should be valid");
+    request_from_config(config, SslMode::Require)
+}
+
+pub fn tls_certificate_path(file_name: &str) -> String {
+    std::path::Path::new(
+        &std::env::var(TEST_TLS_CERTIFICATE_DIR_ENV)
+            .unwrap_or_else(|_| panic!("{TEST_TLS_CERTIFICATE_DIR_ENV} must be set")),
+    )
+    .join(file_name)
+    .to_string_lossy()
+    .into_owned()
+}
+
+fn request_from_config(config: Config, ssl_mode: SslMode) -> ConnectionTestRequest {
     let host = match config.get_hosts().first() {
         Some(Host::Tcp(host)) => host.clone(),
         _ => panic!("integration tests require a TCP PostgreSQL host"),
@@ -38,8 +61,10 @@ pub fn connection_request() -> ConnectionTestRequest {
         database,
         username,
         password,
-        ssl_mode: SslMode::Disable,
+        ssl_mode,
         root_certificate_path: None,
+        client_certificate_path: None,
+        client_key_path: None,
         timeout_seconds: 10,
     }
 }

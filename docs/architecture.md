@@ -123,7 +123,16 @@ Each node owns `idle`, `loading`, `success`, and `error` states. Loaded data rem
 | `verify-ca` | TLS required | Yes | No |
 | `verify-full` | TLS required | Yes | Yes |
 
-`verify-ca` and `verify-full` require a PEM root-certificate path. The React validation schema and Rust connection service enforce this independently.
+`verify-ca` and `verify-full` require a PEM root-certificate path. Any TLS
+mode can also use a PEM client-certificate chain and its matching, unencrypted
+PKCS#8 PEM private key. The two client paths must be supplied together. React,
+the Rust profile repository, and the connection service enforce these rules
+independently.
+
+The command boundary classifies missing or unreadable certificate files,
+invalid certificate material, hostname mismatches, and other TLS handshake
+failures with separate stable error codes. Neither certificate contents nor
+private-key contents are serialized into profile storage or logs.
 
 ## Security and Privacy Invariants
 
@@ -139,7 +148,7 @@ Each node owns `idle`, `loading`, `success`, and `error` states. Loaded data rem
 
 - **Type and lint checks:** TypeScript strict mode, ESLint, rustfmt, and Clippy with warnings denied.
 - **Current automated tests:** frontend validation, transformations, grouping, and tree interactions, plus Rust error, connection, metadata, and session unit tests.
-- **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. Schema fixtures clean themselves up.
+- **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Schema fixtures clean themselves up.
 - **Planned end-to-end tests:** the ten acceptance scenarios in the product requirements.
 
 The standard local gates are:
@@ -161,7 +170,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
-- SSH Tunnel is not implemented.
+- SSH Tunnel is not implemented; the SSL portion of `P0-A12` and `P0-C07` is implemented and covered by the PostgreSQL 14/16/18 CI matrix.
 - Query execution, cancellation, result streaming, and transaction ownership are not implemented.
 - Data browsing, editing, export, and object actions are not implemented.
 - Linux packaging is not part of the first release target.

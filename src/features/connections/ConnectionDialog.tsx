@@ -44,6 +44,8 @@ const validationKeys = {
   required: "validation.required",
   port: "validation.port",
   rootCertificate: "validation.rootCertificate",
+  clientCertificatePair: "validation.clientCertificatePair",
+  clientCertificateSsl: "validation.clientCertificateSsl",
 } as const satisfies Record<string, TranslationKey>;
 
 function getFieldErrors(
@@ -85,6 +87,23 @@ export function ConnectionDialog({
   ) {
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateSslMode(sslMode: ConnectionFormValue["sslMode"]) {
+    setForm((current) => ({
+      ...current,
+      sslMode,
+      ...(sslMode === "disable"
+        ? { clientCertificatePath: "", clientKeyPath: "" }
+        : {}),
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      sslMode: undefined,
+      clientCertificatePath: undefined,
+      clientKeyPath: undefined,
+    }));
     if (requestState.status !== "idle") setRequestState({ status: "idle" });
   }
 
@@ -142,6 +161,7 @@ export function ConnectionDialog({
 
   const requiresCertificate =
     form.sslMode === "verify-ca" || form.sslMode === "verify-full";
+  const usesTls = form.sslMode !== "disable";
   const isTesting = requestState.status === "testing";
 
   return (
@@ -300,8 +320,7 @@ export function ConnectionDialog({
                   <select
                     value={form.sslMode}
                     onChange={(event) =>
-                      updateField(
-                        "sslMode",
+                      updateSslMode(
                         event.target.value as ConnectionFormValue["sslMode"],
                       )
                     }
@@ -335,6 +354,41 @@ export function ConnectionDialog({
                       updateField("rootCertificatePath", event.target.value)
                     }
                     placeholder="/path/to/root.crt"
+                    spellCheck={false}
+                  />
+                </Field>
+
+                <Field
+                  label={t("connection.clientCertificate")}
+                  hint={t("connection.clientCertificateHint")}
+                  error={
+                    fieldErrors.clientCertificatePath &&
+                    t(fieldErrors.clientCertificatePath)
+                  }
+                >
+                  <input
+                    disabled={!usesTls}
+                    value={form.clientCertificatePath}
+                    onChange={(event) =>
+                      updateField("clientCertificatePath", event.target.value)
+                    }
+                    placeholder="/path/to/client.crt"
+                    spellCheck={false}
+                  />
+                </Field>
+
+                <Field
+                  label={t("connection.clientKey")}
+                  hint={t("connection.clientKeyHint")}
+                  error={fieldErrors.clientKeyPath && t(fieldErrors.clientKeyPath)}
+                >
+                  <input
+                    disabled={!usesTls}
+                    value={form.clientKeyPath}
+                    onChange={(event) =>
+                      updateField("clientKeyPath", event.target.value)
+                    }
+                    placeholder="/path/to/client.key"
                     spellCheck={false}
                   />
                 </Field>

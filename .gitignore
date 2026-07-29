@@ -12,6 +12,7 @@ dist
 dist-ssr
 *.local
 *.tsbuildinfo
+tests/postgres/tls/generated/
 
 # Editor directories and files
 .vscode/*

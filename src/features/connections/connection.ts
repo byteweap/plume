@@ -38,6 +38,8 @@ export const connectionFormSchema = z
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
     sslMode: z.enum(sslModes),
     rootCertificatePath: z.string().trim(),
+    clientCertificatePath: z.string().trim(),
+    clientKeyPath: z.string().trim(),
   })
   .superRefine((value, context) => {
     const requiresCertificate =
@@ -47,6 +49,25 @@ export const connectionFormSchema = z
         code: "custom",
         message: "rootCertificate",
         path: ["rootCertificatePath"],
+      });
+    }
+    const clientCredentialsArePaired =
+      Boolean(value.clientCertificatePath) === Boolean(value.clientKeyPath);
+    if (!clientCredentialsArePaired) {
+      const path = value.clientCertificatePath
+        ? "clientKeyPath"
+        : "clientCertificatePath";
+      context.addIssue({
+        code: "custom",
+        message: "clientCertificatePair",
+        path: [path],
+      });
+    }
+    if (value.sslMode === "disable" && value.clientCertificatePath) {
+      context.addIssue({
+        code: "custom",
+        message: "clientCertificateSsl",
+        path: ["clientCertificatePath"],
       });
     }
   });
@@ -61,6 +82,8 @@ export interface ConnectionTestRequest {
   password: string;
   sslMode: SslMode;
   rootCertificatePath?: string;
+  clientCertificatePath?: string;
+  clientKeyPath?: string;
   timeoutSeconds: number;
 }
 
@@ -82,7 +105,13 @@ export interface SessionHealth {
 }
 
 export interface ConnectionProfile
-  extends Omit<ConnectionFormValue, "password" | "rootCertificatePath"> {
+  extends Omit<
+    ConnectionFormValue,
+    | "password"
+    | "rootCertificatePath"
+    | "clientCertificatePath"
+    | "clientKeyPath"
+  > {
   id: string;
   rootCertificatePath?: string;
   clientCertificatePath?: string;
@@ -110,7 +139,13 @@ export interface SshConfig {
 }
 
 export interface ProfileWriteRequest
-  extends Omit<ConnectionFormValue, "password" | "rootCertificatePath"> {
+  extends Omit<
+    ConnectionFormValue,
+    | "password"
+    | "rootCertificatePath"
+    | "clientCertificatePath"
+    | "clientKeyPath"
+  > {
   id?: string;
   password?: string;
   rootCertificatePath?: string;
@@ -131,6 +166,8 @@ export const defaultConnectionFormValue: ConnectionFormValue = {
   color: connectionColors[0],
   sslMode: "prefer",
   rootCertificatePath: "",
+  clientCertificatePath: "",
+  clientKeyPath: "",
 };
 
 export function toConnectionTestRequest(
@@ -144,6 +181,8 @@ export function toConnectionTestRequest(
     password: value.password,
     sslMode: value.sslMode,
     rootCertificatePath: value.rootCertificatePath || undefined,
+    clientCertificatePath: value.clientCertificatePath || undefined,
+    clientKeyPath: value.clientKeyPath || undefined,
     timeoutSeconds: 10,
   };
 }
@@ -164,8 +203,8 @@ export function toProfileWriteRequest(
     color: value.color,
     sslMode: value.sslMode,
     rootCertificatePath: value.rootCertificatePath || undefined,
-    clientCertificatePath: existing?.clientCertificatePath,
-    clientKeyPath: existing?.clientKeyPath,
+    clientCertificatePath: value.clientCertificatePath || undefined,
+    clientKeyPath: value.clientKeyPath || undefined,
     sshConfig: existing?.sshConfig,
     favorite: existing?.favorite ?? false,
   };
@@ -185,5 +224,7 @@ export function profileToFormValue(
     color: profile.color,
     sslMode: profile.sslMode,
     rootCertificatePath: profile.rootCertificatePath ?? "",
+    clientCertificatePath: profile.clientCertificatePath ?? "",
+    clientKeyPath: profile.clientKeyPath ?? "",
   };
 }

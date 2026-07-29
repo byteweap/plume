@@ -31,6 +31,16 @@ describe("connectionFormSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("requires client certificate and private key paths as a pair", () => {
+    const result = connectionFormSchema.safeParse({
+      ...defaultConnectionFormValue,
+      name: "Certificate connection",
+      sslMode: "require",
+      clientCertificatePath: "/tmp/client.crt",
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("saved profile conversion", () => {
@@ -41,6 +51,8 @@ describe("saved profile conversion", () => {
       name: "Local",
       password: undefined,
       rootCertificatePath: undefined,
+      clientCertificatePath: undefined,
+      clientKeyPath: undefined,
       favorite: true,
       createdAt: 1,
       updatedAt: 1,
@@ -55,6 +67,8 @@ describe("toConnectionTestRequest", () => {
   it("does not send an empty certificate path", () => {
     expect(toConnectionTestRequest(defaultConnectionFormValue)).toMatchObject({
       rootCertificatePath: undefined,
+      clientCertificatePath: undefined,
+      clientKeyPath: undefined,
       timeoutSeconds: 10,
     });
   });

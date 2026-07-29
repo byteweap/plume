@@ -85,25 +85,10 @@ jobs:
       matrix:
         postgres: [14, 16, 18]
 
-    services:
-      postgres:
-        image: postgres:${{ matrix.postgres }}
-        env:
-          POSTGRES_DB: plume
-          POSTGRES_PASSWORD: plume
-          POSTGRES_USER: plume
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U plume -d plume"
-          --health-interval 2s
-          --health-timeout 5s
-          --health-retries 15
-
     env:
-      PLUME_TEST_DATABASE_CONFIG: postgresql://plume:plume@localhost:5432/plume?sslmode=disable
+      PLUME_POSTGRES_VERSION: ${{ matrix.postgres }}
+      PLUME_TEST_DATABASE_CONFIG: postgresql://plume:plume@localhost:55432/plume?sslmode=disable
       PLUME_TEST_SECONDARY_DATABASE: plume_secondary
-      PGPASSWORD: plume
 
     steps:
       - name: Check out repository
@@ -122,11 +107,15 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Create integration fixtures
-        run: psql --host localhost --username plume --dbname plume --file tests/postgres/init.sql
+      - name: Start disposable PostgreSQL services
+        run: npm run postgres:up
 
       - name: Run Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Run PostgreSQL integration tests
         run: npm run test:postgres
+
+      - name: Stop disposable PostgreSQL services
+        if: always()
+        run: npm run postgres:down

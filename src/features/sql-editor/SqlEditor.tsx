@@ -10,7 +10,12 @@ import {
 } from "./sqlEditorController";
 import "./SqlEditor.css";
 
-export type { SqlEditorController } from "./sqlEditorController";
+export type {
+  SqlEditorController,
+  SqlExecutionScope,
+  SqlExecutionSource,
+  SqlExecutionTarget,
+} from "./sqlEditorController";
 
 interface SqlEditorProps {
   label: string;
@@ -28,6 +33,8 @@ export const SqlEditor = forwardRef<SqlEditorController, SqlEditorProps>(
 
     useImperativeHandle(forwardedRef, () => ({
       getValue: () => controllerRef.current?.getValue() ?? value,
+      getExecutionTarget: (scope) =>
+        controllerRef.current?.getExecutionTarget(scope) ?? null,
       setValue: (nextValue) => controllerRef.current?.setValue(nextValue),
       replaceSelection: (replacement) =>
         controllerRef.current?.replaceSelection(replacement),

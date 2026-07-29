@@ -1,8 +1,20 @@
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import { basicSetup, EditorView } from "codemirror";
+import {
+  resolveSqlExecutionTarget,
+  type SqlExecutionScope,
+  type SqlExecutionTarget,
+} from "./sqlExecutionTarget";
+
+export type {
+  SqlExecutionScope,
+  SqlExecutionSource,
+  SqlExecutionTarget,
+} from "./sqlExecutionTarget";
 
 export interface SqlEditorController {
   getValue(): string;
+  getExecutionTarget(scope?: SqlExecutionScope): SqlExecutionTarget | null;
   setValue(value: string): void;
   replaceSelection(value: string): void;
   setLabel(label: string): void;
@@ -41,6 +53,7 @@ export function createSqlEditor(
 
   return {
     getValue: () => view.state.doc.toString(),
+    getExecutionTarget: (scope) => resolveSqlExecutionTarget(view.state, scope),
     setValue(value) {
       if (value === view.state.doc.toString()) return;
       notifyChanges = false;

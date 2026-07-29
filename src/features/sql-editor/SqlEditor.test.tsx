@@ -18,6 +18,12 @@ describe("SqlEditor", () => {
 
     expect(screen.getByRole("textbox", { name: "SQL query workspace" })).toBeVisible();
     expect(controller.current?.getValue()).toBe("select 1;");
+    expect(controller.current?.getExecutionTarget("all")).toEqual({
+      sql: "select 1;",
+      from: 0,
+      to: 9,
+      source: "document",
+    });
 
     act(() => controller.current?.replaceSelection("explain "));
     expect(onChange).toHaveBeenLastCalledWith("explain select 1;");

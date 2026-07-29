@@ -40,10 +40,13 @@ when a query tab is opened so the application startup bundle does not absorb
 the editor and parser cost.
 
 Business state stores SQL as plain strings. The adapter in
-`src/features/sql-editor` exposes only value, selection replacement, label,
-focus, and lifecycle operations. CodeMirror `EditorState`, `EditorView`, and
-transaction types must not enter workspace tabs, draft persistence, or future
-query execution protocols.
+`src/features/sql-editor` exposes value, selection replacement, execution
+target resolution, label, focus, and lifecycle operations. Execution targets
+contain only the selected, current-statement, or full-document SQL string,
+its plain numeric range, and its source. CodeMirror `EditorState`,
+`EditorView`, syntax-tree, and transaction types must not enter workspace tabs,
+draft persistence, or future query execution protocols. This boundary
+resolution does not itself execute SQL.
 
 The data-grid library is not selected by this decision.
 

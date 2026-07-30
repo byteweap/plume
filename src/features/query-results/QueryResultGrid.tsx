@@ -1,4 +1,4 @@
-import { Copy, TableProperties } from "lucide-react";
+import { Copy, FileDown, TableProperties } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   DataGrid,
@@ -26,6 +26,7 @@ import {
   type QueryGridRow,
 } from "./queryResultRows";
 import { presentQueryResultValue } from "./queryResultValue";
+import { CsvExportDialog } from "./CsvExportDialog";
 import "./QueryResults.css";
 
 const rowNumberColumnKey = "__row_number__";
@@ -156,6 +157,7 @@ export function QueryResultGrid({
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
+  const [showCsvExport, setShowCsvExport] = useState(false);
   const extendingSelection = useRef(false);
   const selectingRows = useRef(false);
   const lastColumnIndex = statement.columns.length - 1;
@@ -299,66 +301,83 @@ export function QueryResultGrid({
   }
 
   return (
-    <div className="query-result-grid-shell">
-      <div className="query-result-copybar">
-        <span className="query-result-copy-status" aria-live="polite">
-          {copyStatus === "copied"
-            ? t("query.results.copied")
-            : copyStatus === "failed"
-              ? t("query.results.copyFailed")
-              : ""}
-        </span>
-        <IconButton
-          className="query-result-copy-button"
-          label={t("query.results.copySelection")}
-          disabled={!selection}
-          onClick={() => void copySelection(false)}
-        >
-          <Copy size={13} />
-        </IconButton>
-        <IconButton
-          className="query-result-copy-button"
-          label={t("query.results.copyWithHeaders")}
-          disabled={!selection}
-          onClick={() => void copySelection(true)}
-        >
-          <TableProperties size={13} />
-        </IconButton>
+    <>
+      <div className="query-result-grid-shell">
+        <div className="query-result-copybar">
+          <span className="query-result-copy-status" aria-live="polite">
+            {copyStatus === "copied"
+              ? t("query.results.copied")
+              : copyStatus === "failed"
+                ? t("query.results.copyFailed")
+                : ""}
+          </span>
+          <IconButton
+            className="query-result-copy-button"
+            label={t("query.results.copySelection")}
+            disabled={!selection}
+            onClick={() => void copySelection(false)}
+          >
+            <Copy size={13} />
+          </IconButton>
+          <IconButton
+            className="query-result-copy-button"
+            label={t("query.results.copyWithHeaders")}
+            disabled={!selection}
+            onClick={() => void copySelection(true)}
+          >
+            <TableProperties size={13} />
+          </IconButton>
+          <IconButton
+            className="query-result-copy-button"
+            label={t("query.export.open")}
+            disabled={rows.length === 0 || statement.columns.length === 0}
+            onClick={() => setShowCsvExport(true)}
+          >
+            <FileDown size={13} />
+          </IconButton>
+        </div>
+        <DataGrid
+          aria-label={label}
+          className="query-result-grid"
+          columns={columns}
+          rows={rows}
+          rowKeyGetter={rowKeyGetter}
+          rowHeight={rowHeight}
+          headerRowHeight={headerRowHeight}
+          columnWidths={columnWidths}
+          onColumnWidthsChange={setColumnWidths}
+          onCellMouseDown={handleCellMouseDown}
+          onCellKeyDown={handleCellKeyDown}
+          onSelectedCellChange={({ rowIdx, column }) => {
+            updateSelection({
+              rowIndex: rows[rowIdx]?.rowIndex ?? rowIdx,
+              columnIndex: columnIndexFromKey(column.key),
+            });
+          }}
+          onCellCopy={(_args, event) => {
+            if (!selection) return;
+            event.preventDefault();
+            event.clipboardData.setData(
+              "text/plain",
+              serializeGridSelection(rows, selection, statement.columns),
+            );
+          }}
+          renderers={{
+            noRowsFallback: (
+              <div className="query-result-empty" role="status">
+                {emptyLabel}
+              </div>
+            ),
+          }}
+        />
       </div>
-      <DataGrid
-        aria-label={label}
-        className="query-result-grid"
-        columns={columns}
-        rows={rows}
-        rowKeyGetter={rowKeyGetter}
-        rowHeight={rowHeight}
-        headerRowHeight={headerRowHeight}
-        columnWidths={columnWidths}
-        onColumnWidthsChange={setColumnWidths}
-        onCellMouseDown={handleCellMouseDown}
-        onCellKeyDown={handleCellKeyDown}
-        onSelectedCellChange={({ rowIdx, column }) => {
-          updateSelection({
-            rowIndex: rows[rowIdx]?.rowIndex ?? rowIdx,
-            columnIndex: columnIndexFromKey(column.key),
-          });
-        }}
-        onCellCopy={(_args, event) => {
-          if (!selection) return;
-          event.preventDefault();
-          event.clipboardData.setData(
-            "text/plain",
-            serializeGridSelection(rows, selection, statement.columns),
-          );
-        }}
-        renderers={{
-          noRowsFallback: (
-            <div className="query-result-empty" role="status">
-              {emptyLabel}
-            </div>
-          ),
-        }}
-      />
-    </div>
+      {showCsvExport && (
+        <CsvExportDialog
+          statement={statement}
+          selection={selection}
+          onClose={() => setShowCsvExport(false)}
+        />
+      )}
+    </>
   );
 }

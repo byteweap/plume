@@ -257,6 +257,18 @@ describe("QueryResultPanel", () => {
     Reflect.deleteProperty(navigator, "clipboard");
   });
 
+  it("opens CSV export configuration for retained results", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+
+    expect(screen.getByRole("dialog", { name: "Export CSV" })).toBeVisible();
+    expect(screen.getByRole("radio", { name: "All fetched results" })).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Encoding" })).toHaveValue(
+      "utf-8-bom",
+    );
+  });
+
   it("renders booleans without changing their clipboard values", () => {
     renderTypedPanel();
 

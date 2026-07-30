@@ -2,7 +2,9 @@ use serde::Serialize;
 use thiserror::Error;
 use tokio_postgres::error::ErrorPosition;
 
-use crate::{database::query::QueryError, drafts::DraftError, profiles::ProfileError};
+use crate::{
+    database::query::QueryError, drafts::DraftError, exports::ExportError, profiles::ProfileError,
+};
 
 #[derive(Debug, Error)]
 pub enum DatabaseError {
@@ -325,6 +327,49 @@ impl From<QueryError> for CommandError {
     }
 }
 
+impl From<ExportError> for CommandError {
+    fn from(error: ExportError) -> Self {
+        match error {
+            ExportError::Invalid(message) => Self {
+                code: "invalid_export",
+                message,
+                detail: None,
+                diagnostic: None,
+            },
+            ExportError::AlreadyRunning(_) => Self {
+                code: "export_already_running",
+                message: "This export is already running.".to_owned(),
+                detail: None,
+                diagnostic: None,
+            },
+            ExportError::Lock => Self {
+                code: "export_unavailable",
+                message: "The export task service is unavailable.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+            ExportError::DialogPath(_) => Self {
+                code: "export_path_invalid",
+                message: "The selected export location is invalid.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+            ExportError::Io(_) => Self {
+                code: "export_write_failed",
+                message: "The CSV export could not be written.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+            ExportError::Progress(_) | ExportError::Worker(_) => Self {
+                code: "export_failed",
+                message: "The CSV export could not be completed.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+        }
+    }
+}
+
 fn classify_postgres_error(error: &tokio_postgres::Error) -> &'static str {
     match error.as_db_error().map(|db_error| db_error.code().code()) {
         Some("28P01" | "28000") => "authentication_failed",
@@ -340,7 +385,7 @@ mod tests {
     use std::io;
 
     use super::{CommandError, DatabaseError};
-    use crate::database::query::QueryError;
+    use crate::{database::query::QueryError, exports::ExportError};
 
     #[test]
     fn configuration_errors_are_stable_and_safe() {
@@ -352,6 +397,24 @@ mod tests {
         assert_eq!(json["code"], "invalid_configuration");
         assert_eq!(json["message"], "Host is required.");
         assert!(json.get("detail").is_none());
+    }
+
+    #[test]
+    fn export_errors_have_stable_codes() {
+        let invalid = serde_json::to_value(CommandError::from(ExportError::Invalid(
+            "bad CSV shape".to_owned(),
+        )))
+        .unwrap();
+        assert_eq!(invalid["code"], "invalid_export");
+        assert!(invalid.get("detail").is_none());
+
+        let write = serde_json::to_value(CommandError::from(ExportError::Io(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "denied",
+        ))))
+        .unwrap();
+        assert_eq!(write["code"], "export_write_failed");
+        assert_eq!(write["message"], "The CSV export could not be written.");
     }
 
     #[test]

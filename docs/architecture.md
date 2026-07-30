@@ -153,6 +153,15 @@ explicitly reports when that budget is reached. Row numbers select complete
 rows, while copy actions serialize the current cell or row selection as
 tab-separated text with optional column names.
 
+CSV export operates on either all retained rows in the active statement or the
+current rectangular selection. The frontend sends a typed task request with the
+selected columns and raw values, header preference, delimiter, and encoding.
+Rust owns the native save dialog, validates the retained-data bounds, quotes CSV
+fields, and writes UTF-8, UTF-8 with BOM, or UTF-16LE output. Progress events are
+scoped by UUID, and a shared export registry lets a separate command request
+cancellation without blocking the UI. P0-F06 writes the selected target
+directly; temporary-file and atomic-finalization guarantees remain P0-F08 work.
+
 ## SQL Completion Boundary
 
 CodeMirror combines local PostgreSQL keyword and common-function completions

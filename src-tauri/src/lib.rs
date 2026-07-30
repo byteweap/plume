@@ -3,6 +3,7 @@ mod credentials;
 mod database;
 mod drafts;
 mod error;
+mod exports;
 mod profiles;
 
 use commands::{
@@ -11,6 +12,7 @@ use commands::{
         reconnect_saved_database, test_connection, test_connection_profile,
     },
     drafts::{delete_query_draft, list_query_drafts, save_query_draft},
+    exports::{cancel_export, export_csv},
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
@@ -26,6 +28,7 @@ use credentials::platform_credential_store;
 use database::query::QueryRegistry;
 use database::session::ConnectionRegistry;
 use drafts::QueryDraftService;
+use exports::ExportRegistry;
 use profiles::ConnectionProfileService;
 use tauri::Manager;
 
@@ -33,8 +36,10 @@ use tauri::Manager;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(ConnectionRegistry::default())
         .manage(QueryRegistry::default())
+        .manage(ExportRegistry::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("plume.sqlite3");
             let profiles =
@@ -70,7 +75,9 @@ pub fn run() {
             get_catalog_tree,
             get_catalog_collection_items,
             execute_query,
-            cancel_query
+            cancel_query,
+            export_csv,
+            cancel_export
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

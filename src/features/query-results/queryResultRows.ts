@@ -80,10 +80,25 @@ export function serializeGridSelection(
   rows: readonly QueryGridRow[],
   selection: GridSelection,
   columns?: readonly QueryColumn[],
+  options: { includeHeaders?: boolean } = {},
 ): string {
   const bounds = getSelectionBounds(selection);
   const rowsByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
   const lines: string[] = [];
+
+  if (options.includeHeaders) {
+    const headers: string[] = [];
+    for (
+      let columnIndex = bounds.firstColumnIndex;
+      columnIndex <= bounds.lastColumnIndex;
+      columnIndex += 1
+    ) {
+      headers.push(
+        columnIndex === -1 ? "#" : (columns?.[columnIndex]?.name ?? ""),
+      );
+    }
+    lines.push(headers.join("\t"));
+  }
 
   for (
     let rowIndex = bounds.firstRowIndex;

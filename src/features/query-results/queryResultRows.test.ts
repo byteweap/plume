@@ -66,4 +66,32 @@ describe("query result rows", () => {
       }),
     ).toBe("one\tNULL\ntwo\tvalue\nthree\tlast");
   });
+
+  it("includes the selected column names when requested", () => {
+    const rows = buildQueryGridRows(statement);
+    const columns = [
+      {
+        name: "name",
+        ordinal: 0,
+        dataType: { kind: "simple" as const, oid: 25, name: "text" },
+      },
+      {
+        name: "detail",
+        ordinal: 1,
+        dataType: { kind: "simple" as const, oid: 25, name: "text" },
+      },
+    ];
+
+    expect(
+      serializeGridSelection(
+        rows,
+        {
+          anchor: { rowIndex: 1, columnIndex: 0 },
+          focus: { rowIndex: 2, columnIndex: 1 },
+        },
+        columns,
+        { includeHeaders: true },
+      ),
+    ).toBe("name\tdetail\ntwo\tvalue\nthree\tlast");
+  });
 });

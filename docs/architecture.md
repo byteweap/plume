@@ -149,7 +149,9 @@ batches through a lazily loaded React Data Grid adapter with fixed row heights,
 row and column virtualization, resizable columns, keyboard navigation,
 rectangular selection, typed value presentation, and tab-separated copy. The
 query toolbar selects the request-scoped result budget and the result panel
-explicitly reports when that budget is reached. Row/header copy remains P0-F05.
+explicitly reports when that budget is reached. Row numbers select complete
+rows, while copy actions serialize the current cell or row selection as
+tab-separated text with optional column names.
 
 ## SQL Completion Boundary
 

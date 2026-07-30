@@ -1,3 +1,4 @@
+import { Copy, TableProperties } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   DataGrid,
@@ -13,8 +14,11 @@ import type {
   QueryColumn,
   QueryStatementResult,
 } from "../query-execution/queryExecution";
+import { useI18n } from "../../i18n/I18nContext";
+import { IconButton } from "../../shared/IconButton";
 import {
   buildQueryGridRows,
+  getSelectionBounds,
   isPositionSelected,
   serializeGridSelection,
   type GridPosition,
@@ -118,15 +122,43 @@ function isRangeNavigationKey(key: string) {
   ].includes(key);
 }
 
+function isVerticalNavigationKey(key: string) {
+  return ["ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(
+    key,
+  );
+}
+
+function isWholeRowSelected(
+  selection: GridSelection | undefined,
+  rowIndex: number,
+  lastColumnIndex: number,
+) {
+  if (!selection || lastColumnIndex < 0) return false;
+
+  const bounds = getSelectionBounds(selection);
+  return (
+    bounds.firstColumnIndex === 0 &&
+    bounds.lastColumnIndex === lastColumnIndex &&
+    rowIndex >= bounds.firstRowIndex &&
+    rowIndex <= bounds.lastRowIndex
+  );
+}
+
 export function QueryResultGrid({
   statement,
   label,
   emptyLabel,
 }: QueryResultGridProps) {
+  const { t } = useI18n();
   const rows = useMemo(() => buildQueryGridRows(statement), [statement]);
   const [selection, setSelection] = useState<GridSelection>();
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(new Map());
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
   const extendingSelection = useRef(false);
+  const selectingRows = useRef(false);
+  const lastColumnIndex = statement.columns.length - 1;
 
   const columns = useMemo((): Column<QueryGridRow>[] => {
     const rowNumberColumn: Column<QueryGridRow> = {
@@ -137,13 +169,16 @@ export function QueryResultGrid({
       maxWidth: 54,
       frozen: true,
       cellClass: (row) =>
+        isWholeRowSelected(selection, row.rowIndex, lastColumnIndex) ||
         isPositionSelected(selection, {
           rowIndex: row.rowIndex,
           columnIndex: -1,
         })
           ? "query-result-cell-selected query-result-row-number"
           : "query-result-row-number",
-      renderCell: ({ row }) => row.rowIndex + 1,
+      renderCell: ({ row }) => (
+        <span title={t("query.results.selectRow")}>{row.rowIndex + 1}</span>
+      ),
     };
 
     return [
@@ -190,15 +225,28 @@ export function QueryResultGrid({
         },
       })),
     ];
-  }, [selection, statement]);
+  }, [lastColumnIndex, selection, statement, t]);
 
   function updateSelection(position: GridPosition) {
     const shouldExtend = extendingSelection.current;
+    const shouldSelectRows = selectingRows.current && lastColumnIndex >= 0;
     extendingSelection.current = false;
+    selectingRows.current = false;
+    setCopyStatus("idle");
     setSelection((current) =>
       shouldExtend && current
-        ? { anchor: current.anchor, focus: position }
-        : { anchor: position, focus: position },
+        ? {
+            anchor: current.anchor,
+            focus: shouldSelectRows
+              ? { ...position, columnIndex: lastColumnIndex }
+              : position,
+          }
+        : shouldSelectRows
+          ? {
+              anchor: { ...position, columnIndex: 0 },
+              focus: { ...position, columnIndex: lastColumnIndex },
+            }
+          : { anchor: position, focus: position },
     );
   }
 
@@ -213,6 +261,7 @@ export function QueryResultGrid({
     args: CellMouseArgs<QueryGridRow>,
     event: CellMouseEvent,
   ) {
+    selectingRows.current = args.column.key === rowNumberColumnKey;
     if (!event.shiftKey || !selection) return;
 
     extendNextSelection();
@@ -221,9 +270,12 @@ export function QueryResultGrid({
   }
 
   function handleCellKeyDown(
-    _args: CellKeyDownArgs<QueryGridRow>,
+    args: CellKeyDownArgs<QueryGridRow>,
     event: CellKeyboardEvent,
   ) {
+    selectingRows.current =
+      args.column.key === rowNumberColumnKey &&
+      isVerticalNavigationKey(event.key);
     if (event.shiftKey && isRangeNavigationKey(event.key)) {
       extendNextSelection();
     } else {
@@ -231,40 +283,82 @@ export function QueryResultGrid({
     }
   }
 
+  async function copySelection(includeHeaders: boolean) {
+    if (!selection) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        serializeGridSelection(rows, selection, statement.columns, {
+          includeHeaders,
+        }),
+      );
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   return (
-    <DataGrid
-      aria-label={label}
-      className="query-result-grid"
-      columns={columns}
-      rows={rows}
-      rowKeyGetter={rowKeyGetter}
-      rowHeight={rowHeight}
-      headerRowHeight={headerRowHeight}
-      columnWidths={columnWidths}
-      onColumnWidthsChange={setColumnWidths}
-      onCellMouseDown={handleCellMouseDown}
-      onCellKeyDown={handleCellKeyDown}
-      onSelectedCellChange={({ rowIdx, column }) => {
-        updateSelection({
-          rowIndex: rows[rowIdx]?.rowIndex ?? rowIdx,
-          columnIndex: columnIndexFromKey(column.key),
-        });
-      }}
-      onCellCopy={(_args, event) => {
-        if (!selection) return;
-        event.preventDefault();
-        event.clipboardData.setData(
-          "text/plain",
-          serializeGridSelection(rows, selection, statement.columns),
-        );
-      }}
-      renderers={{
-        noRowsFallback: (
-          <div className="query-result-empty" role="status">
-            {emptyLabel}
-          </div>
-        ),
-      }}
-    />
+    <div className="query-result-grid-shell">
+      <div className="query-result-copybar">
+        <span className="query-result-copy-status" aria-live="polite">
+          {copyStatus === "copied"
+            ? t("query.results.copied")
+            : copyStatus === "failed"
+              ? t("query.results.copyFailed")
+              : ""}
+        </span>
+        <IconButton
+          className="query-result-copy-button"
+          label={t("query.results.copySelection")}
+          disabled={!selection}
+          onClick={() => void copySelection(false)}
+        >
+          <Copy size={13} />
+        </IconButton>
+        <IconButton
+          className="query-result-copy-button"
+          label={t("query.results.copyWithHeaders")}
+          disabled={!selection}
+          onClick={() => void copySelection(true)}
+        >
+          <TableProperties size={13} />
+        </IconButton>
+      </div>
+      <DataGrid
+        aria-label={label}
+        className="query-result-grid"
+        columns={columns}
+        rows={rows}
+        rowKeyGetter={rowKeyGetter}
+        rowHeight={rowHeight}
+        headerRowHeight={headerRowHeight}
+        columnWidths={columnWidths}
+        onColumnWidthsChange={setColumnWidths}
+        onCellMouseDown={handleCellMouseDown}
+        onCellKeyDown={handleCellKeyDown}
+        onSelectedCellChange={({ rowIdx, column }) => {
+          updateSelection({
+            rowIndex: rows[rowIdx]?.rowIndex ?? rowIdx,
+            columnIndex: columnIndexFromKey(column.key),
+          });
+        }}
+        onCellCopy={(_args, event) => {
+          if (!selection) return;
+          event.preventDefault();
+          event.clipboardData.setData(
+            "text/plain",
+            serializeGridSelection(rows, selection, statement.columns),
+          );
+        }}
+        renderers={{
+          noRowsFallback: (
+            <div className="query-result-empty" role="status">
+              {emptyLabel}
+            </div>
+          ),
+        }}
+      />
+    </div>
   );
 }

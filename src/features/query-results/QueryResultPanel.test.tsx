@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { QueryExecutionResult } from "../query-execution/queryExecution";
@@ -208,6 +208,53 @@ describe("QueryResultPanel", () => {
       clipboardData: { setData },
     });
     expect(setData).toHaveBeenCalledWith("text/plain", "one\ntwo");
+  });
+
+  it("copies complete rows selected through the row numbers", () => {
+    renderPanel();
+
+    const rowNumbers = screen.getAllByTitle("Select row");
+    fireEvent.mouseDown(rowNumbers[1]!.closest("[role='gridcell']")!);
+    fireEvent.mouseDown(rowNumbers[2]!.closest("[role='gridcell']")!, {
+      shiftKey: true,
+    });
+
+    const setData = vi.fn();
+    fireEvent.copy(screen.getByRole("grid"), {
+      clipboardData: { setData },
+    });
+    expect(setData).toHaveBeenCalledWith(
+      "text/plain",
+      "two\tvalue\nthree\tlast",
+    );
+  });
+
+  it("copies selected rows with their column names", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    renderPanel();
+
+    const rowNumbers = screen.getAllByTitle("Select row");
+    fireEvent.mouseDown(rowNumbers[0]!.closest("[role='gridcell']")!);
+    fireEvent.mouseDown(rowNumbers[2]!.closest("[role='gridcell']")!, {
+      shiftKey: true,
+    });
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Copy selection with column names",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(
+        "name\tdetail\none\tNULL\ntwo\tvalue\nthree\tlast",
+      ),
+    );
+    expect(screen.getByText("Copied selected results")).toBeVisible();
+    Reflect.deleteProperty(navigator, "clipboard");
   });
 
   it("renders booleans without changing their clipboard values", () => {

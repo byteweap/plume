@@ -52,11 +52,82 @@ const result: QueryExecutionResult = {
   ],
 };
 
+const typedResult: QueryExecutionResult = {
+  queryId: "typed-query",
+  status: "succeeded",
+  results: [
+    {
+      statementIndex: 0,
+      status: "succeeded",
+      kind: "rows",
+      columns: [
+        {
+          name: "published",
+          ordinal: 0,
+          dataType: { kind: "simple", oid: 16, name: "bool" },
+        },
+      ],
+      batches: [
+        {
+          offset: 0,
+          rows: [["t"]],
+        },
+      ],
+      rowCount: 1,
+      retainedRowCount: 1,
+      truncated: false,
+    },
+  ],
+};
+
+const invisibleValuesResult: QueryExecutionResult = {
+  queryId: "invisible-values-query",
+  status: "succeeded",
+  results: [
+    {
+      statementIndex: 0,
+      status: "succeeded",
+      kind: "rows",
+      columns: [
+        {
+          name: "value",
+          ordinal: 0,
+          dataType: { kind: "simple", oid: 25, name: "text" },
+        },
+      ],
+      batches: [
+        { offset: 0, rows: [[null], [""], [" \t"]] },
+      ],
+      rowCount: 3,
+      retainedRowCount: 3,
+      truncated: false,
+    },
+  ],
+};
+
 function renderPanel() {
   window.localStorage.setItem("plume.locale", "en-US");
   return render(
     <I18nProvider>
       <QueryResultPanel result={result} />
+    </I18nProvider>,
+  );
+}
+
+function renderTypedPanel() {
+  window.localStorage.setItem("plume.locale", "en-US");
+  return render(
+    <I18nProvider>
+      <QueryResultPanel result={typedResult} />
+    </I18nProvider>,
+  );
+}
+
+function renderInvisibleValuesPanel() {
+  window.localStorage.setItem("plume.locale", "en-US");
+  return render(
+    <I18nProvider>
+      <QueryResultPanel result={invisibleValuesResult} />
     </I18nProvider>,
   );
 }
@@ -120,5 +191,33 @@ describe("QueryResultPanel", () => {
       clipboardData: { setData },
     });
     expect(setData).toHaveBeenCalledWith("text/plain", "one\ntwo");
+  });
+
+  it("renders booleans without changing their clipboard values", () => {
+    renderTypedPanel();
+
+    const booleanValue = screen.getByText("true");
+    expect(booleanValue).toHaveClass("query-result-value-boolean");
+    expect(screen.getByText("bool")).toBeVisible();
+
+    const booleanCell = booleanValue.closest("[role='gridcell']");
+    expect(booleanCell).not.toBeNull();
+    fireEvent.mouseDown(booleanCell!);
+
+    const setData = vi.fn();
+    fireEvent.copy(screen.getByRole("grid"), {
+      clipboardData: { setData },
+    });
+    expect(setData).toHaveBeenCalledWith("text/plain", "t");
+  });
+
+  it("makes null, empty, and whitespace-only text visible", () => {
+    renderInvisibleValuesPanel();
+
+    expect(screen.getByText("NULL")).toHaveClass("query-result-value-null");
+    expect(screen.getByText("''")).toHaveClass("query-result-value-empty");
+    expect(
+      document.querySelector(".query-result-value-whitespace"),
+    ).toHaveTextContent('" \\t"');
   });
 });

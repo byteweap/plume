@@ -1,7 +1,9 @@
 import type {
+  QueryColumn,
   QueryStatementResult,
   QueryValue,
 } from "../query-execution/queryExecution";
+import { presentQueryResultValue } from "./queryResultValue";
 
 export interface QueryGridRow {
   rowIndex: number;
@@ -77,6 +79,7 @@ export function isPositionSelected(
 export function serializeGridSelection(
   rows: readonly QueryGridRow[],
   selection: GridSelection,
+  columns?: readonly QueryColumn[],
 ): string {
   const bounds = getSelectionBounds(selection);
   const rowsByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
@@ -99,15 +102,14 @@ export function serializeGridSelection(
       values.push(
         columnIndex === -1
           ? String(row.rowIndex + 1)
-          : formatQueryValue(row.values[columnIndex]),
+          : presentQueryResultValue(
+              row.values[columnIndex],
+              columns?.[columnIndex],
+            ).copyText,
       );
     }
     lines.push(values.join("\t"));
   }
 
   return lines.join("\n");
-}
-
-export function formatQueryValue(value: QueryValue | undefined): string {
-  return value ?? "NULL";
 }

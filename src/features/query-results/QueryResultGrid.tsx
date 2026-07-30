@@ -9,16 +9,19 @@ import {
   type ColumnWidths,
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
-import type { QueryStatementResult } from "../query-execution/queryExecution";
+import type {
+  QueryColumn,
+  QueryStatementResult,
+} from "../query-execution/queryExecution";
 import {
   buildQueryGridRows,
-  formatQueryValue,
   isPositionSelected,
   serializeGridSelection,
   type GridPosition,
   type GridSelection,
   type QueryGridRow,
 } from "./queryResultRows";
+import { presentQueryResultValue } from "./queryResultValue";
 import "./QueryResults.css";
 
 const rowNumberColumnKey = "__row_number__";
@@ -43,7 +46,13 @@ function estimateColumnWidth(
   statement: QueryStatementResult,
   columnIndex: number,
 ): number {
-  const headerLength = statement.columns[columnIndex]?.name.length ?? 0;
+  const column = statement.columns[columnIndex];
+  if (!column) return 104;
+
+  const headerLength = Math.max(
+    column.name.length,
+    getDataTypeLabel(column)?.length ?? 0,
+  );
   let contentLength = headerLength;
   let sampled = 0;
 
@@ -51,7 +60,10 @@ function estimateColumnWidth(
     for (const row of batch.rows) {
       contentLength = Math.max(
         contentLength,
-        Math.min(formatQueryValue(row[columnIndex]).length, 42),
+        Math.min(
+          presentQueryResultValue(row[columnIndex], column).displayText.length,
+          42,
+        ),
       );
       sampled += 1;
       if (sampled === 24) break;
@@ -60,6 +72,37 @@ function estimateColumnWidth(
   }
 
   return Math.min(360, Math.max(104, contentLength * 7 + 32));
+}
+
+function getDataTypeLabel(column: QueryColumn): string | undefined {
+  const name = column.dataType.name;
+  if (!name) return undefined;
+
+  const schema = column.dataType.schema;
+  return schema && schema !== "pg_catalog" ? `${schema}.${name}` : name;
+}
+
+function getResultCellClass(
+  row: QueryGridRow,
+  column: QueryColumn,
+  columnIndex: number,
+  selection: GridSelection | undefined,
+): string {
+  const presentation = presentQueryResultValue(
+    row.values[columnIndex],
+    column,
+  );
+  const isSelected = isPositionSelected(selection, {
+    rowIndex: row.rowIndex,
+    columnIndex,
+  });
+
+  return [
+    `query-result-cell-${presentation.kind}`,
+    isSelected ? "query-result-cell-selected" : undefined,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function isRangeNavigationKey(key: string) {
@@ -112,22 +155,36 @@ export function QueryResultGrid({
         minWidth: 80,
         maxWidth: 560,
         resizable: true,
-        cellClass: (row: QueryGridRow) =>
-          isPositionSelected(selection, {
-            rowIndex: row.rowIndex,
-            columnIndex,
-          })
-            ? "query-result-cell-selected"
-            : undefined,
-        renderCell: ({ row }: { row: QueryGridRow }) => {
-          const value = row.values[columnIndex];
-          const text = formatQueryValue(value);
+        renderHeaderCell: () => {
+          const dataTypeLabel = getDataTypeLabel(column);
           return (
             <span
-              className={value === null ? "query-result-null" : undefined}
-              title={text}
+              className="query-result-column-header"
+              title={
+                dataTypeLabel
+                  ? `${column.name} (${dataTypeLabel})`
+                  : column.name
+              }
             >
-              {text}
+              <span>{column.name}</span>
+              {dataTypeLabel && <small>{dataTypeLabel}</small>}
+            </span>
+          );
+        },
+        cellClass: (row: QueryGridRow) =>
+          getResultCellClass(row, column, columnIndex, selection),
+        renderCell: ({ row }: { row: QueryGridRow }) => {
+          const presentation = presentQueryResultValue(
+            row.values[columnIndex],
+            column,
+          );
+          return (
+            <span
+              className={`query-result-value query-result-value-${presentation.kind}`}
+              data-query-result-value={presentation.displayText}
+              title={presentation.titleText}
+            >
+              {presentation.displayText}
             </span>
           );
         },
@@ -198,7 +255,7 @@ export function QueryResultGrid({
         event.preventDefault();
         event.clipboardData.setData(
           "text/plain",
-          serializeGridSelection(rows, selection),
+          serializeGridSelection(rows, selection, statement.columns),
         );
       }}
       renderers={{

@@ -118,6 +118,32 @@
   font-weight: 600;
 }
 
+.query-result-column-header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.query-result-column-header > span,
+.query-result-column-header > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.query-result-column-header > span {
+  min-width: 0;
+}
+
+.query-result-column-header > small {
+  flex: 0 1 auto;
+  color: #7a847d;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 500;
+}
+
 .query-result-grid .rdg-cell {
   display: flex;
   align-items: center;
@@ -128,6 +154,52 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.query-result-grid .query-result-cell-numeric {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.query-result-value-null {
+  color: #8a5d75;
+  font-style: italic;
+}
+
+.query-result-value-empty,
+.query-result-value-whitespace {
+  color: #6d778f;
+  font-style: italic;
+}
+
+.query-result-value-boolean {
+  color: #2d6c53;
+  font-weight: 600;
+}
+
+.query-result-value-boolean[data-query-result-value="false"] {
+  color: #9a593c;
+}
+
+.query-result-value-numeric {
+  color: #285e7a;
+  font-variant-numeric: tabular-nums;
+}
+
+.query-result-value-datetime {
+  color: #65558a;
+}
+
+.query-result-value-json {
+  color: #7b5b38;
+}
+
+.query-result-value-array {
+  color: #346d63;
+}
+
+.query-result-value-binary {
+  color: #855237;
 }
 
 .query-result-grid .query-result-cell-selected {
@@ -146,11 +218,6 @@
 .query-result-grid .query-result-row-number.query-result-cell-selected {
   color: #315c47;
   background: #dfece3;
-}
-
-.query-result-null {
-  color: #8a5d75;
-  font-style: italic;
 }
 
 .query-result-empty,
@@ -224,6 +291,10 @@
     color: #bdc7c0;
   }
 
+  .query-result-column-header > small {
+    color: #8f9a93;
+  }
+
   .query-result-grid .query-result-cell-selected {
     background: #294035;
     box-shadow: inset 0 0 0 1px rgb(121 170 144 / 26%);
@@ -239,8 +310,41 @@
     background: #2b4035;
   }
 
-  .query-result-null {
+  .query-result-value-null {
     color: #d2a3bc;
+  }
+
+  .query-result-value-empty,
+  .query-result-value-whitespace {
+    color: #b8bfd4;
+  }
+
+  .query-result-value-boolean {
+    color: #83caa2;
+  }
+
+  .query-result-value-boolean[data-query-result-value="false"] {
+    color: #e2a584;
+  }
+
+  .query-result-value-numeric {
+    color: #8dc7e8;
+  }
+
+  .query-result-value-datetime {
+    color: #c4afe9;
+  }
+
+  .query-result-value-json {
+    color: #e0ba88;
+  }
+
+  .query-result-value-array {
+    color: #8dcfc3;
+  }
+
+  .query-result-value-binary {
+    color: #e0a880;
   }
 
   .query-result-command strong {

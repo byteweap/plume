@@ -586,6 +586,10 @@ describe("App sidebar", () => {
     await screen.findByText("PostgreSQL 18.0");
     fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
     const editor = await replaceEditorText("select 1;\nselect 2;");
+    const rowLimit = screen.getByRole("combobox", {
+      name: "Result row limit",
+    });
+    expect(rowLimit).toHaveValue("10000");
     const view = EditorView.findFromDOM(editor)!;
     act(() => {
       view.dispatch({ selection: { anchor: view.state.doc.length - 2 } });
@@ -602,6 +606,7 @@ describe("App sidebar", () => {
       sessionId: "session-1",
       database: "postgres",
       sql: "select 2;",
+      rowLimit: 10_000,
     });
     expect(await screen.findByText("Query completed")).toBeVisible();
     expect(screen.getByText("Rows returned 1")).toBeVisible();
@@ -617,6 +622,8 @@ describe("App sidebar", () => {
     fireEvent.keyDown(resultResizer, { key: "ArrowDown" });
     expect(resultResizer).toHaveAttribute("aria-valuenow", "240");
 
+    fireEvent.change(rowLimit, { target: { value: "500" } });
+    expect(rowLimit).toHaveValue("500");
     fireEvent.click(screen.getByRole("button", { name: "Run all SQL" }));
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
     expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
@@ -624,6 +631,7 @@ describe("App sidebar", () => {
       sessionId: "session-1",
       database: "postgres",
       sql: "select 1;\nselect 2;",
+      rowLimit: 500,
     });
   });
 

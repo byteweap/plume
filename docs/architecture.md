@@ -117,8 +117,10 @@ preserve statement framing, a zero-based statement index, completion status,
 column names and metadata (PostgreSQL type OID, type name, schema, and category),
 text-form values, nulls, actual row counts, retained row counts, and affected-row
 counts. Row data is returned in fixed 256-row batches with a zero-based offset.
-Each execution retains at most 10,000 rows in memory; excess rows are drained
-from the protocol stream and marked truncated. A failed Describe (for example,
+Each execution carries a user-selected shared retention budget between 100 and
+10,000 rows, defaulting to 10,000. Excess rows and later statement results are
+drained from the protocol stream and marked truncated without rewriting SQL.
+A failed Describe (for example,
 because the request contains multiple statements) returns an explicit `unknown`
 type category instead of guessing.
 The response echoes the query ID, and the frontend accepts it only for the
@@ -145,8 +147,9 @@ Execution results live only for the query-tab lifecycle and are not persisted in
 drafts. P0-F01 defines the result protocol, and P0-F02 renders its retained
 batches through a lazily loaded React Data Grid adapter with fixed row heights,
 row and column virtualization, resizable columns, keyboard navigation,
-rectangular selection, and tab-separated copy. Configurable result limits remain
-P0-F04 work; richer type rendering and row/header copy remain P0-F03 and P0-F05.
+rectangular selection, typed value presentation, and tab-separated copy. The
+query toolbar selects the request-scoped result budget and the result panel
+explicitly reports when that budget is reached. Row/header copy remains P0-F05.
 
 ## SQL Completion Boundary
 

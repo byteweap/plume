@@ -34,7 +34,13 @@ pub async fn execute_query(
     };
     registered.activate(query_client.canceller).await;
     let result = async {
-        query::execute(&query_client.client, request.query_id.clone(), &request.sql).await
+        query::execute(
+            &query_client.client,
+            request.query_id.clone(),
+            &request.sql,
+            request.row_limit,
+        )
+        .await
     }
     .await;
     let cancelled = queries

@@ -105,6 +105,23 @@ const invisibleValuesResult: QueryExecutionResult = {
   ],
 };
 
+const truncatedResult: QueryExecutionResult = {
+  queryId: "truncated-query",
+  status: "succeeded",
+  results: [
+    {
+      statementIndex: 0,
+      status: "succeeded",
+      kind: "rows",
+      columns: [],
+      batches: [],
+      rowCount: 5,
+      retainedRowCount: 2,
+      truncated: true,
+    },
+  ],
+};
+
 function renderPanel() {
   window.localStorage.setItem("plume.locale", "en-US");
   return render(
@@ -219,5 +236,17 @@ describe("QueryResultPanel", () => {
     expect(
       document.querySelector(".query-result-value-whitespace"),
     ).toHaveTextContent('" \\t"');
+  });
+
+  it("makes a reached result limit explicit", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <QueryResultPanel result={truncatedResult} />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("2 / 5 rows")).toBeVisible();
+    expect(screen.getByText("Result row limit reached")).toBeVisible();
   });
 });

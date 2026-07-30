@@ -9,8 +9,13 @@ use uuid::Uuid;
 
 use crate::{database::connection::QueryCanceller, error::DatabaseError};
 
-const MAX_QUERY_ROWS: usize = 10_000;
+const DEFAULT_QUERY_ROW_LIMIT: usize = 10_000;
+const MAX_QUERY_ROW_LIMIT: usize = 10_000;
 const QUERY_ROW_BATCH_SIZE: usize = 256;
+
+const fn default_query_row_limit() -> usize {
+    DEFAULT_QUERY_ROW_LIMIT
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +24,8 @@ pub struct ExecuteQueryRequest {
     pub session_id: String,
     pub database: String,
     pub sql: String,
+    #[serde(default = "default_query_row_limit")]
+    pub row_limit: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -58,6 +65,11 @@ impl ExecuteQueryRequest {
         }
         if self.sql.trim().is_empty() {
             return Err(QueryError::Invalid("SQL is required.".to_owned()));
+        }
+        if !(1..=MAX_QUERY_ROW_LIMIT).contains(&self.row_limit) {
+            return Err(QueryError::Invalid(format!(
+                "Row limit must be between 1 and {MAX_QUERY_ROW_LIMIT}."
+            )));
         }
         Ok(())
     }
@@ -395,8 +407,9 @@ pub async fn execute(
     client: &Client,
     query_id: String,
     sql: &str,
+    row_limit: usize,
 ) -> Result<QueryExecutionResult, QueryError> {
-    execute_with_limit(client, query_id, sql, MAX_QUERY_ROWS).await
+    execute_with_limit(client, query_id, sql, row_limit).await
 }
 
 impl QueryDataType {
@@ -596,9 +609,10 @@ async fn execute_with_limit(
 #[cfg(test)]
 mod tests {
     use super::{
-        CancelQueryRequest, CancelQueryStatus, ExecuteQueryRequest, MAX_QUERY_ROWS,
-        QUERY_ROW_BATCH_SIZE, QueryDataTypeKind, QueryError, QueryRegistry, QueryStatementKind,
-        QueryStatementStatus, execute, execute_with_limit, is_postgres_cancellation,
+        CancelQueryRequest, CancelQueryStatus, DEFAULT_QUERY_ROW_LIMIT, ExecuteQueryRequest,
+        MAX_QUERY_ROW_LIMIT, QUERY_ROW_BATCH_SIZE, QueryDataTypeKind, QueryError, QueryRegistry,
+        QueryStatementKind, QueryStatementStatus, execute, execute_with_limit,
+        is_postgres_cancellation,
     };
     use crate::database::{
         connection::{ConnectionTestRequest, OpenConnection, QueryCanceller, open},
@@ -613,6 +627,7 @@ mod tests {
             session_id: "session-1".to_owned(),
             database: "postgres".to_owned(),
             sql: "SELECT 1".to_owned(),
+            row_limit: DEFAULT_QUERY_ROW_LIMIT,
         }
     }
 
@@ -657,7 +672,28 @@ mod tests {
             request.query_id = QUERY_ID.to_owned();
             request.sql = " \n ".to_owned();
             assert!(request.validate().is_err());
+
+            request.sql = "SELECT 1".to_owned();
+            request.row_limit = 0;
+            assert!(request.validate().is_err());
+
+            request.row_limit = MAX_QUERY_ROW_LIMIT + 1;
+            assert!(request.validate().is_err());
         });
+    }
+
+    #[test]
+    fn defaults_omitted_row_limits_for_older_callers() {
+        let request: ExecuteQueryRequest = serde_json::from_value(serde_json::json!({
+            "queryId": QUERY_ID,
+            "sessionId": "session-1",
+            "database": "postgres",
+            "sql": "SELECT 1"
+        }))
+        .unwrap();
+
+        assert_eq!(request.row_limit, DEFAULT_QUERY_ROW_LIMIT);
+        assert!(request.validate().is_ok());
     }
 
     async fn run_registered(
@@ -674,7 +710,13 @@ mod tests {
                 connection.settings.clone(),
             ))
             .await;
-        let result = execute(&connection.client, request.query_id.clone(), &request.sql).await;
+        let result = execute(
+            &connection.client,
+            request.query_id.clone(),
+            &request.sql,
+            request.row_limit,
+        )
+        .await;
         let cancelled = registry
             .finish(&request.query_id, is_postgres_cancellation(&result))
             .await;
@@ -936,6 +978,30 @@ mod tests {
 
     #[test]
     #[ignore = "requires the local PostgreSQL integration environment"]
+    fn shares_the_result_limit_across_all_statements() {
+        tauri::async_runtime::block_on(async {
+            let client = test_support::connect().await;
+            let result = execute_with_limit(
+                &client,
+                QUERY_ID.to_owned(),
+                "SELECT value FROM generate_series(1, 2) AS value; SELECT 3 AS value",
+                1,
+            )
+            .await
+            .unwrap();
+
+            assert_eq!(result.results.len(), 2);
+            assert_eq!(result.results[0].row_count, 2);
+            assert_eq!(result.results[0].retained_row_count, 1);
+            assert!(result.results[0].truncated);
+            assert_eq!(result.results[1].row_count, 1);
+            assert_eq!(result.results[1].retained_row_count, 0);
+            assert!(result.results[1].truncated);
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
     fn enforces_the_production_row_limit_without_losing_actual_count() {
         tauri::async_runtime::block_on(async {
             let client = test_support::connect().await;
@@ -943,20 +1009,21 @@ mod tests {
                 &client,
                 QUERY_ID.to_owned(),
                 "SELECT value FROM generate_series(1, 10005) AS value",
+                DEFAULT_QUERY_ROW_LIMIT,
             )
             .await
             .unwrap();
 
             let statement = &result.results[0];
             assert_eq!(statement.row_count, 10_005);
-            assert_eq!(statement.retained_row_count, MAX_QUERY_ROWS as u64);
+            assert_eq!(statement.retained_row_count, DEFAULT_QUERY_ROW_LIMIT as u64);
             assert_eq!(
                 statement
                     .batches
                     .iter()
                     .map(|batch| batch.rows.len())
                     .sum::<usize>(),
-                MAX_QUERY_ROWS
+                DEFAULT_QUERY_ROW_LIMIT
             );
             assert!(statement.truncated);
         });

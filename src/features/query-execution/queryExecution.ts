@@ -1,11 +1,15 @@
 import type { CommandError } from "../../platform/tauri";
 import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
 
+export const DEFAULT_QUERY_ROW_LIMIT = 10_000;
+export const QUERY_ROW_LIMIT_OPTIONS = [100, 500, 1_000, 5_000, 10_000] as const;
+
 export interface ExecuteQueryRequest {
   queryId: string;
   sessionId: string;
   database: string;
   sql: string;
+  rowLimit: number;
 }
 
 export interface CancelQueryRequest {

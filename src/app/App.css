@@ -664,6 +664,32 @@
   gap: 8px;
 }
 
+.query-row-limit-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: #667068;
+  font-size: 10px;
+}
+
+.query-row-limit-control select {
+  width: 78px;
+  height: 26px;
+  border: 1px solid #d2d8d4;
+  border-radius: 5px;
+  padding: 0 6px;
+  color: #3e4941;
+  background: #ffffff;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.query-row-limit-control select:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
 .query-draft-state {
   color: #6d776f;
   font-size: 10px;
@@ -887,6 +913,16 @@
 
   .query-contextbar {
     border-color: #363d38;
+  }
+
+  .query-row-limit-control {
+    color: #aab4ad;
+  }
+
+  .query-row-limit-control select {
+    border-color: #414943;
+    color: #dce3de;
+    background: #242925;
   }
 
   .query-offline-notice {

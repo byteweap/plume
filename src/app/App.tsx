@@ -46,7 +46,9 @@ import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import {
   createQueryId,
+  DEFAULT_QUERY_ROW_LIMIT,
   formatQueryDuration,
+  QUERY_ROW_LIMIT_OPTIONS,
   summarizeQueryResult,
   type QueryExecutionState,
 } from "../features/query-execution/queryExecution";
@@ -127,6 +129,7 @@ export function App() {
   const [filter, setFilter] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [queryRowLimit, setQueryRowLimit] = useState(DEFAULT_QUERY_ROW_LIMIT);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const sidebarResizeStart = useRef<{
     pointerId: number;
@@ -228,6 +231,7 @@ export function App() {
     tab: QueryTab,
     sessionId: string,
     target: SqlExecutionTarget,
+    rowLimit: number,
   ) {
     if (executingProfiles.current.has(tab.profileId)) return;
 
@@ -248,6 +252,7 @@ export function App() {
         sessionId,
         database: tab.database,
         sql: target.sql,
+        rowLimit,
       });
       dispatchWorkspaceTabs({
         type: "query-succeeded",
@@ -947,8 +952,10 @@ export function App() {
                 connection={activeConnection}
                 state={activeSession?.state ?? "disconnected"}
                 error={activeSession?.error}
+                rowLimit={queryRowLimit}
                 onReconnect={() => void connectProfile(activeProfile, false)}
                 onSave={() => void saveQueryDraft(activeTab)}
+                onRowLimitChange={setQueryRowLimit}
                 onExecute={(target) => {
                   if (
                     !activeConnection ||
@@ -960,6 +967,7 @@ export function App() {
                     activeTab,
                     activeConnection.sessionId,
                     target,
+                    queryRowLimit,
                   );
                 }}
                 onCancel={() => {
@@ -1122,8 +1130,10 @@ function QueryWorkspace({
   connection,
   state,
   error,
+  rowLimit,
   onReconnect,
   onSave,
+  onRowLimitChange,
   onExecute,
   onCancel,
   onSqlChange,
@@ -1133,13 +1143,15 @@ function QueryWorkspace({
   connection?: ActiveConnection;
   state: ConnectionLifecycleState;
   error?: string;
+  rowLimit: number;
   onReconnect: () => void;
   onSave: () => void;
+  onRowLimitChange: (rowLimit: number) => void;
   onExecute: (target: SqlExecutionTarget) => void;
   onCancel: () => void;
   onSqlChange: (sql: string) => void;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const editorRef = useRef<SqlEditorController>(null);
   const workspaceMainRef = useRef<HTMLDivElement>(null);
   const resultResizeStart = useRef<{
@@ -1266,6 +1278,26 @@ function QueryWorkspace({
           </span>
         </div>
         <div className="query-context-actions">
+          <label className="query-row-limit-control">
+            <span>{t("query.rowLimit")}</span>
+            <select
+              aria-label={t("query.rowLimit")}
+              value={rowLimit}
+              disabled={
+                execution.status === "running" ||
+                execution.status === "cancelling"
+              }
+              onChange={(event) =>
+                onRowLimitChange(Number(event.currentTarget.value))
+              }
+            >
+              {QUERY_ROW_LIMIT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option.toLocaleString(locale)}
+                </option>
+              ))}
+            </select>
+          </label>
           <IconButton
             className="query-run-button"
             label={t("query.runCurrent")}

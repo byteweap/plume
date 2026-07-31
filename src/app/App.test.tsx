@@ -7,6 +7,7 @@ import type { ConnectionProfile } from "../features/connections/connection";
 import { connectionApi } from "../features/connections/connectionApi";
 import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
+import { queryHistoryApi } from "../features/history/queryHistoryApi";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
 import {
   sqlCompletionApi,
@@ -61,6 +62,10 @@ describe("App sidebar", () => {
       updatedAt: 2,
     }));
     vi.spyOn(queryDraftApi, "delete").mockResolvedValue();
+    vi.spyOn(queryHistoryApi, "record").mockImplementation(async (request) => ({
+      ...request,
+      executedAt: 1,
+    }));
     vi.spyOn(queryExecutionApi, "execute").mockImplementation(
       async (request) => ({
         queryId: request.queryId,
@@ -418,6 +423,15 @@ describe("App sidebar", () => {
     );
 
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    await waitFor(() => expect(queryHistoryApi.record).toHaveBeenCalledOnce());
+    expect(queryHistoryApi.record).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        profileId: "profile-1",
+        database: "postgres",
+        sql: "INSERT INTO audit_events DEFAULT VALUES;",
+        resultStatus: "failed",
+      }),
+    );
     const firstRequest = vi.mocked(queryExecutionApi.execute).mock.calls[0]![0];
     expect(firstRequest).toMatchObject({
       sessionId: "session-1",
@@ -436,6 +450,10 @@ describe("App sidebar", () => {
 
     fireEvent.click(run);
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(queryHistoryApi.record).toHaveBeenCalledTimes(2));
+    expect(queryHistoryApi.record).toHaveBeenLastCalledWith(
+      expect.objectContaining({ resultStatus: "succeeded" }),
+    );
     const secondRequest = vi.mocked(queryExecutionApi.execute).mock.calls[1]![0];
     expect(secondRequest.sessionId).toBe("session-2");
     expect(secondRequest.queryId).not.toBe(firstRequest.queryId);
@@ -784,6 +802,7 @@ describe("App sidebar", () => {
 
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
     await waitFor(() => expect(tableDataApi.getEditability).toHaveBeenCalledOnce());
+    expect(queryHistoryApi.record).not.toHaveBeenCalled();
     expect(tableDataApi.getEditability).toHaveBeenCalledWith("session-1", {
       database: "postgres",
       schema: "public",

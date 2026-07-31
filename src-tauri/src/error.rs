@@ -7,6 +7,7 @@ use crate::{
     diagnostics,
     drafts::DraftError,
     exports::ExportError,
+    history::HistoryError,
     profiles::ProfileError,
     replay::ReplayProtectionError,
 };
@@ -429,6 +430,25 @@ impl From<ReplayProtectionError> for CommandError {
                 .to_owned(),
             detail: None,
             diagnostic: None,
+        }
+    }
+}
+
+impl From<HistoryError> for CommandError {
+    fn from(error: HistoryError) -> Self {
+        match error {
+            HistoryError::Invalid(message) => Self {
+                code: "invalid_history",
+                message,
+                detail: None,
+                diagnostic: None,
+            },
+            HistoryError::Storage(_) | HistoryError::Lock => Self {
+                code: "history_storage_error",
+                message: "Plume could not save the local query history.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
         }
     }
 }

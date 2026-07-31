@@ -400,6 +400,11 @@ while snapshots store tab metadata and unsaved SQL only; result sets, passwords,
 private keys, and active PostgreSQL sessions never enter this database. The
 migration is transactional, enables foreign keys, and rejects a database newer
 than the running application rather than guessing at its shape.
+User SQL executions append one history row after each terminal response, storing
+the connection profile ID, database/schema, exact execution target, elapsed
+milliseconds, outcome (`succeeded`, `failed`, or `cancelled`), and timestamp.
+Structured table-data reads are excluded. A history write is best-effort and
+never changes the database operation's user-visible result.
 
 ## Security and Privacy Invariants
 

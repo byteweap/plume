@@ -54,6 +54,8 @@ import {
 } from "../features/connections/connectionSession";
 import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
+import { queryHistoryApi } from "../features/history/queryHistoryApi";
+import type { QueryHistoryStatus } from "../features/history/queryHistory";
 import {
   createQueryId,
   DEFAULT_QUERY_ROW_LIMIT,
@@ -170,6 +172,27 @@ function clampQueryResultHeight(height: number, workspaceHeight: number) {
     workspaceHeight - minimumQueryEditorHeight - queryResultResizerSize,
   );
   return Math.min(maximumHeight, Math.max(minimumQueryResultHeight, height));
+}
+
+function recordQueryHistory(
+  tab: ExecutableTab,
+  target: SqlExecutionTarget,
+  startedAt: number,
+  resultStatus: QueryHistoryStatus,
+) {
+  if (tab.kind !== "query") return;
+
+  void queryHistoryApi
+    .record({
+      id: crypto.randomUUID(),
+      profileId: tab.profileId,
+      database: tab.database,
+      schema: tab.schema,
+      sql: target.sql,
+      durationMs: Math.max(0, Date.now() - startedAt),
+      resultStatus,
+    })
+    .catch(() => undefined);
 }
 
 export function App() {
@@ -342,13 +365,14 @@ export function App() {
       if (executingProfiles.current.has(tab.profileId)) return;
 
       const queryId = createQueryId();
+      const startedAt = Date.now();
       executingProfiles.current.add(tab.profileId);
       dispatchWorkspaceTabs({
         type: "query-started",
         tabId: tab.id,
         queryId,
         target,
-        startedAt: Date.now(),
+        startedAt,
       });
       dispatchSession({ type: "begin-work", profileId: tab.profileId });
 
@@ -377,6 +401,7 @@ export function App() {
           finishedAt: Date.now(),
           hasNextPage: tablePage?.hasNextPage,
         });
+        recordQueryHistory(tab, target, startedAt, "succeeded");
         dispatchSession({ type: "ready", profileId: tab.profileId });
       } catch (error) {
         const commandError = toCommandError(error);
@@ -387,6 +412,7 @@ export function App() {
             queryId,
             finishedAt: Date.now(),
           });
+          recordQueryHistory(tab, target, startedAt, "cancelled");
         } else {
           dispatchWorkspaceTabs({
             type: "query-failed",
@@ -395,6 +421,7 @@ export function App() {
             error: commandError,
             finishedAt: Date.now(),
           });
+          recordQueryHistory(tab, target, startedAt, "failed");
         }
         if (isConnectionQueryError(commandError.code)) {
           dispatchSession({

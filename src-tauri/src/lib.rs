@@ -5,6 +5,7 @@ mod diagnostics;
 mod drafts;
 mod error;
 mod exports;
+mod history;
 mod profiles;
 mod replay;
 
@@ -15,6 +16,7 @@ use commands::{
     },
     drafts::{delete_query_draft, list_query_drafts, save_query_draft},
     exports::{cancel_export, export_csv, export_json},
+    history::record_query_history,
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
@@ -33,6 +35,7 @@ use database::query::QueryRegistry;
 use database::session::ConnectionRegistry;
 use drafts::QueryDraftService;
 use exports::ExportRegistry;
+use history::QueryHistoryService;
 use profiles::ConnectionProfileService;
 use replay::OperationReplayGuard;
 use tauri::Manager;
@@ -52,9 +55,11 @@ pub fn run() {
             let database_path = app.path().app_data_dir()?.join("plume.sqlite3");
             let profiles =
                 ConnectionProfileService::open(database_path.clone(), platform_credential_store())?;
-            let drafts = QueryDraftService::open(database_path)?;
+            let drafts = QueryDraftService::open(database_path.clone())?;
+            let history = QueryHistoryService::open(database_path)?;
             app.manage(profiles);
             app.manage(drafts);
+            app.manage(history);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -88,7 +93,8 @@ pub fn run() {
             commit_table_data_changes,
             export_csv,
             export_json,
-            cancel_export
+            cancel_export,
+            record_query_history
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

@@ -376,7 +376,11 @@ export function App() {
       sessionId,
     });
     void tableDataApi
-      .getEditability(sessionId, activeTab)
+      .getEditability(sessionId, {
+        database: activeTab.database,
+        schema: activeTab.schema,
+        table: activeTab.table,
+      })
       .then((result) =>
         dispatchWorkspaceTabs({
           type: "table-data-editability-loaded",

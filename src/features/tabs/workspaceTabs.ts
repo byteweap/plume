@@ -13,6 +13,10 @@ import {
   type TableDataSort,
   type TableEditabilityResponse,
 } from "../table-data/tableData";
+import {
+  createEmptyTableDataChangeSet,
+  type TableDataChangeSet,
+} from "../table-data/tableDataChanges";
 
 export interface WorkspaceContext {
   profileId: string;
@@ -53,6 +57,7 @@ export interface TableDataTab extends WorkspaceContext {
   sorts: TableDataSort[];
   filters: TableDataFilter[];
   editability: TableDataEditability;
+  changes: TableDataChangeSet;
   columns: QueryColumn[];
   execution?: QueryExecutionState;
 }
@@ -102,6 +107,11 @@ export type WorkspaceTabsAction =
       type: "table-data-editability-failed";
       tabId: string;
       sessionId: string;
+    }
+  | {
+      type: "stage-table-data-changes";
+      tabId: string;
+      changes: TableDataChangeSet;
     }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
@@ -253,6 +263,7 @@ export function workspaceTabsReducer(
         sorts: [],
         filters: [],
         editability: { status: "idle" },
+        changes: createEmptyTableDataChangeSet(),
         columns: [],
       };
       return {
@@ -336,6 +347,17 @@ export function workspaceTabsReducer(
         sessionId: action.sessionId,
         reason: "metadata-unavailable",
       });
+    case "stage-table-data-changes":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId &&
+          tab.kind === "table-data" &&
+          tab.editability.status === "editable"
+            ? { ...tab, changes: action.changes }
+            : tab,
+        ),
+      };
     case "restore-queries": {
       const existingIds = new Set(state.tabs.map((tab) => tab.id));
       const restored = action.tabs.filter((tab) => !existingIds.has(tab.id));

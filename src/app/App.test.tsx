@@ -686,20 +686,9 @@ describe("App sidebar", () => {
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
     await waitFor(() => expect(tableDataApi.getEditability).toHaveBeenCalledOnce());
     expect(tableDataApi.getEditability).toHaveBeenCalledWith("session-1", {
-      id: expect.any(String),
-      kind: "table-data",
-      profileId: "profile-1",
       database: "postgres",
       schema: "public",
       table: "users",
-      title: "users",
-      pageIndex: 0,
-      pageSize: 200,
-      hasNextPage: false,
-      sorts: [],
-      filters: [],
-      editability: { status: "idle" },
-      columns: [],
     });
     expect(queryExecutionApi.execute).toHaveBeenCalledWith({
       queryId: expect.any(String),

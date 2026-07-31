@@ -192,6 +192,18 @@ reason instead of allowing ambiguous row targeting. A new session always
 refreshes the decision, and stale responses from an earlier session are
 ignored.
 
+Pending table edits are a serializable frontend-only change set owned by the
+table-data tab. Existing-row updates retain the original row locator, page and
+row position, and both the original and staged value for every changed cell.
+Inserted rows begin with an explicit `DEFAULT` state per column, which remains
+distinct from `NULL` and a string value (including the empty string). Deleted
+rows retain their locator and complete original row snapshot; staging a delete
+removes earlier cell updates for that row. The immutable model coalesces repeat
+edits and removes a cell change when it returns to its original value. It is
+not a database command: paging, sorting, filtering, and query completion leave
+the change set intact, and the workspace reducer accepts new staged changes
+only while reliable-key editability is active.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

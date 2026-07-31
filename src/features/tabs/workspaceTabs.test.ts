@@ -5,6 +5,10 @@ import {
   getQueryExecution,
   workspaceTabsReducer,
 } from "./workspaceTabs";
+import {
+  createEmptyTableDataChangeSet,
+  stageTableRowInsert,
+} from "../table-data/tableDataChanges";
 
 const context = {
   profileId: "profile-1",
@@ -79,6 +83,7 @@ describe("workspaceTabsReducer", () => {
       title: "users",
       table: "users",
       editability: { status: "idle" },
+      changes: { updatedRows: [], insertedRows: [], deletedRows: [] },
       ...context,
     });
 
@@ -107,6 +112,19 @@ describe("workspaceTabsReducer", () => {
         key: { name: "users_pkey", columns: ["id"] },
       },
     });
+    const pendingChanges = stageTableRowInsert(
+      createEmptyTableDataChangeSet(),
+      "local-1",
+      2,
+    );
+    state = workspaceTabsReducer(state, {
+      type: "stage-table-data-changes",
+      tabId: tableTabId,
+      changes: pendingChanges,
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      changes: { insertedRows: [{ localId: "local-1" }] },
+    });
 
     state = workspaceTabsReducer(state, {
       type: "table-data-editability-loading",
@@ -133,6 +151,15 @@ describe("workspaceTabsReducer", () => {
         sessionId: "session-2",
         reason: "metadata-unavailable",
       },
+      changes: { insertedRows: [{ localId: "local-1" }] },
+    });
+    state = workspaceTabsReducer(state, {
+      type: "stage-table-data-changes",
+      tabId: tableTabId,
+      changes: createEmptyTableDataChangeSet(),
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      changes: { insertedRows: [{ localId: "local-1" }] },
     });
 
     state = workspaceTabsReducer(state, {
@@ -179,6 +206,7 @@ describe("workspaceTabsReducer", () => {
       filters: [
         { columnIndex: 1, operator: "contains", value: "Ada" },
       ],
+      changes: { insertedRows: [{ localId: "local-1" }] },
     });
   });
 

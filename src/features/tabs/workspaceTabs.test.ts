@@ -93,6 +93,18 @@ describe("workspaceTabsReducer", () => {
       pageSize: 50,
       hasNextPage: false,
     });
+
+    state = workspaceTabsReducer(state, {
+      type: "set-table-data-sort",
+      tabId: tableTabId,
+      sorts: [{ columnIndex: 1, columnName: "name", direction: "DESC" }],
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      kind: "table-data",
+      pageIndex: 0,
+      pageSize: 50,
+      sorts: [{ columnIndex: 1, columnName: "name", direction: "DESC" }],
+    });
   });
 
   it("keeps SQL drafts isolated by query tab", () => {

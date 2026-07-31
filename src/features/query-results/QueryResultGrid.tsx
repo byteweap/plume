@@ -8,6 +8,7 @@ import {
   type CellMouseEvent,
   type Column,
   type ColumnWidths,
+  type SortColumn,
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
 import type {
@@ -40,6 +41,13 @@ export interface QueryResultGridProps {
   statement: QueryStatementResult;
   label: string;
   emptyLabel: string;
+  sorts?: QueryResultSort[];
+  onSortsChange?: (sorts: QueryResultSort[]) => void;
+}
+
+export interface QueryResultSort {
+  columnIndex: number;
+  direction: "ASC" | "DESC";
 }
 
 function rowKeyGetter(row: QueryGridRow) {
@@ -152,6 +160,8 @@ export function QueryResultGrid({
   statement,
   label,
   emptyLabel,
+  sorts = [],
+  onSortsChange,
 }: QueryResultGridProps) {
   const { t } = useI18n();
   const rows = useMemo(() => buildQueryGridRows(statement), [statement]);
@@ -161,6 +171,7 @@ export function QueryResultGrid({
     "idle",
   );
   const [exportFormat, setExportFormat] = useState<ResultExportFormat>();
+  const sortable = Boolean(onSortsChange);
   const extendingSelection = useRef(false);
   const selectingRows = useRef(false);
   const lastColumnIndex = statement.columns.length - 1;
@@ -195,6 +206,7 @@ export function QueryResultGrid({
         minWidth: 80,
         maxWidth: 560,
         resizable: true,
+        sortable,
         renderHeaderCell: () => {
           const dataTypeLabel = getDataTypeLabel(column);
           return (
@@ -230,7 +242,15 @@ export function QueryResultGrid({
         },
       })),
     ];
-  }, [lastColumnIndex, selection, statement, t]);
+  }, [lastColumnIndex, selection, sortable, statement, t]);
+  const sortColumns = useMemo<readonly SortColumn[]>(
+    () =>
+      sorts.map((sort) => ({
+        columnKey: `column-${sort.columnIndex}`,
+        direction: sort.direction,
+      })),
+    [sorts],
+  );
 
   function updateSelection(position: GridPosition) {
     const shouldExtend = extendingSelection.current;
@@ -357,6 +377,17 @@ export function QueryResultGrid({
           headerRowHeight={headerRowHeight}
           columnWidths={columnWidths}
           onColumnWidthsChange={setColumnWidths}
+          sortColumns={sortColumns}
+          onSortColumnsChange={(nextSortColumns) =>
+            onSortsChange?.(
+              nextSortColumns
+                .map((sort) => ({
+                  columnIndex: columnIndexFromKey(sort.columnKey),
+                  direction: sort.direction,
+                }))
+                .filter((sort) => sort.columnIndex >= 0),
+            )
+          }
           onCellMouseDown={handleCellMouseDown}
           onCellKeyDown={handleCellKeyDown}
           onSelectedCellChange={({ rowIdx, column }) => {

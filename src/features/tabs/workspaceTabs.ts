@@ -5,6 +5,7 @@ import type {
   QueryExecutionState,
 } from "../query-execution/queryExecution";
 import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
+import type { TableDataSort } from "../table-data/tableData";
 
 export interface WorkspaceContext {
   profileId: string;
@@ -42,6 +43,7 @@ export interface TableDataTab extends WorkspaceContext {
   pageIndex: number;
   pageSize: number;
   hasNextPage: boolean;
+  sorts: TableDataSort[];
   execution?: QueryExecutionState;
 }
 
@@ -64,6 +66,11 @@ export type WorkspaceTabsAction =
       tabId: string;
       pageIndex: number;
       pageSize: number;
+    }
+  | {
+      type: "set-table-data-sort";
+      tabId: string;
+      sorts: TableDataSort[];
     }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
@@ -212,6 +219,7 @@ export function workspaceTabsReducer(
         pageIndex: 0,
         pageSize: 200,
         hasNextPage: false,
+        sorts: [],
       };
       return {
         ...state,
@@ -230,6 +238,21 @@ export function workspaceTabsReducer(
                 ...tab,
                 pageIndex: action.pageIndex,
                 pageSize: action.pageSize,
+                hasNextPage: false,
+                execution: undefined,
+              }
+            : tab,
+        ),
+      };
+    case "set-table-data-sort":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "table-data"
+            ? {
+                ...tab,
+                sorts: action.sorts,
+                pageIndex: 0,
                 hasNextPage: false,
                 execution: undefined,
               }

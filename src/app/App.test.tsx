@@ -679,6 +679,19 @@ describe("App sidebar", () => {
       rowLimit: 51,
     });
     expect(await screen.findByText("Page 1")).toBeVisible();
+
+    fireEvent.click(
+      await screen.findByRole("columnheader", { name: /^value/ }),
+    );
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(4));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: 'SELECT *\nFROM "public"."users"\nORDER BY 1 ASC\nLIMIT 51\nOFFSET 0;',
+      rowLimit: 51,
+    });
+    expect(screen.getByLabelText("Current sort")).toHaveTextContent("1. value");
   });
 
   it("executes the cursor statement and all SQL with connection ownership", async () => {

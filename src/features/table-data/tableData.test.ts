@@ -34,6 +34,21 @@ describe("table data initial query", () => {
     ).toBe('SELECT *\nFROM "public"."users"\nLIMIT 51\nOFFSET 100;');
   });
 
+  it("builds persistent multi-column ordering by result ordinal", () => {
+    expect(
+      createTableDataTarget(
+        { schema: "public", table: "users" },
+        { pageIndex: 1, pageSize: 100 },
+        [
+          { columnIndex: 2, columnName: "created_at", direction: "DESC" },
+          { columnIndex: 0, columnName: "id", direction: "ASC" },
+        ],
+      ).sql,
+    ).toBe(
+      'SELECT *\nFROM "public"."users"\nORDER BY 3 DESC, 1 ASC\nLIMIT 101\nOFFSET 100;',
+    );
+  });
+
   it("removes the probe row across retained batches", () => {
     const normalized = normalizeTableDataPage(
       {

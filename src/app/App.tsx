@@ -13,6 +13,8 @@ import {
 } from "react";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
   Braces,
   Check,
   ChevronLeft,
@@ -357,7 +359,7 @@ export function App() {
     void executeQuery(
       activeTab,
       activeConnection.sessionId,
-      createTableDataTarget(activeTab, activeTab),
+      createTableDataTarget(activeTab, activeTab, activeTab.sorts),
       activeTab.pageSize + 1,
     );
   }, [activeConnection, activeSession?.state, activeTab, executeQuery]);
@@ -1051,7 +1053,7 @@ export function App() {
                   void executeQuery(
                     activeTab,
                     activeConnection.sessionId,
-                    createTableDataTarget(activeTab, activeTab),
+                    createTableDataTarget(activeTab, activeTab, activeTab.sorts),
                     activeTab.pageSize + 1,
                   );
                 }}
@@ -1061,6 +1063,13 @@ export function App() {
                     tabId: activeTab.id,
                     pageIndex,
                     pageSize,
+                  })
+                }
+                onSortsChange={(sorts) =>
+                  dispatchWorkspaceTabs({
+                    type: "set-table-data-sort",
+                    tabId: activeTab.id,
+                    sorts,
                   })
                 }
                 onCancel={() => {
@@ -1217,6 +1226,7 @@ function TableDataWorkspace({
   onReconnect,
   onReload,
   onPageChange,
+  onSortsChange,
   onCancel,
 }: {
   tab: TableDataTab;
@@ -1225,6 +1235,7 @@ function TableDataWorkspace({
   onReconnect: () => void;
   onReload: () => void;
   onPageChange: (pageIndex: number, pageSize: number) => void;
+  onSortsChange: (sorts: TableDataTab["sorts"]) => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
@@ -1255,10 +1266,28 @@ function TableDataWorkspace({
           <h1>{tab.table}</h1>
         </div>
         <div className="table-data-toolbar">
-          <span className="table-data-order-warning">
-            <AlertTriangle size={12} />
-            {t("tableData.unstableOrder")}
-          </span>
+          {tab.sorts.length === 0 ? (
+            <span className="table-data-order-warning">
+              <AlertTriangle size={12} />
+              {t("tableData.unstableOrder")}
+            </span>
+          ) : (
+            <div
+              className="table-data-sort-summary"
+              aria-label={t("tableData.currentSort")}
+            >
+              {tab.sorts.map((sort, index) => (
+                <span key={`${sort.columnIndex}:${sort.direction}`}>
+                  {sort.direction === "ASC" ? (
+                    <ArrowUp size={11} />
+                  ) : (
+                    <ArrowDown size={11} />
+                  )}
+                  {index + 1}. {sort.columnName}
+                </span>
+              ))}
+            </div>
+          )}
           <label className="table-data-page-size">
             <span>{t("tableData.pageSize")}</span>
             <select
@@ -1322,7 +1351,23 @@ function TableDataWorkspace({
               </div>
             }
           >
-            <QueryResultPanel result={execution.result} />
+            <QueryResultPanel
+              result={execution.result}
+              sorts={tab.sorts}
+              onSortsChange={(sorts) => {
+                const statement = execution.result.results.find(
+                  (item) => item.kind === "rows",
+                );
+                onSortsChange(
+                  sorts.map((sort) => ({
+                    ...sort,
+                    columnName:
+                      statement?.columns[sort.columnIndex]?.name ??
+                      String(sort.columnIndex + 1),
+                  })),
+                );
+              }}
+            />
           </Suspense>
         ) : execution.status === "failed" ? (
           <div className="table-data-error" role="alert">

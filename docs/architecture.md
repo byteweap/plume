@@ -175,9 +175,13 @@ bounded `LIMIT`/`OFFSET`. The initial page size is 200. Each page requests one
 additional probe row, which is removed before rendering, to determine whether
 the next-page action is available without running a full count or draining the
 result set. Users can move backward and forward or select 50, 100, 200, or 500
-rows per page; changing the size returns to page one. Until an explicit sort is
-added, the toolbar continuously warns that PostgreSQL may return rows in a
-different order between page requests. Sorting, filtering, and editability are
+rows per page; changing the size returns to page one. Result headers control
+sorting: a normal activation replaces the current order, while Ctrl/Cmd adds or
+changes a secondary key through React Data Grid's native multi-sort behavior.
+Sorts are persisted in the table-data tab, shown with priority and direction,
+reset pagination to page one, and compile to PostgreSQL `ORDER BY` ordinals so
+duplicate or unusual column names remain unambiguous. With no sort, the toolbar
+warns that rows may move between page requests. Filtering and editability are
 layered onto this tab model by the subsequent P0-G tasks.
 
 ## SQL Completion Boundary

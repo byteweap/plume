@@ -18,6 +18,12 @@ export interface TableDataPage {
   pageSize: number;
 }
 
+export interface TableDataSort {
+  columnIndex: number;
+  columnName: string;
+  direction: "ASC" | "DESC";
+}
+
 export function quotePostgresIdentifier(identifier: string): string {
   return `"${identifier.split('"').join('""')}"`;
 }
@@ -25,10 +31,16 @@ export function quotePostgresIdentifier(identifier: string): string {
 export function createTableDataTarget(
   reference: Pick<TableDataReference, "schema" | "table">,
   page: TableDataPage,
+  sorts: TableDataSort[] = [],
 ): SqlExecutionTarget {
   const probeLimit = page.pageSize + 1;
   const offset = page.pageIndex * page.pageSize;
-  const sql = `SELECT *\nFROM ${quotePostgresIdentifier(reference.schema)}.${quotePostgresIdentifier(reference.table)}\nLIMIT ${probeLimit}\nOFFSET ${offset};`;
+  const orderBy = sorts.length
+    ? `\nORDER BY ${sorts
+        .map((sort) => `${sort.columnIndex + 1} ${sort.direction}`)
+        .join(", ")}`
+    : "";
+  const sql = `SELECT *\nFROM ${quotePostgresIdentifier(reference.schema)}.${quotePostgresIdentifier(reference.table)}${orderBy}\nLIMIT ${probeLimit}\nOFFSET ${offset};`;
   return {
     sql,
     from: 0,

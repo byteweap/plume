@@ -2,11 +2,16 @@ import { Check, Table2 } from "lucide-react";
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { QueryExecutionResult } from "../query-execution/queryExecution";
 import { useI18n } from "../../i18n/I18nContext";
-import { QueryResultGrid } from "./QueryResultGrid";
+import {
+  QueryResultGrid,
+  type QueryResultSort,
+} from "./QueryResultGrid";
 import "./QueryResults.css";
 
 export interface QueryResultPanelProps {
   result: QueryExecutionResult;
+  sorts?: QueryResultSort[];
+  onSortsChange?: (sorts: QueryResultSort[]) => void;
 }
 
 function getInitialStatementIndex(result: QueryExecutionResult) {
@@ -16,7 +21,11 @@ function getInitialStatementIndex(result: QueryExecutionResult) {
   return rowResultIndex === -1 ? 0 : rowResultIndex;
 }
 
-export function QueryResultPanel({ result }: QueryResultPanelProps) {
+export function QueryResultPanel({
+  result,
+  sorts,
+  onSortsChange,
+}: QueryResultPanelProps) {
   const { t } = useI18n();
   const [activeIndex, setActiveIndex] = useState(() =>
     getInitialStatementIndex(result),
@@ -112,6 +121,8 @@ export function QueryResultPanel({ result }: QueryResultPanelProps) {
             statement={statement}
             label={`${t("query.results.statement")} ${statement.statementIndex + 1}`}
             emptyLabel={t("query.results.empty")}
+            sorts={sorts}
+            onSortsChange={onSortsChange}
           />
         ) : (
           <div className="query-result-command" role="status">

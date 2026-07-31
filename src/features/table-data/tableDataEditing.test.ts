@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { QueryStatementResult } from "../query-execution/queryExecution";
-import { createEmptyTableDataChangeSet } from "./tableDataChanges";
+import {
+  createEmptyTableDataChangeSet,
+  stageTableRowInsert,
+} from "./tableDataChanges";
 import { createTableDataGridEditing } from "./tableDataEditing";
 
 const statement: QueryStatementResult = {
@@ -74,5 +77,41 @@ describe("table data grid editing", () => {
     );
     expect(editing).toBeUndefined();
     expect(onChangesChange).not.toHaveBeenCalled();
+  });
+
+  it("edits and discards inserted rows through the same local change callback", () => {
+    const changes = stageTableRowInsert(
+      createEmptyTableDataChangeSet(),
+      "local-1",
+      2,
+    );
+    const onChangesChange = vi.fn();
+    const editing = createTableDataGridEditing(
+      { pageIndex: 0, key, changes },
+      statement,
+      onChangesChange,
+    );
+    const insertedRow = {
+      rowIndex: 1,
+      rowKey: "inserted:local-1",
+      insertedId: "local-1",
+      values: [null, null],
+    };
+    expect(editing?.insertedRows).toEqual(changes.insertedRows);
+    expect(editing?.getPendingValue(insertedRow, 0)).toEqual({ kind: "default" });
+
+    editing?.onCellValueChange(insertedRow, 0, { kind: "null" });
+    expect(onChangesChange.mock.calls[0]![0].insertedRows[0].values[0]).toEqual({
+      kind: "null",
+    });
+    editing?.onDiscardInsertedRow("local-1");
+    expect(onChangesChange.mock.calls[1]![0].insertedRows).toEqual([]);
+
+    const anotherPage = createTableDataGridEditing(
+      { pageIndex: 1, key, changes },
+      statement,
+      vi.fn(),
+    );
+    expect(anotherPage?.insertedRows).toEqual([]);
   });
 });

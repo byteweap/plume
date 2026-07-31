@@ -215,6 +215,15 @@ visible marker and expose both original and staged presentations in their
 tooltip. Read-only tables and result sets missing any selected key column do
 not receive an editor.
 
+The add-row action is enabled only when that editable grid has loaded its
+columns. It creates a local UUID scoped to the current page and appends a
+virtual row whose cells all begin as `DEFAULT`; the standard editor can change
+each cell to explicit `NULL` or text without substituting an empty string.
+Inserted rows never enter the query protocol. Their row-number cell provides a
+discard icon that removes the local insert, and navigating to another page
+hides rather than duplicates page-scoped inserts while preserving them in the
+tab change set.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

@@ -7,6 +7,8 @@ import { presentQueryResultValue } from "./queryResultValue";
 
 export interface QueryGridRow {
   rowIndex: number;
+  rowKey?: string;
+  insertedId?: string;
   values: QueryValue[];
 }
 
@@ -116,7 +118,9 @@ export function serializeGridSelection(
     ) {
       values.push(
         columnIndex === -1
-          ? String(row.rowIndex + 1)
+          ? row.insertedId
+            ? "+"
+            : String(row.rowIndex + 1)
           : presentQueryResultValue(
               row.values[columnIndex],
               columns?.[columnIndex],

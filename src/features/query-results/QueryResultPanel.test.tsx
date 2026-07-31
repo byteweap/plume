@@ -170,8 +170,10 @@ describe("QueryResultPanel", () => {
         <QueryResultPanel
           result={result}
           editing={{
+            insertedRows: [],
             getPendingValue: () => undefined,
             onCellValueChange,
+            onDiscardInsertedRow: vi.fn(),
           }}
         />
       </I18nProvider>,
@@ -201,11 +203,13 @@ describe("QueryResultPanel", () => {
         <QueryResultPanel
           result={result}
           editing={{
+            insertedRows: [],
             getPendingValue: (row, columnIndex) =>
               row.rowIndex === 0 && columnIndex === 0
                 ? { kind: "default" }
                 : undefined,
             onCellValueChange: vi.fn(),
+            onDiscardInsertedRow: vi.fn(),
           }}
         />
       </I18nProvider>,
@@ -218,6 +222,64 @@ describe("QueryResultPanel", () => {
     expect(staged.closest("[role='gridcell']")).toHaveClass(
       "query-result-cell-pending",
     );
+  });
+
+  it("renders and edits a local inserted row with DEFAULT values", () => {
+    const emptyResult: QueryExecutionResult = {
+      queryId: "empty-query",
+      status: "succeeded",
+      results: [
+        {
+          ...result.results[0]!,
+          batches: [],
+          rowCount: 0,
+          retainedRowCount: 0,
+        },
+      ],
+    };
+    const insertedRows = [
+      {
+        localId: "local-1",
+        pageIndex: 0,
+        values: [{ kind: "default" as const }, { kind: "default" as const }],
+      },
+    ];
+    const onCellValueChange = vi.fn();
+    const onDiscardInsertedRow = vi.fn();
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={emptyResult}
+          editing={{
+            insertedRows,
+            getPendingValue: (row, columnIndex) =>
+              row.insertedId
+                ? insertedRows[0]?.values[columnIndex]
+                : undefined,
+            onCellValueChange,
+            onDiscardInsertedRow,
+          }}
+        />
+      </I18nProvider>,
+    );
+
+    const defaults = screen.getAllByText("DEFAULT");
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0]).toHaveAttribute("title", "Staged: DEFAULT");
+    fireEvent.doubleClick(defaults[0]!.closest("[role='gridcell']")!);
+    fireEvent.change(screen.getByRole("combobox", { name: "Value mode" }), {
+      target: { value: "null" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply cell value" }));
+    expect(onCellValueChange).toHaveBeenCalledWith(
+      expect.objectContaining({ insertedId: "local-1" }),
+      0,
+      { kind: "null" },
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Discard new row" }));
+    expect(onDiscardInsertedRow).toHaveBeenCalledWith("local-1");
   });
 
   it("supports keyboard navigation between statement tabs", () => {

@@ -705,6 +705,10 @@ describe("App sidebar", () => {
     expect(await screen.findByText("Editable")).toBeVisible();
     expect(screen.getByText("Primary key: id")).toBeVisible();
     expect(await screen.findByRole("grid", { name: "Result 1" })).toBeVisible();
+    const addRow = screen.getByRole("button", { name: "Add row" });
+    expect(addRow).toBeEnabled();
+    fireEvent.click(addRow);
+    expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
     const nextPage = screen.getByRole("button", { name: "Next page" });
     expect(nextPage).toBeEnabled();
     fireEvent.click(nextPage);

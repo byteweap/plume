@@ -77,7 +77,10 @@ import {
 } from "../features/table-data/tableData";
 import { tableDataApi } from "../features/table-data/tableDataApi";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
-import type { TableDataChangeSet } from "../features/table-data/tableDataChanges";
+import {
+  stageTableRowInsert,
+  type TableDataChangeSet,
+} from "../features/table-data/tableDataChanges";
 import { createTableDataGridEditing } from "../features/table-data/tableDataEditing";
 import {
   createInitialWorkspaceTabsState,
@@ -1396,6 +1399,26 @@ function TableDataWorkspace({
               ))}
             </div>
           )}
+          <IconButton
+            label={t("tableData.addRow")}
+            disabled={
+              loading ||
+              !editing ||
+              tab.columns.length === 0
+            }
+            onClick={() =>
+              onChangesChange(
+                stageTableRowInsert(
+                  tab.changes,
+                  crypto.randomUUID(),
+                  tab.columns.length,
+                  tab.pageIndex,
+                ),
+              )
+            }
+          >
+            <Plus size={14} />
+          </IconButton>
           <label className="table-data-page-size">
             <span>{t("tableData.pageSize")}</span>
             <select

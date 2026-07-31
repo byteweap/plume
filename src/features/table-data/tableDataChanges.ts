@@ -33,6 +33,7 @@ export interface PendingTableRowUpdate extends TableRowLocation {
 
 export interface PendingTableRowInsert {
   localId: string;
+  pageIndex: number;
   values: PendingTableValue[];
 }
 
@@ -150,6 +151,7 @@ export function stageTableRowInsert(
   changes: TableDataChangeSet,
   localId: string,
   columnCount: number,
+  pageIndex = 0,
 ): TableDataChangeSet {
   if (columnCount < 0) throw new RangeError("Column count must be non-negative");
   if (changes.insertedRows.some((row) => row.localId === localId)) return changes;
@@ -159,6 +161,7 @@ export function stageTableRowInsert(
       ...changes.insertedRows,
       {
         localId,
+        pageIndex,
         values: Array.from({ length: columnCount }, () => ({
           kind: "default" as const,
         })),

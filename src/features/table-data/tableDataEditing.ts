@@ -3,7 +3,9 @@ import type { QueryResultGridEditing } from "../query-results/QueryResultGrid";
 import type { TableIdentityKey } from "./tableData";
 import {
   createTableRowLocator,
+  discardTableRowInsert,
   findPendingTableCellUpdate,
+  setTableRowInsertValue,
   stageTableCellUpdate,
   type TableDataChangeSet,
 } from "./tableDataChanges";
@@ -37,13 +39,32 @@ export function createTableDataGridEditing(
   }
 
   return {
+    insertedRows: context.changes.insertedRows.filter(
+      (row) => row.pageIndex === context.pageIndex,
+    ),
     getPendingValue: (row, columnIndex) => {
+      if (row.insertedId) {
+        return context.changes.insertedRows.find(
+          (insertedRow) => insertedRow.localId === row.insertedId,
+        )?.values[columnIndex];
+      }
       const locator = getLocator(row.values);
       return locator
         ? findPendingTableCellUpdate(context.changes, locator, columnIndex)?.newValue
         : undefined;
     },
     onCellValueChange: (row, columnIndex, newValue) => {
+      if (row.insertedId) {
+        onChangesChange(
+          setTableRowInsertValue(
+            context.changes,
+            row.insertedId,
+            columnIndex,
+            newValue,
+          ),
+        );
+        return;
+      }
       const column = statement.columns[columnIndex];
       const locator = getLocator(row.values);
       if (!column || !locator) return;
@@ -59,5 +80,7 @@ export function createTableDataGridEditing(
         }),
       );
     },
+    onDiscardInsertedRow: (localId) =>
+      onChangesChange(discardTableRowInsert(context.changes, localId)),
   };
 }

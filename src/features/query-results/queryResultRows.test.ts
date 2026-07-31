@@ -94,4 +94,23 @@ describe("query result rows", () => {
       ),
     ).toBe("name\tdetail\ntwo\tvalue\nthree\tlast");
   });
+
+  it("uses a local marker when copying an inserted row number", () => {
+    expect(
+      serializeGridSelection(
+        [
+          {
+            rowIndex: 3,
+            rowKey: "inserted:local-1",
+            insertedId: "local-1",
+            values: ["DEFAULT"],
+          },
+        ],
+        {
+          anchor: { rowIndex: 3, columnIndex: -1 },
+          focus: { rowIndex: 3, columnIndex: 0 },
+        },
+      ),
+    ).toBe("+\tDEFAULT");
+  });
 });

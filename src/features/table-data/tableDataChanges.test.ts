@@ -89,6 +89,7 @@ describe("table data pending changes", () => {
     expect(withEmptyString.insertedRows).toEqual([
       {
         localId: "local-1",
+        pageIndex: 0,
         values: [
           { kind: "default" },
           { kind: "null" },

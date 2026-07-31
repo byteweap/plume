@@ -1,4 +1,4 @@
-import { Braces, Copy, FileDown, TableProperties } from "lucide-react";
+import { Braces, Copy, FileDown, TableProperties, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   DataGrid,
@@ -50,6 +50,7 @@ export interface QueryResultGridProps {
 }
 
 export interface QueryResultGridEditing {
+  insertedRows: Array<{ localId: string; values: PendingTableValue[] }>;
   getPendingValue: (
     row: QueryGridRow,
     columnIndex: number,
@@ -59,6 +60,7 @@ export interface QueryResultGridEditing {
     columnIndex: number,
     value: PendingTableValue,
   ) => void;
+  onDiscardInsertedRow: (localId: string) => void;
 }
 
 export interface QueryResultSort {
@@ -67,7 +69,7 @@ export interface QueryResultSort {
 }
 
 function rowKeyGetter(row: QueryGridRow) {
-  return row.rowIndex;
+  return row.rowKey ?? row.rowIndex;
 }
 
 function columnIndexFromKey(key: string): number {
@@ -134,6 +136,7 @@ function getResultCellClass(
   return [
     `query-result-cell-${presentation.kind}`,
     pendingValue ? "query-result-cell-pending" : undefined,
+    row.insertedId ? "query-result-cell-inserted" : undefined,
     isSelected ? "query-result-cell-selected" : undefined,
   ]
     .filter(Boolean)
@@ -205,7 +208,39 @@ export function QueryResultGrid({
   editing,
 }: QueryResultGridProps) {
   const { t } = useI18n();
-  const rows = useMemo(() => buildQueryGridRows(statement), [statement]);
+  const rows = useMemo(() => {
+    const loadedRows = buildQueryGridRows(statement);
+    const nextRowIndex =
+      loadedRows.reduce((maximum, row) => Math.max(maximum, row.rowIndex), -1) + 1;
+    const insertedRows = (editing?.insertedRows ?? []).map((row, index) => ({
+      rowIndex: nextRowIndex + index,
+      rowKey: `inserted:${row.localId}`,
+      insertedId: row.localId,
+      values: row.values.map((value) =>
+        value.kind === "value" ? value.value : null,
+      ),
+    }));
+    return [...loadedRows, ...insertedRows];
+  }, [editing?.insertedRows, statement]);
+  const copyRows = useMemo(
+    () =>
+      editing
+        ? rows.map((row) => ({
+            ...row,
+            values: row.values.map((value, columnIndex) => {
+              const pendingValue = editing.getPendingValue(row, columnIndex);
+              return pendingValue?.kind === "default"
+                ? "DEFAULT"
+                : pendingValue?.kind === "null"
+                  ? null
+                  : pendingValue?.kind === "value"
+                    ? pendingValue.value
+                    : value;
+            }),
+          }))
+        : rows,
+    [editing, rows],
+  );
   const [selection, setSelection] = useState<GridSelection>();
   const [columnWidths, setColumnWidths] = useState<ColumnWidths>(new Map());
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
@@ -233,9 +268,23 @@ export function QueryResultGrid({
         })
           ? "query-result-cell-selected query-result-row-number"
           : "query-result-row-number",
-      renderCell: ({ row }) => (
-        <span title={t("query.results.selectRow")}>{row.rowIndex + 1}</span>
-      ),
+      renderCell: ({ row }) =>
+        row.insertedId && editing ? (
+          <IconButton
+            className="query-result-discard-row"
+            label={t("tableData.discardNewRow")}
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation();
+              editing.onDiscardInsertedRow(row.insertedId!);
+            }}
+          >
+            <X size={12} />
+          </IconButton>
+        ) : (
+          <span title={t("query.results.selectRow")}>{row.rowIndex + 1}</span>
+        ),
     };
 
     return [
@@ -286,7 +335,9 @@ export function QueryResultGrid({
             column,
           );
           const titleText = pendingValue
-            ? `${t("tableData.editor.original")}: ${originalPresentation.displayText}\n${t("tableData.editor.staged")}: ${presentation.displayText}`
+            ? row.insertedId
+              ? `${t("tableData.editor.staged")}: ${presentation.displayText}`
+              : `${t("tableData.editor.original")}: ${originalPresentation.displayText}\n${t("tableData.editor.staged")}: ${presentation.displayText}`
             : presentation.titleText;
           return (
             <span
@@ -394,7 +445,7 @@ export function QueryResultGrid({
 
     try {
       await navigator.clipboard.writeText(
-        serializeGridSelection(rows, selection, statement.columns, {
+        serializeGridSelection(copyRows, selection, statement.columns, {
           includeHeaders,
         }),
       );
@@ -483,7 +534,7 @@ export function QueryResultGrid({
             event.preventDefault();
             event.clipboardData.setData(
               "text/plain",
-              serializeGridSelection(rows, selection, statement.columns),
+              serializeGridSelection(copyRows, selection, statement.columns),
             );
           }}
           renderers={{

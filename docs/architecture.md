@@ -114,6 +114,11 @@ creates an opaque query ID before execution, and the Rust active-query registry
 binds it to a session, database, PostgreSQL cancel token, and resolved transport
 settings until the command succeeds or fails. Cancellation requests must match
 that ownership; duplicate requests share one in-flight cancellation attempt.
+Every query ID and structured table-data commit ID must also be atomically claimed
+by the process-wide replay guard before any database call. Claims are never released,
+including after connection loss or an ambiguous failure, so IPC retries, session
+replacement, and recovery cannot resubmit an old operation. A duplicate receives
+`operation_replay_blocked`; only a new explicit user action creates a new ID.
 
 ## Query Execution Boundary
 

@@ -227,7 +227,7 @@ async fn execute_changes(
 }
 
 impl CommitTableDataRequest {
-    fn validate(&self) -> Result<(), TableDataCommitError> {
+    pub(crate) fn validate(&self) -> Result<(), TableDataCommitError> {
         if Uuid::parse_str(&self.request_id).is_err() {
             return Err(TableDataCommitError::Invalid(
                 "Request ID must be a valid UUID.".to_owned(),

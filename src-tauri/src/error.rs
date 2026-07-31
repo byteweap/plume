@@ -8,6 +8,7 @@ use crate::{
     drafts::DraftError,
     exports::ExportError,
     profiles::ProfileError,
+    replay::ReplayProtectionError,
 };
 
 #[derive(Debug, Error)]
@@ -420,6 +421,18 @@ impl From<ExportError> for CommandError {
     }
 }
 
+impl From<ReplayProtectionError> for CommandError {
+    fn from(_: ReplayProtectionError) -> Self {
+        Self {
+            code: "operation_replay_blocked",
+            message: "This operation was already submitted. Review the database state before running it again."
+                .to_owned(),
+            detail: None,
+            diagnostic: None,
+        }
+    }
+}
+
 fn classify_postgres_error(error: &tokio_postgres::Error) -> &'static str {
     match error.as_db_error().map(|db_error| db_error.code().code()) {
         Some("28P01" | "28000") => "authentication_failed",
@@ -438,6 +451,7 @@ mod tests {
     use crate::{
         database::{query::QueryError, table_data::TableDataCommitError},
         exports::ExportError,
+        replay::ReplayProtectionError,
     };
 
     #[test]
@@ -515,6 +529,21 @@ mod tests {
                 .unwrap()
                 .contains("No changes")
         );
+    }
+
+    #[test]
+    fn replayed_operations_have_a_stable_fail_closed_error() {
+        let json = serde_json::to_value(CommandError::from(ReplayProtectionError::AlreadyClaimed))
+            .expect("command error should serialize");
+
+        assert_eq!(json["code"], "operation_replay_blocked");
+        assert!(
+            json["message"]
+                .as_str()
+                .unwrap()
+                .contains("already submitted")
+        );
+        assert!(json.get("detail").is_none());
     }
 
     #[test]

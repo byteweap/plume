@@ -378,6 +378,69 @@ describe("App sidebar", () => {
     expect(await screen.findByText(/Disconnected · localhost:5432/)).toBeVisible();
   });
 
+  it("does not replay a failed write query after an explicit reconnect", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    const reconnectSaved = vi
+      .spyOn(connectionApi, "reconnectSaved")
+      .mockResolvedValue({
+        sessionId: "session-2",
+        database: "postgres",
+        latencyMs: 9,
+        serverVersion: "18.1",
+        transport: "plain",
+      });
+    vi.mocked(queryExecutionApi.execute).mockRejectedValueOnce({
+      code: "connection_failed",
+      message: "The connection closed after the write was submitted.",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("INSERT INTO audit_events DEFAULT VALUES;");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Run selection or current statement",
+      }),
+    );
+
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    const firstRequest = vi.mocked(queryExecutionApi.execute).mock.calls[0]![0];
+    expect(firstRequest).toMatchObject({
+      sessionId: "session-1",
+      sql: "INSERT INTO audit_events DEFAULT VALUES;",
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Reconnect" }));
+    await waitFor(() =>
+      expect(reconnectSaved).toHaveBeenCalledWith("profile-1", "session-1"),
+    );
+    const run = screen.getByRole("button", {
+      name: "Run selection or current statement",
+    });
+    await waitFor(() => expect(run).toBeEnabled());
+    expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
+
+    fireEvent.click(run);
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
+    const secondRequest = vi.mocked(queryExecutionApi.execute).mock.calls[1]![0];
+    expect(secondRequest.sessionId).toBe("session-2");
+    expect(secondRequest.queryId).not.toBe(firstRequest.queryId);
+  });
+
   it("creates, switches, renames, and closes connection-bound query tabs", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
@@ -874,6 +937,9 @@ describe("App sidebar", () => {
 
     fireEvent.click(commitChanges);
     await waitFor(() => expect(tableDataApi.commit).toHaveBeenCalledTimes(2));
+    expect(
+      vi.mocked(tableDataApi.commit).mock.calls[1]![0].requestId,
+    ).not.toBe(vi.mocked(tableDataApi.commit).mock.calls[0]![0].requestId);
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(6));
     expect(screen.queryByText("Review changes")).toBeNull();
     expect(commitChanges).toBeDisabled();

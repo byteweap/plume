@@ -9,14 +9,21 @@ use crate::{
         session::ConnectionRegistry,
     },
     error::CommandError,
+    replay::OperationReplayGuard,
 };
 
 #[tauri::command]
 pub async fn execute_query(
     connections: State<'_, ConnectionRegistry>,
     queries: State<'_, QueryRegistry>,
+    replay_guard: State<'_, OperationReplayGuard>,
     request: ExecuteQueryRequest,
 ) -> Result<QueryExecutionResult, CommandError> {
+    request.validate().map_err(CommandError::from)?;
+    replay_guard
+        .claim(&request.query_id)
+        .await
+        .map_err(CommandError::from)?;
     let registered = queries
         .register(&request)
         .await

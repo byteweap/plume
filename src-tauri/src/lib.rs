@@ -6,6 +6,7 @@ mod drafts;
 mod error;
 mod exports;
 mod profiles;
+mod replay;
 
 use commands::{
     connections::{
@@ -33,6 +34,7 @@ use database::session::ConnectionRegistry;
 use drafts::QueryDraftService;
 use exports::ExportRegistry;
 use profiles::ConnectionProfileService;
+use replay::OperationReplayGuard;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -45,6 +47,7 @@ pub fn run() {
         .manage(ConnectionRegistry::default())
         .manage(QueryRegistry::default())
         .manage(ExportRegistry::default())
+        .manage(OperationReplayGuard::default())
         .setup(|app| {
             let database_path = app.path().app_data_dir()?.join("plume.sqlite3");
             let profiles =

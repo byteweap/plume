@@ -105,6 +105,14 @@ export function findPendingTableCellUpdate(
     ?.cells.find((cell) => cell.columnIndex === columnIndex);
 }
 
+export function findPendingTableRowDelete(
+  changes: TableDataChangeSet,
+  locator: TableRowLocator,
+): PendingTableRowDelete | undefined {
+  const rowId = getTableRowId(locator);
+  return changes.deletedRows.find((row) => row.rowId === rowId);
+}
+
 export function stageTableCellUpdate(
   changes: TableDataChangeSet,
   update: StageTableCellUpdate,

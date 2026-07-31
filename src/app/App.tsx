@@ -77,6 +77,7 @@ import {
 } from "../features/table-data/tableData";
 import { tableDataApi } from "../features/table-data/tableDataApi";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
+import { TableDataDeleteSummary } from "../features/table-data/TableDataDeleteSummary";
 import {
   stageTableRowInsert,
   type TableDataChangeSet,
@@ -1365,7 +1366,11 @@ function TableDataWorkspace({
 
   return (
     <section
-      className="table-data-workspace"
+      className={`table-data-workspace ${
+        tab.changes.deletedRows.length > 0
+          ? "table-data-workspace-with-delete-summary"
+          : ""
+      }`}
       aria-label={t("tableData.workspace")}
     >
       <header className="table-data-header">
@@ -1478,6 +1483,8 @@ function TableDataWorkspace({
         disabled={loading}
         onApply={onFiltersChange}
       />
+
+      <TableDataDeleteSummary rows={tab.changes.deletedRows} />
 
       <div className="table-data-content">
         {execution.status === "succeeded" ? (

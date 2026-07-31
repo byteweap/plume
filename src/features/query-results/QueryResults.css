@@ -305,6 +305,36 @@
   color: #98624b;
 }
 
+.query-result-row-actions {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.icon-button.query-result-delete-row {
+  width: 19px;
+  height: 19px;
+  flex-basis: 19px;
+  color: #8c695b;
+}
+
+.query-result-grid .query-result-cell-deleted {
+  color: #816e67;
+  background: #f8eeea;
+}
+
+.query-result-grid .query-result-cell-deleted .query-result-value {
+  opacity: 0.72;
+  text-decoration: line-through;
+}
+
+.query-result-grid .query-result-cell-deleted.query-result-cell-selected {
+  background: #eedbd4;
+  box-shadow: inset 2px 0 0 #b86f53;
+}
+
 .query-result-grid .query-result-cell-inserted {
   background: #f5faf6;
 }
@@ -500,6 +530,20 @@
 
   .icon-button.query-result-discard-row {
     color: #e2a58d;
+  }
+
+  .icon-button.query-result-delete-row {
+    color: #d6a28e;
+  }
+
+  .query-result-grid .query-result-cell-deleted {
+    color: #bdaaa2;
+    background: #392b27;
+  }
+
+  .query-result-grid .query-result-cell-deleted.query-result-cell-selected {
+    background: #4a332c;
+    box-shadow: inset 2px 0 0 #d18468;
   }
 
   .query-result-cell-editor {

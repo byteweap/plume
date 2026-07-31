@@ -224,6 +224,14 @@ discard icon that removes the local insert, and navigating to another page
 hides rather than duplicates page-scoped inserts while preserving them in the
 tab change set.
 
+Existing rows expose a delete icon in the row-number column. Activating it
+stages a full original-row snapshot and its reliable locator, removes any
+earlier cell updates for that row, disables further editing, and renders the
+row with a deletion treatment; the same control restores it. A dedicated
+unframed summary band remains visible before commit, showing the total delete
+count and every ordered key name/value pair, including composite keys. No
+delete statement is issued by these interactions.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

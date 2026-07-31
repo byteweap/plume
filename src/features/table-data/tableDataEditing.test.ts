@@ -114,4 +114,45 @@ describe("table data grid editing", () => {
     );
     expect(anotherPage?.insertedRows).toEqual([]);
   });
+
+  it("stages deletion snapshots, blocks edits, and restores the row locally", () => {
+    const originalChanges = createEmptyTableDataChangeSet();
+    const onDelete = vi.fn();
+    const editing = createTableDataGridEditing(
+      { pageIndex: 2, key, changes: originalChanges },
+      statement,
+      onDelete,
+    );
+    const row = { rowIndex: 4, values: ["42", "Ada"] };
+    expect(editing?.isRowDeleted(row)).toBe(false);
+    editing?.onToggleRowDeleted(row);
+
+    const deletedChanges = onDelete.mock.calls[0]![0];
+    expect(deletedChanges.deletedRows).toEqual([
+      expect.objectContaining({
+        pageIndex: 2,
+        rowIndex: 4,
+        locator: {
+          keyName: "users_pkey",
+          columns: [{ columnName: "id", value: "42" }],
+        },
+        originalValues: ["42", "Ada"],
+      }),
+    ]);
+
+    const onRestore = vi.fn();
+    const deletedEditing = createTableDataGridEditing(
+      { pageIndex: 2, key, changes: deletedChanges },
+      statement,
+      onRestore,
+    );
+    expect(deletedEditing?.isRowDeleted(row)).toBe(true);
+    deletedEditing?.onCellValueChange(row, 1, {
+      kind: "value",
+      value: "blocked",
+    });
+    expect(onRestore).not.toHaveBeenCalled();
+    deletedEditing?.onToggleRowDeleted(row);
+    expect(onRestore.mock.calls[0]![0].deletedRows).toEqual([]);
+  });
 });

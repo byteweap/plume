@@ -1,4 +1,12 @@
-import { Braces, Copy, FileDown, TableProperties, X } from "lucide-react";
+import {
+  Braces,
+  Copy,
+  FileDown,
+  TableProperties,
+  Trash2,
+  Undo2,
+  X,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   DataGrid,
@@ -60,7 +68,9 @@ export interface QueryResultGridEditing {
     columnIndex: number,
     value: PendingTableValue,
   ) => void;
+  isRowDeleted: (row: QueryGridRow) => boolean;
   onDiscardInsertedRow: (localId: string) => void;
+  onToggleRowDeleted: (row: QueryGridRow) => void;
 }
 
 export interface QueryResultSort {
@@ -122,6 +132,7 @@ function getResultCellClass(
   columnIndex: number,
   selection: GridSelection | undefined,
   pendingValue?: PendingTableValue,
+  deleted = false,
 ): string {
   const presentation = presentGridCellValue(
     row.values[columnIndex],
@@ -137,6 +148,7 @@ function getResultCellClass(
     `query-result-cell-${presentation.kind}`,
     pendingValue ? "query-result-cell-pending" : undefined,
     row.insertedId ? "query-result-cell-inserted" : undefined,
+    deleted ? "query-result-cell-deleted" : undefined,
     isSelected ? "query-result-cell-selected" : undefined,
   ]
     .filter(Boolean)
@@ -256,18 +268,25 @@ export function QueryResultGrid({
     const rowNumberColumn: Column<QueryGridRow> = {
       key: rowNumberColumnKey,
       name: "#",
-      width: 54,
-      minWidth: 54,
-      maxWidth: 54,
+      width: editing ? 74 : 54,
+      minWidth: editing ? 74 : 54,
+      maxWidth: editing ? 74 : 54,
       frozen: true,
-      cellClass: (row) =>
-        isWholeRowSelected(selection, row.rowIndex, lastColumnIndex) ||
-        isPositionSelected(selection, {
-          rowIndex: row.rowIndex,
-          columnIndex: -1,
-        })
-          ? "query-result-cell-selected query-result-row-number"
-          : "query-result-row-number",
+      cellClass: (row) => {
+        const selected =
+          isWholeRowSelected(selection, row.rowIndex, lastColumnIndex) ||
+          isPositionSelected(selection, {
+            rowIndex: row.rowIndex,
+            columnIndex: -1,
+          });
+        return [
+          "query-result-row-number",
+          selected ? "query-result-cell-selected" : undefined,
+          editing?.isRowDeleted(row) ? "query-result-cell-deleted" : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ");
+      },
       renderCell: ({ row }) =>
         row.insertedId && editing ? (
           <IconButton
@@ -282,6 +301,30 @@ export function QueryResultGrid({
           >
             <X size={12} />
           </IconButton>
+        ) : editing ? (
+          <div className="query-result-row-actions">
+            <span title={t("query.results.selectRow")}>{row.rowIndex + 1}</span>
+            <IconButton
+              className="query-result-delete-row"
+              label={
+                editing.isRowDeleted(row)
+                  ? t("tableData.restoreDeletedRow")
+                  : t("tableData.deleteRow")
+              }
+              type="button"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => {
+                event.stopPropagation();
+                editing.onToggleRowDeleted(row);
+              }}
+            >
+              {editing.isRowDeleted(row) ? (
+                <Undo2 size={11} />
+              ) : (
+                <Trash2 size={11} />
+              )}
+            </IconButton>
+          </div>
         ) : (
           <span title={t("query.results.selectRow")}>{row.rowIndex + 1}</span>
         ),
@@ -321,6 +364,7 @@ export function QueryResultGrid({
             columnIndex,
             selection,
             pendingValue,
+            editing?.isRowDeleted(row),
           );
         },
         renderCell: ({ row }: { row: QueryGridRow }) => {
@@ -354,7 +398,7 @@ export function QueryResultGrid({
         },
         ...(editing
           ? {
-              editable: true,
+              editable: (row: QueryGridRow) => !editing.isRowDeleted(row),
               editorOptions: { commitOnOutsideClick: false },
               renderEditCell: ({
                 row,

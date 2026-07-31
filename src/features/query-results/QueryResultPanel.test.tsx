@@ -173,7 +173,9 @@ describe("QueryResultPanel", () => {
             insertedRows: [],
             getPendingValue: () => undefined,
             onCellValueChange,
+            isRowDeleted: () => false,
             onDiscardInsertedRow: vi.fn(),
+            onToggleRowDeleted: vi.fn(),
           }}
         />
       </I18nProvider>,
@@ -209,7 +211,9 @@ describe("QueryResultPanel", () => {
                 ? { kind: "default" }
                 : undefined,
             onCellValueChange: vi.fn(),
+            isRowDeleted: () => false,
             onDiscardInsertedRow: vi.fn(),
+            onToggleRowDeleted: vi.fn(),
           }}
         />
       </I18nProvider>,
@@ -258,7 +262,9 @@ describe("QueryResultPanel", () => {
                 ? insertedRows[0]?.values[columnIndex]
                 : undefined,
             onCellValueChange,
+            isRowDeleted: () => false,
             onDiscardInsertedRow,
+            onToggleRowDeleted: vi.fn(),
           }}
         />
       </I18nProvider>,
@@ -280,6 +286,62 @@ describe("QueryResultPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Discard new row" }));
     expect(onDiscardInsertedRow).toHaveBeenCalledWith("local-1");
+  });
+
+  it("marks existing rows as deleted and offers restoration", () => {
+    const onToggleRowDeleted = vi.fn();
+    window.localStorage.setItem("plume.locale", "en-US");
+    const { unmount } = render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={result}
+          editing={{
+            insertedRows: [],
+            getPendingValue: () => undefined,
+            onCellValueChange: vi.fn(),
+            isRowDeleted: () => false,
+            onDiscardInsertedRow: vi.fn(),
+            onToggleRowDeleted,
+          }}
+        />
+      </I18nProvider>,
+    );
+    const deleteButtons = screen.getAllByRole("button", {
+      name: "Mark row for deletion",
+    });
+    fireEvent.click(deleteButtons[0]!);
+    expect(onToggleRowDeleted).toHaveBeenCalledWith({
+      rowIndex: 0,
+      values: ["one", null],
+    });
+
+    unmount();
+    render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={result}
+          editing={{
+            insertedRows: [],
+            getPendingValue: () => undefined,
+            onCellValueChange: vi.fn(),
+            isRowDeleted: (row) => row.rowIndex === 0,
+            onDiscardInsertedRow: vi.fn(),
+            onToggleRowDeleted,
+          }}
+        />
+      </I18nProvider>,
+    );
+    const deletedCell = screen.getByText("one").closest("[role='gridcell']");
+    expect(deletedCell).toHaveClass("query-result-cell-deleted");
+    fireEvent.doubleClick(deletedCell!);
+    expect(screen.queryByRole("textbox", { name: "Edit name" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Restore deleted row" }),
+    );
+    expect(onToggleRowDeleted).toHaveBeenLastCalledWith({
+      rowIndex: 0,
+      values: ["one", null],
+    });
   });
 
   it("supports keyboard navigation between statement tabs", () => {

@@ -5,8 +5,11 @@ import {
   createTableRowLocator,
   discardTableRowInsert,
   findPendingTableCellUpdate,
+  findPendingTableRowDelete,
+  restoreTableRowDelete,
   setTableRowInsertValue,
   stageTableCellUpdate,
+  stageTableRowDelete,
   type TableDataChangeSet,
 } from "./tableDataChanges";
 
@@ -53,6 +56,13 @@ export function createTableDataGridEditing(
         ? findPendingTableCellUpdate(context.changes, locator, columnIndex)?.newValue
         : undefined;
     },
+    isRowDeleted: (row) => {
+      if (row.insertedId) return false;
+      const locator = getLocator(row.values);
+      return locator
+        ? Boolean(findPendingTableRowDelete(context.changes, locator))
+        : false;
+    },
     onCellValueChange: (row, columnIndex, newValue) => {
       if (row.insertedId) {
         onChangesChange(
@@ -67,7 +77,13 @@ export function createTableDataGridEditing(
       }
       const column = statement.columns[columnIndex];
       const locator = getLocator(row.values);
-      if (!column || !locator) return;
+      if (
+        !column ||
+        !locator ||
+        findPendingTableRowDelete(context.changes, locator)
+      ) {
+        return;
+      }
       onChangesChange(
         stageTableCellUpdate(context.changes, {
           locator,
@@ -82,5 +98,19 @@ export function createTableDataGridEditing(
     },
     onDiscardInsertedRow: (localId) =>
       onChangesChange(discardTableRowInsert(context.changes, localId)),
+    onToggleRowDeleted: (row) => {
+      if (row.insertedId) return;
+      const locator = getLocator(row.values);
+      if (!locator) return;
+      const changes = findPendingTableRowDelete(context.changes, locator)
+        ? restoreTableRowDelete(context.changes, locator)
+        : stageTableRowDelete(context.changes, {
+            locator,
+            pageIndex: context.pageIndex,
+            rowIndex: row.rowIndex,
+            originalValues: row.values,
+          });
+      onChangesChange(changes);
+    },
   };
 }

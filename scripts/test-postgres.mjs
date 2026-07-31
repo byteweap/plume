@@ -22,18 +22,24 @@ const environment = {
   PLUME_TEST_SSH_JUMP_PORT: process.env.PLUME_TEST_SSH_JUMP_PORT ?? "55223",
 };
 
-const result = spawnSync(
-  "cargo",
-  [
-    "test",
-    "--manifest-path",
-    "src-tauri/Cargo.toml",
-    "--",
-    "--ignored",
-    "--test-threads=1",
-  ],
-  { env: environment, stdio: "inherit", shell: process.platform === "win32" },
-);
+for (const filter of ["database::", "query_errors_include_structured_postgres_diagnostics"]) {
+  const result = spawnSync(
+    "cargo",
+    [
+      "test",
+      "--manifest-path",
+      "src-tauri/Cargo.toml",
+      filter,
+      "--",
+      "--ignored",
+      "--test-threads=1",
+    ],
+    { env: environment, stdio: "inherit", shell: process.platform === "win32" },
+  );
 
-if (result.error) throw result.error;
-process.exitCode = result.status ?? 1;
+  if (result.error) throw result.error;
+  if ((result.status ?? 1) !== 0) {
+    process.exitCode = result.status ?? 1;
+    break;
+  }
+}

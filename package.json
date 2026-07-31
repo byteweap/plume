@@ -17,7 +17,7 @@
     "postgres:down": "docker compose -f compose.postgres.yml down --volumes",
     "postgres:certificates": "node scripts/generate-postgres-tls.mjs",
     "postgres:ssh-fixtures": "node scripts/generate-ssh-fixtures.mjs",
-    "postgres:up": "npm run postgres:certificates && npm run postgres:ssh-fixtures && docker compose -f compose.postgres.yml up --detach --wait",
+    "postgres:up": "npm run postgres:certificates && npm run postgres:ssh-fixtures && docker compose -f compose.postgres.yml up --detach --wait --build --force-recreate --renew-anon-volumes",
     "test:postgres": "node scripts/test-postgres.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

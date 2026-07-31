@@ -523,9 +523,27 @@ mod tests {
             assert_eq!(row_count, 0, "the first insert must have been rolled back");
 
             client
+                .batch_execute("DROP TABLE public.plume_table_data_commit_test")
+                .await
+                .unwrap();
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn commits_mixed_changes_in_one_transaction() {
+        tauri::async_runtime::block_on(async {
+            let mut client = test_support::connect().await;
+            client
                 .batch_execute(
-                    "INSERT INTO public.plume_table_data_commit_test (id, note)
-                     VALUES (1, 'delete me'), (2, 'update me')",
+                    "DROP TABLE IF EXISTS public.plume_table_data_commit_test;
+                     CREATE TABLE public.plume_table_data_commit_test (
+                       id integer PRIMARY KEY,
+                       note text NOT NULL DEFAULT 'fallback',
+                       optional_note text
+                     );
+                     INSERT INTO public.plume_table_data_commit_test (id, note)
+                     VALUES (1, 'delete me'), (2, 'update me');",
                 )
                 .await
                 .unwrap();
@@ -542,18 +560,26 @@ mod tests {
                             "dataType": { "oid": 23, "name": "int4", "schema": "pg_catalog", "kind": "simple" }
                         },
                         {
-                            "name": "note",
-                            "dataType": { "oid": 25, "name": "text", "schema": "pg_catalog", "kind": "simple" }
+                        "name": "note",
+                        "dataType": { "oid": 25, "name": "text", "schema": "pg_catalog", "kind": "simple" }
+                    },
+                    {
+                        "name": "optional_note",
+                        "dataType": { "oid": 25, "name": "text", "schema": "pg_catalog", "kind": "simple" }
                         }
                     ],
                     "keyColumns": ["id"],
                     "updatedRows": [{
                         "locator": { "columns": [{ "columnName": "id", "value": "2" }] },
-                        "cells": [{ "columnName": "note", "value": { "kind": "default" } }]
+                        "cells": [
+                            { "columnName": "note", "value": { "kind": "default" } },
+                            { "columnName": "optional_note", "value": { "kind": "null" } }
+                        ]
                     }],
                     "insertedRows": [{ "values": [
                         { "kind": "value", "value": "3" },
-                        { "kind": "value", "value": "" }
+                        { "kind": "value", "value": "" },
+                        { "kind": "default" }
                     ] }],
                     "deletedRows": [{
                         "locator": { "columns": [{ "columnName": "id", "value": "1" }] }
@@ -566,7 +592,7 @@ mod tests {
             assert_eq!(result.deleted_rows, 1);
             let rows = client
                 .query(
-                    "SELECT id, note FROM public.plume_table_data_commit_test ORDER BY id",
+                    "SELECT id, note, optional_note FROM public.plume_table_data_commit_test ORDER BY id",
                     &[],
                 )
                 .await
@@ -574,8 +600,10 @@ mod tests {
             assert_eq!(rows.len(), 2);
             assert_eq!(rows[0].get::<_, i32>(0), 2);
             assert_eq!(rows[0].get::<_, String>(1), "fallback");
+            assert_eq!(rows[0].get::<_, Option<String>>(2), None);
             assert_eq!(rows[1].get::<_, i32>(0), 3);
             assert_eq!(rows[1].get::<_, String>(1), "");
+            assert_eq!(rows[1].get::<_, Option<String>>(2), None);
             client
                 .batch_execute("DROP TABLE public.plume_table_data_commit_test")
                 .await

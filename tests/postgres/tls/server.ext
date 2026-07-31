@@ -1,2 +1,4 @@
+basicConstraints=critical,CA:FALSE
+keyUsage=critical,digitalSignature,keyEncipherment
 subjectAltName=DNS:localhost,DNS:database.internal
 extendedKeyUsage=serverAuth

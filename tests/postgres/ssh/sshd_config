@@ -9,6 +9,5 @@ PermitEmptyPasswords no
 AllowTcpForwarding yes
 GatewayPorts no
 StrictModes no
-UsePAM no
 PrintMotd no
 Subsystem sftp internal-sftp

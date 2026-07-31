@@ -29,6 +29,10 @@ openssl(
   "ca.crt",
   "-subj",
   "/CN=Plume Test CA",
+  "-addext",
+  "basicConstraints=critical,CA:TRUE",
+  "-addext",
+  "keyUsage=critical,keyCertSign,cRLSign",
   "-days",
   "2",
 );
@@ -105,6 +109,10 @@ openssl(
   "untrusted-ca.crt",
   "-subj",
   "/CN=Untrusted Plume Test CA",
+  "-addext",
+  "basicConstraints=critical,CA:TRUE",
+  "-addext",
+  "keyUsage=critical,keyCertSign,cRLSign",
   "-days",
   "2",
 );

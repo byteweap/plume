@@ -416,6 +416,12 @@ query SQL (including unsaved edits). It deliberately excludes execution state,
 result rows, staged table edits, session identifiers, transactions, and
 credentials. Persistence starts only after profiles and drafts initialize, so
 an empty startup state cannot overwrite a recoverable snapshot.
+Startup loads the snapshot and saved drafts only after the profile catalog is
+available. Tabs for missing profiles are discarded; snapshot SQL wins over an
+older draft, while drafts absent from the snapshot are appended. Every restored
+table tab starts with empty rows, edits, editability, and execution state. The
+active tab and layout may be restored, but no connection, SQL, write operation,
+transaction, or replay-protection operation ID is recreated automatically.
 
 ## Security and Privacy Invariants
 

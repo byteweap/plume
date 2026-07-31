@@ -112,7 +112,10 @@ import {
   type TableDataTab,
   type WorkspaceTab,
 } from "../features/tabs/workspaceTabs";
-import { createWorkspaceSnapshotRequest } from "../features/workspace/workspaceSnapshot";
+import {
+  createRestoredWorkspaceState,
+  createWorkspaceSnapshotRequest,
+} from "../features/workspace/workspaceSnapshot";
 import { workspaceSnapshotApi } from "../features/workspace/workspaceSnapshotApi";
 import { useI18n } from "../i18n/I18nContext";
 import { isTauriRuntime, toCommandError } from "../platform/tauri";
@@ -647,25 +650,25 @@ export function App() {
 
       try {
         const knownProfiles = new Set(savedProfiles.map((profile) => profile.id));
-        const drafts = await queryDraftApi.list();
+        const [drafts, snapshot] = await Promise.all([
+          queryDraftApi.list(),
+          workspaceSnapshotApi.load(),
+        ]);
         if (cancelled) return;
         setProfiles(savedProfiles);
+        const restored = createRestoredWorkspaceState(
+          snapshot,
+          drafts,
+          knownProfiles,
+        );
         dispatchWorkspaceTabs({
-          type: "restore-queries",
-          tabs: drafts
-            .filter((draft) => knownProfiles.has(draft.profileId))
-            .map((draft) => ({
-              id: draft.id,
-              kind: "query" as const,
-              profileId: draft.profileId,
-              database: draft.database,
-              schema: draft.schema,
-              title: draft.title,
-              sql: draft.sql,
-              draftState: "saved" as const,
-              updatedAt: draft.updatedAt,
-            })),
+          type: "restore-workspace",
+          ...restored,
         });
+        if (snapshot) {
+          setSidebarWidth(clampSidebarWidth(snapshot.layout.sidebarWidth));
+          setSidebarCollapsed(snapshot.layout.sidebarCollapsed);
+        }
         setWorkspacePersistenceReady(true);
       } catch (error) {
         const commandError = toCommandError(error);

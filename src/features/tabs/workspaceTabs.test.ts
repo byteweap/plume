@@ -17,6 +17,28 @@ const context = {
 };
 
 describe("workspaceTabsReducer", () => {
+  it("restores a safe workspace and advances stale counters", () => {
+    const state = workspaceTabsReducer(createInitialWorkspaceTabsState(), {
+      type: "restore-workspace",
+      tabs: [
+        { id: "welcome", kind: "welcome" },
+        {
+          id: "workspace-7",
+          kind: "connection",
+          profileId: "profile-1",
+          database: "postgres",
+        },
+      ],
+      activeTabId: "workspace-7",
+      nextTabId: 2,
+      nextQueryNumber: 1,
+    });
+
+    expect(state.activeTabId).toBe("workspace-7");
+    expect(state.nextTabId).toBe(8);
+    expect(state.nextQueryNumber).toBe(1);
+  });
+
   it("opens one connection overview for the same context", () => {
     let state = createInitialWorkspaceTabsState();
     state = workspaceTabsReducer(state, { type: "open-connection", ...context });

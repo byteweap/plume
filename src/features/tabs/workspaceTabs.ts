@@ -115,6 +115,13 @@ export type WorkspaceTabsAction =
     }
   | { type: "discard-table-data-changes"; tabId: string }
   | { type: "restore-queries"; tabs: QueryTab[] }
+  | {
+      type: "restore-workspace";
+      tabs: WorkspaceTab[];
+      activeTabId: string;
+      nextTabId: number;
+      nextQueryNumber: number;
+    }
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
   | { type: "update-query"; tabId: string; sql: string }
@@ -377,6 +384,21 @@ export function workspaceTabsReducer(
         tabs,
         nextTabId: getNextTabId(tabs, state.nextTabId),
         nextQueryNumber: getNextQueryNumber(tabs, state.nextQueryNumber),
+      };
+    }
+    case "restore-workspace": {
+      const tabs = action.tabs.length > 0 ? action.tabs : [welcomeTab];
+      const activeTabId = tabs.some((tab) => tab.id === action.activeTabId)
+        ? action.activeTabId
+        : welcomeTab.id;
+      return {
+        tabs,
+        activeTabId,
+        nextTabId: getNextTabId(tabs, Math.max(1, action.nextTabId)),
+        nextQueryNumber: getNextQueryNumber(
+          tabs,
+          Math.max(1, action.nextQueryNumber),
+        ),
       };
     }
     case "activate":

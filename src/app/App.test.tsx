@@ -334,6 +334,63 @@ describe("App sidebar", () => {
     expect(connectSaved).not.toHaveBeenCalled();
   });
 
+  it("restores a snapshot without reconnecting or replaying its query", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    const connectSaved = vi.spyOn(connectionApi, "connectSaved");
+    vi.mocked(queryDraftApi.list).mockResolvedValue([
+      {
+        id: "workspace-9",
+        profileId: "profile-1",
+        database: "postgres",
+        schema: "public",
+        title: "Recovered audit",
+        sql: "select 'older saved draft';",
+        createdAt: 1,
+        updatedAt: 2,
+      },
+    ]);
+    vi.mocked(workspaceSnapshotApi.load).mockResolvedValue({
+      activeTabId: "workspace-9",
+      nextTabId: 10,
+      nextQueryNumber: 5,
+      layout: { sidebarWidth: 340, sidebarCollapsed: true },
+      tabs: [
+        { id: "welcome", kind: "welcome" },
+        {
+          id: "workspace-9",
+          kind: "query",
+          profileId: "profile-1",
+          database: "postgres",
+          schema: "public",
+          title: "Recovered audit",
+          sql: "select 'latest unsaved edit';",
+        },
+      ],
+      updatedAt: 3,
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    const restored = await screen.findByRole("tab", {
+      name: "Recovered audit",
+    });
+    expect(restored).toHaveAttribute("aria-selected", "true");
+    expect(
+      await screen.findByRole("textbox", { name: "SQL query workspace" }),
+    ).toHaveTextContent("select 'latest unsaved edit';");
+    expect(screen.getByText("Unsaved")).toBeVisible();
+    expect(screen.getByRole("complementary", { hidden: true })).toHaveAttribute(
+      "aria-hidden",
+      "true",
+    );
+    expect(connectSaved).not.toHaveBeenCalled();
+    expect(queryExecutionApi.execute).not.toHaveBeenCalled();
+  });
+
   it("checks, explicitly reconnects, and disconnects without replaying the initial connect", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     const connectSaved = vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({

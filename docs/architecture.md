@@ -131,6 +131,19 @@ drained from the protocol stream and marked truncated without rewriting SQL.
 A failed Describe (for example,
 because the request contains multiple statements) returns an explicit `unknown`
 type category instead of guessing.
+
+Before dispatch, the frontend safety layer parses that exact execution target
+with CodeMirror's PostgreSQL grammar. It walks statement and writable-CTE syntax
+nodes and reports structured risks for `DROP`, `TRUNCATE`, and `DELETE` or
+`UPDATE` statements without their own top-level `WHERE` clause. Each report
+includes the risk type, severity, category, statement and operation offsets, a
+bounded statement summary, and identifiable target objects. Detection reads
+only syntax-tree keyword nodes, so comments, strings, quoted identifiers,
+dollar-quoted function bodies, and `ALTER TABLE ... DROP COLUMN` do not become
+executable operations by textual coincidence. This module only classifies SQL;
+the query execution boundary remains responsible for deciding how a reported
+risk must be confirmed.
+
 The response echoes the query ID, and the frontend accepts it only for the
 matching request that is still active in that tab. A successful cancel-packet
 send moves the UI only into a waiting state. Cancellation becomes final only

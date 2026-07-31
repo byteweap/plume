@@ -12,6 +12,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub const CSV_EXPORT_PROGRESS_EVENT: &str = "csv-export-progress";
+pub const JSON_EXPORT_PROGRESS_EVENT: &str = "json-export-progress";
 const MAX_EXPORT_ROWS: usize = 10_000;
 const MAX_EXPORT_COLUMNS: usize = 2_048;
 const PROGRESS_ROW_INTERVAL: usize = 256;
@@ -58,36 +59,72 @@ pub struct CsvExportRequest {
 
 impl CsvExportRequest {
     pub fn validate(&self) -> Result<(), ExportError> {
-        Uuid::parse_str(&self.task_id)
-            .map_err(|_| ExportError::Invalid("Task ID must be a UUID.".to_owned()))?;
-        if self.suggested_file_name.trim().is_empty()
-            || self.suggested_file_name.len() > 128
-            || self
-                .suggested_file_name
-                .chars()
-                .any(|character| matches!(character, '/' | '\\' | '\0'))
-        {
-            return Err(ExportError::Invalid(
-                "Suggested file name is invalid.".to_owned(),
-            ));
-        }
-        if self.columns.is_empty() || self.columns.len() > MAX_EXPORT_COLUMNS {
-            return Err(ExportError::Invalid(format!(
-                "CSV exports require between 1 and {MAX_EXPORT_COLUMNS} columns."
-            )));
-        }
-        if self.rows.len() > MAX_EXPORT_ROWS {
-            return Err(ExportError::Invalid(format!(
-                "CSV exports cannot exceed {MAX_EXPORT_ROWS} retained rows."
-            )));
-        }
-        if self.rows.iter().any(|row| row.len() != self.columns.len()) {
-            return Err(ExportError::Invalid(
-                "Every CSV row must match the exported column count.".to_owned(),
-            ));
-        }
-        Ok(())
+        validate_export_request(
+            &self.task_id,
+            &self.suggested_file_name,
+            &self.columns,
+            &self.rows,
+            "CSV",
+        )
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonExportRequest {
+    pub task_id: String,
+    pub suggested_file_name: String,
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<Option<String>>>,
+}
+
+impl JsonExportRequest {
+    pub fn validate(&self) -> Result<(), ExportError> {
+        validate_export_request(
+            &self.task_id,
+            &self.suggested_file_name,
+            &self.columns,
+            &self.rows,
+            "JSON",
+        )
+    }
+}
+
+fn validate_export_request(
+    task_id: &str,
+    suggested_file_name: &str,
+    columns: &[String],
+    rows: &[Vec<Option<String>>],
+    format: &str,
+) -> Result<(), ExportError> {
+    Uuid::parse_str(task_id)
+        .map_err(|_| ExportError::Invalid("Task ID must be a UUID.".to_owned()))?;
+    if suggested_file_name.trim().is_empty()
+        || suggested_file_name.len() > 128
+        || suggested_file_name
+            .chars()
+            .any(|character| matches!(character, '/' | '\\' | '\0'))
+    {
+        return Err(ExportError::Invalid(
+            "Suggested file name is invalid.".to_owned(),
+        ));
+    }
+    if columns.is_empty() || columns.len() > MAX_EXPORT_COLUMNS {
+        return Err(ExportError::Invalid(format!(
+            "{format} exports require between 1 and {MAX_EXPORT_COLUMNS} columns."
+        )));
+    }
+    if rows.len() > MAX_EXPORT_ROWS {
+        return Err(ExportError::Invalid(format!(
+            "{format} exports cannot exceed {MAX_EXPORT_ROWS} retained rows."
+        )));
+    }
+    if rows.iter().any(|row| row.len() != columns.len()) {
+        return Err(ExportError::Invalid(format!(
+            "Every {format} row must match the exported column count."
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -111,6 +148,30 @@ pub enum CsvExportStatus {
 pub struct CsvExportResult {
     pub task_id: String,
     pub status: CsvExportStatus,
+    pub rows_written: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonExportProgress {
+    pub task_id: String,
+    pub completed_rows: u64,
+    pub total_rows: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum JsonExportStatus {
+    Completed,
+    Dismissed,
+    Cancelled,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonExportResult {
+    pub task_id: String,
+    pub status: JsonExportStatus,
     pub rows_written: u64,
 }
 
@@ -184,6 +245,12 @@ pub enum CsvWriteOutcome {
     Cancelled(u64),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JsonWriteOutcome {
+    Completed(u64),
+    Cancelled(u64),
+}
+
 pub fn write_csv<W, F>(
     writer: &mut W,
     request: &CsvExportRequest,
@@ -241,6 +308,94 @@ where
 
     writer.flush()?;
     Ok(CsvWriteOutcome::Completed(total_rows))
+}
+
+pub fn write_json<W, F>(
+    writer: &mut W,
+    request: &JsonExportRequest,
+    cancelled: &AtomicBool,
+    mut report_progress: F,
+) -> Result<JsonWriteOutcome, ExportError>
+where
+    W: Write,
+    F: FnMut(JsonExportProgress) -> Result<(), ExportError>,
+{
+    request.validate()?;
+    let total_rows = request.rows.len() as u64;
+    report_progress(JsonExportProgress {
+        task_id: request.task_id.clone(),
+        completed_rows: 0,
+        total_rows,
+    })?;
+
+    if cancelled.load(Ordering::Acquire) {
+        writer.flush()?;
+        return Ok(JsonWriteOutcome::Cancelled(0));
+    }
+
+    let keys = unique_json_keys(&request.columns);
+    writer.write_all(b"[")?;
+    for (index, row) in request.rows.iter().enumerate() {
+        if cancelled.load(Ordering::Acquire) {
+            writer.flush()?;
+            return Ok(JsonWriteOutcome::Cancelled(index as u64));
+        }
+
+        if index > 0 {
+            writer.write_all(b",")?;
+        }
+        writer.write_all(b"\n  {")?;
+        for (column_index, (key, value)) in keys.iter().zip(row).enumerate() {
+            if column_index > 0 {
+                writer.write_all(b",")?;
+            }
+            writer.write_all(b"\n    ")?;
+            serde_json::to_writer(&mut *writer, key)?;
+            writer.write_all(b": ")?;
+            serde_json::to_writer(&mut *writer, value)?;
+        }
+        writer.write_all(b"\n  }")?;
+
+        let completed_rows = index + 1;
+        if completed_rows % PROGRESS_ROW_INTERVAL == 0 || completed_rows == request.rows.len() {
+            report_progress(JsonExportProgress {
+                task_id: request.task_id.clone(),
+                completed_rows: completed_rows as u64,
+                total_rows,
+            })?;
+        }
+    }
+    if request.rows.is_empty() {
+        writer.write_all(b"]\n")?;
+    } else {
+        writer.write_all(b"\n]\n")?;
+    }
+    writer.flush()?;
+    Ok(JsonWriteOutcome::Completed(total_rows))
+}
+
+fn unique_json_keys(columns: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    let reserved = columns.iter().cloned().collect::<HashSet<_>>();
+    let mut used = HashSet::with_capacity(columns.len());
+    columns
+        .iter()
+        .map(|column| {
+            if used.insert(column.clone()) {
+                return column.clone();
+            }
+
+            let mut suffix = 2;
+            loop {
+                let candidate = format!("{column}_{suffix}");
+                if !reserved.contains(&candidate) && used.insert(candidate.clone()) {
+                    break candidate;
+                }
+                suffix += 1;
+            }
+        })
+        .collect()
 }
 
 fn write_preamble<W: Write>(writer: &mut W, encoding: CsvEncoding) -> Result<(), ExportError> {
@@ -314,6 +469,8 @@ pub enum ExportError {
     DialogPath(String),
     #[error("The CSV export could not be written: {0}")]
     Io(#[from] io::Error),
+    #[error("The JSON export could not be serialized: {0}")]
+    Json(#[from] serde_json::Error),
     #[error("The export progress event could not be sent: {0}")]
     Progress(String),
     #[error("The export worker failed: {0}")]
@@ -326,7 +483,8 @@ mod tests {
 
     use super::{
         CancelExportRequest, CancelExportStatus, CsvDelimiter, CsvEncoding, CsvExportRequest,
-        CsvWriteOutcome, ExportRegistry, write_csv,
+        CsvWriteOutcome, ExportRegistry, JsonExportRequest, JsonWriteOutcome, write_csv,
+        write_json,
     };
 
     const TASK_ID: &str = "4f9e4878-4e75-4a0e-9f60-08e02f5bd706";
@@ -430,5 +588,41 @@ mod tests {
         request.rows[0].pop();
 
         assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn writes_json_objects_with_nulls_and_unique_duplicate_column_names() {
+        let request = JsonExportRequest {
+            task_id: TASK_ID.to_owned(),
+            suggested_file_name: "query-result.json".to_owned(),
+            columns: vec!["id".to_owned(), "id".to_owned(), "id_2".to_owned()],
+            rows: vec![vec![Some("1".to_owned()), None, Some("3".to_owned())]],
+        };
+        let mut bytes = Vec::new();
+
+        let outcome =
+            write_json(&mut bytes, &request, &AtomicBool::new(false), |_| Ok(())).unwrap();
+
+        assert_eq!(outcome, JsonWriteOutcome::Completed(1));
+        let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(value[0]["id"], "1");
+        assert!(value[0]["id_3"].is_null());
+        assert_eq!(value[0]["id_2"], "3");
+    }
+
+    #[test]
+    fn honours_json_cancellation_before_writing_output() {
+        let request = JsonExportRequest {
+            task_id: TASK_ID.to_owned(),
+            suggested_file_name: "query-result.json".to_owned(),
+            columns: vec!["id".to_owned()],
+            rows: vec![vec![Some("1".to_owned())]],
+        };
+        let mut bytes = Vec::new();
+
+        let outcome = write_json(&mut bytes, &request, &AtomicBool::new(true), |_| Ok(())).unwrap();
+
+        assert_eq!(outcome, JsonWriteOutcome::Cancelled(0));
+        assert!(bytes.is_empty());
     }
 }

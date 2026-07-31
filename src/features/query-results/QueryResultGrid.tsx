@@ -1,4 +1,4 @@
-import { Copy, FileDown, TableProperties } from "lucide-react";
+import { Braces, Copy, FileDown, TableProperties } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import {
   DataGrid,
@@ -26,7 +26,10 @@ import {
   type QueryGridRow,
 } from "./queryResultRows";
 import { presentQueryResultValue } from "./queryResultValue";
-import { CsvExportDialog } from "./CsvExportDialog";
+import {
+  ResultExportDialog,
+  type ResultExportFormat,
+} from "./ResultExportDialog";
 import "./QueryResults.css";
 
 const rowNumberColumnKey = "__row_number__";
@@ -157,7 +160,7 @@ export function QueryResultGrid({
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
     "idle",
   );
-  const [showCsvExport, setShowCsvExport] = useState(false);
+  const [exportFormat, setExportFormat] = useState<ResultExportFormat>();
   const extendingSelection = useRef(false);
   const selectingRows = useRef(false);
   const lastColumnIndex = statement.columns.length - 1;
@@ -331,9 +334,17 @@ export function QueryResultGrid({
             className="query-result-copy-button"
             label={t("query.export.open")}
             disabled={rows.length === 0 || statement.columns.length === 0}
-            onClick={() => setShowCsvExport(true)}
+            onClick={() => setExportFormat("csv")}
           >
             <FileDown size={13} />
+          </IconButton>
+          <IconButton
+            className="query-result-copy-button"
+            label={t("query.export.jsonOpen")}
+            disabled={rows.length === 0 || statement.columns.length === 0}
+            onClick={() => setExportFormat("json")}
+          >
+            <Braces size={13} />
           </IconButton>
         </div>
         <DataGrid
@@ -371,11 +382,12 @@ export function QueryResultGrid({
           }}
         />
       </div>
-      {showCsvExport && (
-        <CsvExportDialog
+      {exportFormat && (
+        <ResultExportDialog
+          format={exportFormat}
           statement={statement}
           selection={selection}
-          onClose={() => setShowCsvExport(false)}
+          onClose={() => setExportFormat(undefined)}
         />
       )}
     </>

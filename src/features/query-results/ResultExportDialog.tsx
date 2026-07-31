@@ -11,14 +11,15 @@ import { useI18n } from "../../i18n/I18nContext";
 import { IconButton } from "../../shared/IconButton";
 import type { QueryStatementResult } from "../query-execution/queryExecution";
 import {
-  getCsvExportData,
+  getResultExportData,
   type CsvDelimiter,
   type CsvEncoding,
   type CsvExportProgress,
 } from "./csvExport";
 import { csvExportApi } from "./csvExportApi";
+import { jsonExportApi } from "./jsonExportApi";
 import type { GridSelection } from "./queryResultRows";
-import "./CsvExportDialog.css";
+import "./ResultExportDialog.css";
 
 type ExportScope = "all" | "selection";
 type ExportStatus =
@@ -30,21 +31,25 @@ type ExportStatus =
   | "cancelled"
   | "failed";
 
-export interface CsvExportDialogProps {
+export type ResultExportFormat = "csv" | "json";
+
+export interface ResultExportDialogProps {
+  format: ResultExportFormat;
   statement: QueryStatementResult;
   selection?: GridSelection;
   onClose: () => void;
 }
 
-export function CsvExportDialog({
+export function ResultExportDialog({
+  format,
   statement,
   selection,
   onClose,
-}: CsvExportDialogProps) {
+}: ResultExportDialogProps) {
   const { locale, t } = useI18n();
-  const allData = useMemo(() => getCsvExportData(statement), [statement]);
+  const allData = useMemo(() => getResultExportData(statement), [statement]);
   const selectedData = useMemo(
-    () => getCsvExportData(statement, selection),
+    () => getResultExportData(statement, selection),
     [selection, statement],
   );
   const [scope, setScope] = useState<ExportScope>("all");
@@ -60,6 +65,7 @@ export function CsvExportDialog({
   const activeTaskId = useRef<string | undefined>(undefined);
   const dialogRef = useRef<HTMLElement>(null);
   const data = scope === "selection" ? selectedData : allData;
+  const isCsv = format === "csv";
   const busy = ["choosing", "running", "cancelling"].includes(status);
   const progressLabel = t("query.export.progress")
     .replace("{completed}", progress.completedRows.toLocaleString(locale))
@@ -77,23 +83,29 @@ export function CsvExportDialog({
     setProgress({ taskId, completedRows: 0, totalRows: data.rows.length });
     setStatus("choosing");
     try {
-      const result = await csvExportApi.execute(
-        {
-          taskId,
-          suggestedFileName: `query-result-${statement.statementIndex + 1}.csv`,
-          columns: data.columns,
-          rows: data.rows,
-          includeHeaders,
-          delimiter,
-          encoding,
-        },
-        (nextProgress) => {
-          setProgress(nextProgress);
-          setStatus((current) =>
-            current === "cancelling" ? current : "running",
-          );
-        },
-      );
+      const onProgress = (nextProgress: CsvExportProgress) => {
+        setProgress(nextProgress);
+        setStatus((current) =>
+          current === "cancelling" ? current : "running",
+        );
+      };
+      const commonRequest = {
+        taskId,
+        suggestedFileName: `query-result-${statement.statementIndex + 1}.${format}`,
+        columns: data.columns,
+        rows: data.rows,
+      };
+      const result = isCsv
+        ? await csvExportApi.execute(
+            {
+              ...commonRequest,
+              includeHeaders,
+              delimiter,
+              encoding,
+            },
+            onProgress,
+          )
+        : await jsonExportApi.execute(commonRequest, onProgress);
       setProgress((current) => ({
         ...current,
         completedRows: result.rowsWritten,
@@ -118,7 +130,7 @@ export function CsvExportDialog({
 
     setStatus("cancelling");
     try {
-      await csvExportApi.cancel(taskId);
+      await (isCsv ? csvExportApi : jsonExportApi).cancel(taskId);
     } catch {
       setStatus("failed");
     }
@@ -130,7 +142,7 @@ export function CsvExportDialog({
 
   return (
     <div
-      className="csv-export-backdrop"
+      className="result-export-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) closeIfIdle();
@@ -138,22 +150,24 @@ export function CsvExportDialog({
     >
       <section
         ref={dialogRef}
-        className="csv-export-dialog"
+        className="result-export-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="csv-export-title"
+        aria-labelledby="result-export-title"
         tabIndex={-1}
         onKeyDown={(event) => {
           if (event.key === "Escape") closeIfIdle();
         }}
       >
-        <header className="csv-export-header">
+        <header className="result-export-header">
           <div>
             <FileDown size={17} aria-hidden="true" />
-            <h2 id="csv-export-title">{t("query.export.title")}</h2>
+            <h2 id="result-export-title">
+              {t(isCsv ? "query.export.title" : "query.export.jsonTitle")}
+            </h2>
           </div>
           <IconButton
-            label={t("query.export.close")}
+            label={t(isCsv ? "query.export.close" : "query.export.jsonClose")}
             disabled={busy}
             onClick={onClose}
           >
@@ -161,14 +175,14 @@ export function CsvExportDialog({
           </IconButton>
         </header>
 
-        <div className="csv-export-body">
+        <div className="result-export-body">
           <fieldset disabled={busy}>
             <legend>{t("query.export.scope")}</legend>
-            <div className="csv-export-segmented">
+            <div className="result-export-segmented">
               <label>
                 <input
                   type="radio"
-                  name="csv-export-scope"
+                  name="result-export-scope"
                   value="all"
                   checked={scope === "all"}
                   onChange={() => setScope("all")}
@@ -178,7 +192,7 @@ export function CsvExportDialog({
               <label>
                 <input
                   type="radio"
-                  name="csv-export-scope"
+                  name="result-export-scope"
                   value="selection"
                   checked={scope === "selection"}
                   disabled={!selectedData}
@@ -189,52 +203,60 @@ export function CsvExportDialog({
             </div>
           </fieldset>
 
-          <div className="csv-export-options">
-            <label>
-              <span>{t("query.export.delimiter")}</span>
-              <select
-                value={delimiter}
-                disabled={busy}
-                onChange={(event) =>
-                  setDelimiter(event.currentTarget.value as CsvDelimiter)
-                }
-              >
-                <option value="comma">{t("query.export.delimiterComma")}</option>
-                <option value="semicolon">
-                  {t("query.export.delimiterSemicolon")}
-                </option>
-                <option value="tab">{t("query.export.delimiterTab")}</option>
-              </select>
-            </label>
-            <label>
-              <span>{t("query.export.encoding")}</span>
-              <select
-                value={encoding}
-                disabled={busy}
-                onChange={(event) =>
-                  setEncoding(event.currentTarget.value as CsvEncoding)
-                }
-              >
-                <option value="utf-8">UTF-8</option>
-                <option value="utf-8-bom">UTF-8 BOM</option>
-                <option value="utf-16le">UTF-16 LE</option>
-              </select>
-            </label>
-          </div>
+          {isCsv && (
+            <>
+              <div className="result-export-options">
+                <label>
+                  <span>{t("query.export.delimiter")}</span>
+                  <select
+                    value={delimiter}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setDelimiter(event.currentTarget.value as CsvDelimiter)
+                    }
+                  >
+                    <option value="comma">
+                      {t("query.export.delimiterComma")}
+                    </option>
+                    <option value="semicolon">
+                      {t("query.export.delimiterSemicolon")}
+                    </option>
+                    <option value="tab">{t("query.export.delimiterTab")}</option>
+                  </select>
+                </label>
+                <label>
+                  <span>{t("query.export.encoding")}</span>
+                  <select
+                    value={encoding}
+                    disabled={busy}
+                    onChange={(event) =>
+                      setEncoding(event.currentTarget.value as CsvEncoding)
+                    }
+                  >
+                    <option value="utf-8">UTF-8</option>
+                    <option value="utf-8-bom">UTF-8 BOM</option>
+                    <option value="utf-16le">UTF-16 LE</option>
+                  </select>
+                </label>
+              </div>
 
-          <label className="csv-export-checkbox">
-            <input
-              type="checkbox"
-              checked={includeHeaders}
-              disabled={busy}
-              onChange={(event) => setIncludeHeaders(event.currentTarget.checked)}
-            />
-            <span>{t("query.export.includeHeaders")}</span>
-          </label>
+              <label className="result-export-checkbox">
+                <input
+                  type="checkbox"
+                  checked={includeHeaders}
+                  disabled={busy}
+                  onChange={(event) =>
+                    setIncludeHeaders(event.currentTarget.checked)
+                  }
+                />
+                <span>{t("query.export.includeHeaders")}</span>
+              </label>
+            </>
+          )}
 
           {status !== "idle" && (
             <div
-              className={`csv-export-status csv-export-status-${status}`}
+              className={`result-export-status result-export-status-${status}`}
               role="status"
               aria-live="polite"
             >
@@ -252,14 +274,30 @@ export function CsvExportDialog({
                   {status === "choosing"
                     ? t("query.export.choosing")
                     : status === "running"
-                      ? t("query.export.running")
+                      ? t(
+                          isCsv
+                            ? "query.export.running"
+                            : "query.export.jsonRunning",
+                        )
                       : status === "cancelling"
                         ? t("query.export.cancelling")
                         : status === "completed"
-                          ? t("query.export.completed")
+                          ? t(
+                              isCsv
+                                ? "query.export.completed"
+                                : "query.export.jsonCompleted",
+                            )
                           : status === "cancelled"
-                            ? t("query.export.cancelled")
-                            : t("query.export.failed")}
+                            ? t(
+                                isCsv
+                                  ? "query.export.cancelled"
+                                  : "query.export.jsonCancelled",
+                              )
+                            : t(
+                                isCsv
+                                  ? "query.export.failed"
+                                  : "query.export.jsonFailed",
+                              )}
                 </strong>
                 {status !== "choosing" && status !== "failed" && (
                   <span>{progressLabel}</span>
@@ -270,14 +308,18 @@ export function CsvExportDialog({
 
           {["running", "cancelling"].includes(status) && (
             <progress
-              aria-label={t("query.export.progressLabel")}
+              aria-label={t(
+                isCsv
+                  ? "query.export.progressLabel"
+                  : "query.export.jsonProgressLabel",
+              )}
               value={progress.completedRows}
               max={Math.max(1, progress.totalRows)}
             />
           )}
         </div>
 
-        <footer className="csv-export-footer">
+        <footer className="result-export-footer">
           {status === "running" ? (
             <button
               className="button button-quiet button-compact"

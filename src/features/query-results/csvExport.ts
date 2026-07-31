@@ -11,10 +11,12 @@ import {
 export type CsvDelimiter = "comma" | "semicolon" | "tab";
 export type CsvEncoding = "utf-8" | "utf-8-bom" | "utf-16le";
 
-export interface CsvExportData {
+export interface ResultExportData {
   columns: string[];
   rows: QueryValue[][];
 }
+
+export type CsvExportData = ResultExportData;
 
 export interface CsvExportRequest extends CsvExportData {
   taskId: string;
@@ -41,10 +43,10 @@ export interface CancelExportResult {
   status: "requested" | "alreadyFinished";
 }
 
-export function getCsvExportData(
+export function getResultExportData(
   statement: QueryStatementResult,
   selection?: GridSelection,
-): CsvExportData | undefined {
+): ResultExportData | undefined {
   const rows = buildQueryGridRows(statement);
   if (statement.columns.length === 0) return undefined;
 
@@ -79,3 +81,5 @@ export function getCsvExportData(
     ),
   };
 }
+
+export const getCsvExportData = getResultExportData;

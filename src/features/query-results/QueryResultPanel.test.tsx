@@ -269,6 +269,14 @@ describe("QueryResultPanel", () => {
     );
   });
 
+  it("opens JSON export configuration for retained results", () => {
+    renderPanel();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export JSON" }));
+
+    expect(screen.getByRole("dialog", { name: "Export JSON" })).toBeVisible();
+  });
+
   it("renders booleans without changing their clipboard values", () => {
     renderTypedPanel();
 

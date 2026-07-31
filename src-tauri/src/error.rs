@@ -354,9 +354,9 @@ impl From<ExportError> for CommandError {
                 detail: Some(error.to_string()),
                 diagnostic: None,
             },
-            ExportError::Io(_) => Self {
+            ExportError::Io(_) | ExportError::Json(_) => Self {
                 code: "export_write_failed",
-                message: "The CSV export could not be written.".to_owned(),
+                message: "The export file could not be written.".to_owned(),
                 detail: Some(error.to_string()),
                 diagnostic: None,
             },
@@ -414,7 +414,7 @@ mod tests {
         ))))
         .unwrap();
         assert_eq!(write["code"], "export_write_failed");
-        assert_eq!(write["message"], "The CSV export could not be written.");
+        assert_eq!(write["message"], "The export file could not be written.");
     }
 
     #[test]

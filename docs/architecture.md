@@ -153,14 +153,17 @@ explicitly reports when that budget is reached. Row numbers select complete
 rows, while copy actions serialize the current cell or row selection as
 tab-separated text with optional column names.
 
-CSV export operates on either all retained rows in the active statement or the
-current rectangular selection. The frontend sends a typed task request with the
-selected columns and raw values, header preference, delimiter, and encoding.
-Rust owns the native save dialog, validates the retained-data bounds, quotes CSV
-fields, and writes UTF-8, UTF-8 with BOM, or UTF-16LE output. Progress events are
-scoped by UUID, and a shared export registry lets a separate command request
-cancellation without blocking the UI. P0-F06 writes the selected target
-directly; temporary-file and atomic-finalization guarantees remain P0-F08 work.
+CSV and JSON export operate on either all retained rows in the active statement
+or the current rectangular selection. The frontend sends typed task requests
+with the selected columns and raw values; CSV additionally carries the header,
+delimiter, and encoding preferences. Rust owns the native save dialogs,
+validates the retained-data bounds, quotes CSV fields, and writes UTF-8, UTF-8
+with BOM, or UTF-16LE CSV. JSON is streamed as an indented array of objects,
+preserves nulls, and deterministically disambiguates duplicate column names so
+values are not overwritten. Format-specific progress events are scoped by UUID,
+and a shared export registry lets a separate command request cancellation
+without blocking the UI. P0-F06 and P0-F07 write the selected target directly;
+temporary-file and atomic-finalization guarantees remain P0-F08 work.
 
 ## SQL Completion Boundary
 
@@ -266,7 +269,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
 - Incrementally consumable result streaming and transaction ownership are not implemented.
-- Data browsing, editing, export, and object actions are not implemented.
+- Data browsing, editing, and object actions are not implemented.
 - Linux packaging is not part of the first release target.
 
 These limitations are product backlog items, not reasons to bypass the boundaries described above.

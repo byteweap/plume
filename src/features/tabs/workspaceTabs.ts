@@ -113,6 +113,7 @@ export type WorkspaceTabsAction =
       tabId: string;
       changes: TableDataChangeSet;
     }
+  | { type: "discard-table-data-changes"; tabId: string }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
@@ -355,6 +356,15 @@ export function workspaceTabsReducer(
           tab.kind === "table-data" &&
           tab.editability.status === "editable"
             ? { ...tab, changes: action.changes }
+            : tab,
+        ),
+      };
+    case "discard-table-data-changes":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "table-data"
+            ? { ...tab, changes: createEmptyTableDataChangeSet() }
             : tab,
         ),
       };

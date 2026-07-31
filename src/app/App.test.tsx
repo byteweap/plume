@@ -626,6 +626,7 @@ describe("App sidebar", () => {
       serverVersion: "18.0",
       transport: "plain",
     });
+    const disconnect = vi.spyOn(connectionApi, "disconnect").mockResolvedValue();
     vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
       databases: [
         { name: "postgres", owner: "postgres", allowConnections: true },
@@ -715,6 +716,22 @@ describe("App sidebar", () => {
     expect(addRow).toBeEnabled();
     fireEvent.click(addRow);
     expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
+
+    const beforeUnload = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(beforeUnload);
+    expect(beforeUnload.defaultPrevented).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Close tab users" }));
+    expect(screen.getByRole("dialog", { name: "Uncommitted data changes" })).toBeVisible();
+    fireEvent.click(screen.getAllByRole("button", { name: "Cancel" })[1]!);
+    expect(screen.getByRole("tab", { name: "users" })).toBeVisible();
+
+    fireEvent.click(screen.getByRole("button", { name: "Connection actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Disconnect" }));
+    expect(screen.getByRole("dialog", { name: "Uncommitted data changes" })).toBeVisible();
+    fireEvent.click(screen.getAllByRole("button", { name: "Cancel" })[1]!);
+    expect(disconnect).not.toHaveBeenCalled();
+
     const discardAll = screen.getByRole("button", {
       name: "Discard all changes",
     });
@@ -831,6 +848,7 @@ describe("App sidebar", () => {
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(6));
     expect(screen.queryByText("Review changes")).toBeNull();
     expect(commitChanges).toBeDisabled();
+
   });
 
   it("executes the cursor statement and all SQL with connection ownership", async () => {

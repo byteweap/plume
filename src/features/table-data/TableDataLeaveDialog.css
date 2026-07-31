@@ -1,0 +1,178 @@
+.table-data-leave-backdrop {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(25 31 27 / 38%);
+  backdrop-filter: blur(2px);
+}
+
+.table-data-leave-dialog {
+  display: flex;
+  width: min(520px, calc(100vw - 40px));
+  max-height: min(580px, calc(100vh - 40px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #cbd2cd;
+  border-radius: 8px;
+  color: #303a33;
+  background: #ffffff;
+  box-shadow: 0 18px 50px rgb(25 35 29 / 22%);
+}
+
+.table-data-leave-dialog > header {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 28px;
+  align-items: start;
+  gap: 9px;
+  border-bottom: 1px solid #e0e5e1;
+  padding: 15px 14px 13px 17px;
+}
+
+.table-data-leave-dialog > header > svg {
+  margin-top: 1px;
+  color: #a66f22;
+}
+
+.table-data-leave-dialog h2,
+.table-data-leave-dialog p {
+  margin: 0;
+}
+
+.table-data-leave-dialog h2 {
+  font-size: 14px;
+}
+
+.table-data-leave-dialog p {
+  margin-top: 3px;
+  color: #727c75;
+  font-size: 11px;
+}
+
+.table-data-leave-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  padding: 6px 17px;
+}
+
+.table-data-leave-item {
+  display: grid;
+  min-height: 47px;
+  grid-template-columns: minmax(90px, 1fr) minmax(120px, 1.4fr);
+  align-items: center;
+  column-gap: 12px;
+  border-bottom: 1px solid #e6eae7;
+  padding: 7px 0;
+  font-size: 11px;
+}
+
+.table-data-leave-item:last-child {
+  border-bottom: 0;
+}
+
+.table-data-leave-item span,
+.table-data-leave-item small {
+  overflow: hidden;
+  color: #707a73;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-data-leave-item small {
+  grid-column: 1 / -1;
+  color: #8a6450;
+  font-size: 10px;
+}
+
+.table-data-leave-error {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-top: 1px solid #ecd7cf;
+  padding: 9px 17px;
+  color: #934936;
+  background: #fff8f5;
+  font-size: 11px;
+}
+
+.table-data-leave-error span {
+  color: #765f57;
+}
+
+.table-data-leave-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  border-top: 1px solid #e0e5e1;
+  padding: 10px 14px;
+  background: #f8faf8;
+}
+
+.table-data-leave-discard {
+  color: #984b39;
+}
+
+@media (prefers-color-scheme: dark) {
+  .table-data-leave-dialog {
+    border-color: #454d47;
+    color: #dce3de;
+    background: #202521;
+  }
+
+  .table-data-leave-dialog > header,
+  .table-data-leave-item,
+  .table-data-leave-dialog > footer {
+    border-color: #3b433d;
+  }
+
+  .table-data-leave-dialog p,
+  .table-data-leave-item span {
+    color: #a8b1ab;
+  }
+
+  .table-data-leave-item small {
+    color: #d2a78f;
+  }
+
+  .table-data-leave-error {
+    border-color: #5c4037;
+    color: #e5a291;
+    background: #2d2522;
+  }
+
+  .table-data-leave-error span {
+    color: #c5aaa1;
+  }
+
+  .table-data-leave-dialog > footer {
+    background: #242925;
+  }
+}
+
+@media (max-width: 560px) {
+  .table-data-leave-backdrop {
+    padding: 10px;
+  }
+
+  .table-data-leave-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .table-data-leave-item {
+    grid-template-columns: 1fr;
+  }
+
+  .table-data-leave-item small {
+    grid-column: 1;
+  }
+
+  .table-data-leave-dialog > footer {
+    flex-wrap: wrap;
+  }
+}

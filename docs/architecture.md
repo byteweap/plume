@@ -255,6 +255,18 @@ rows, and delete treatments exclusively from that model, the current page
 immediately returns to its pre-edit query snapshot without issuing a query or
 database command; any previous commit error is cleared at the same time.
 
+Pending table changes also participate in a centralized leave guard. Closing a
+table tab protects that tab, disconnecting or deleting a profile protects every
+changed table tab owned by that profile, and a native window-close request
+protects all changed table tabs in the workspace. The modal lists each affected
+table and its insert/update/delete counts, then offers commit-and-continue,
+discard-and-continue, or cancel. Commits run through the same transactional
+command one table at a time and stop on the first error; the failed and any
+remaining change sets stay open. Discard clears only the guarded sets before
+the original close, disconnect, delete, or exit continues. Browser unload also
+sets the platform's standard unsaved-work guard when custom desktop actions are
+not available.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

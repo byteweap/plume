@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
   ArrowDown,
@@ -82,9 +83,8 @@ import {
   type TableDataChangeTarget,
 } from "../features/table-data/TableDataChangePreview";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
-import {
-  createCommitTableDataRequest,
-} from "../features/table-data/tableDataCommit";
+import { TableDataLeaveDialog } from "../features/table-data/TableDataLeaveDialog";
+import { createCommitTableDataRequest } from "../features/table-data/tableDataCommit";
 import {
   createEmptyTableDataChangeSet,
   discardAllTableDataChanges,
@@ -104,7 +104,7 @@ import {
   type WorkspaceTab,
 } from "../features/tabs/workspaceTabs";
 import { useI18n } from "../i18n/I18nContext";
-import { toCommandError } from "../platform/tauri";
+import { isTauriRuntime, toCommandError } from "../platform/tauri";
 import { IconButton } from "../shared/IconButton";
 import "./App.css";
 
@@ -118,6 +118,12 @@ const environmentClass: Record<ConnectionProfile["environment"], string> = {
 const defaultSidebarWidth = 286;
 const minimumSidebarWidth = 220;
 const maximumSidebarWidth = 560;
+
+type TableDataLeaveRequest =
+  | { kind: "close-tab"; tabId: string; tabIds: string[] }
+  | { kind: "disconnect"; profileId: string; tabIds: string[] }
+  | { kind: "delete-profile"; profileId: string; tabIds: string[] }
+  | { kind: "exit"; tabIds: string[] };
 const sidebarKeyboardStep = 16;
 const defaultQueryResultHeight = 260;
 const minimumQueryResultHeight = 120;
@@ -167,6 +173,12 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [queryRowLimit, setQueryRowLimit] = useState(DEFAULT_QUERY_ROW_LIMIT);
+  const [leaveRequest, setLeaveRequest] = useState<TableDataLeaveRequest>();
+  const [leaveStatus, setLeaveStatus] = useState<
+    | { status: "idle" }
+    | { status: "committing" }
+    | { status: "failed"; message: string }
+  >({ status: "idle" });
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const sidebarResizeStart = useRef<{
     pointerId: number;
@@ -214,6 +226,43 @@ export function App() {
       ),
     );
   }, [profiles, filter]);
+
+  useEffect(() => {
+    const pendingTabIds = workspaceTabs.tabs
+      .filter(
+        (tab): tab is TableDataTab =>
+          tab.kind === "table-data" && hasPendingTableDataChanges(tab.changes),
+      )
+      .map((tab) => tab.id);
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (pendingTabIds.length === 0) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    if (isTauriRuntime()) {
+      void getCurrentWindow()
+        .onCloseRequested((event) => {
+          if (pendingTabIds.length === 0) return;
+          event.preventDefault();
+          setLeaveStatus({ status: "idle" });
+          setLeaveRequest({ kind: "exit", tabIds: pendingTabIds });
+        })
+        .then((removeListener) => {
+          if (disposed) removeListener();
+          else unlisten = removeListener;
+        });
+    }
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [workspaceTabs.tabs]);
 
   const saveQueryDraft = useCallback(async (tab: QueryTab) => {
     if (discardedDraftIds.current.has(tab.id)) return;
@@ -644,6 +693,15 @@ export function App() {
   }
 
   function closeWorkspaceTab(tab: WorkspaceTab) {
+    if (tab.kind === "table-data" && hasPendingTableDataChanges(tab.changes)) {
+      setLeaveStatus({ status: "idle" });
+      setLeaveRequest({ kind: "close-tab", tabId: tab.id, tabIds: [tab.id] });
+      return;
+    }
+    closeWorkspaceTabImmediately(tab);
+  }
+
+  function closeWorkspaceTabImmediately(tab: WorkspaceTab) {
     const pending = draftSaveTimers.current.get(tab.id);
     if (pending) window.clearTimeout(pending.timeout);
     draftSaveTimers.current.delete(tab.id);
@@ -773,6 +831,23 @@ export function App() {
   }
 
   async function disconnectProfile(profile: ConnectionProfile) {
+    const pendingTabIds = workspaceTabs.tabs
+      .filter(
+        (tab): tab is TableDataTab =>
+          tab.kind === "table-data" &&
+          tab.profileId === profile.id &&
+          hasPendingTableDataChanges(tab.changes),
+      )
+      .map((tab) => tab.id);
+    if (pendingTabIds.length > 0) {
+      setLeaveStatus({ status: "idle" });
+      setLeaveRequest({ kind: "disconnect", profileId: profile.id, tabIds: pendingTabIds });
+      return;
+    }
+    await disconnectProfileImmediately(profile);
+  }
+
+  async function disconnectProfileImmediately(profile: ConnectionProfile) {
     const session = getConnectionSession(sessions, profile.id);
     if (!session.sessionId || isTransitioning(session.state)) return;
 
@@ -792,6 +867,85 @@ export function App() {
         });
       }
     }
+  }
+
+  async function completeTableDataLeave(request: TableDataLeaveRequest) {
+    setLeaveRequest(undefined);
+    setLeaveStatus({ status: "idle" });
+    if (request.kind === "close-tab") {
+      const tab = workspaceTabs.tabs.find((item) => item.id === request.tabId);
+      if (tab) closeWorkspaceTabImmediately(tab);
+      return;
+    }
+    if (request.kind === "disconnect") {
+      const profile = profiles.find((item) => item.id === request.profileId);
+      if (profile) await disconnectProfileImmediately(profile);
+      return;
+    }
+    if (request.kind === "delete-profile") {
+      const profile = profiles.find((item) => item.id === request.profileId);
+      if (profile) await deleteProfileImmediately(profile);
+      return;
+    }
+    if (isTauriRuntime()) {
+      await getCurrentWindow().destroy();
+    } else {
+      window.close();
+    }
+  }
+
+  async function commitTableDataBeforeLeave() {
+    const request = leaveRequest;
+    if (!request || leaveStatus.status === "committing") return;
+    setLeaveStatus({ status: "committing" });
+    try {
+      for (const tabId of request.tabIds) {
+        const tab = workspaceTabs.tabs.find(
+          (item): item is TableDataTab =>
+            item.id === tabId && item.kind === "table-data",
+        );
+        if (!tab || !hasPendingTableDataChanges(tab.changes)) continue;
+        const session = getConnectionSession(sessions, tab.profileId);
+        if (
+          !session.sessionId ||
+          (session.state !== "connected" && session.state !== "busy") ||
+          tab.editability.status !== "editable"
+        ) {
+          throw new Error(t("tableData.leave.connectionUnavailable"));
+        }
+        await tableDataApi.commit(
+          createCommitTableDataRequest(
+            session.sessionId,
+            tab,
+            tab.columns,
+            tab.editability.key,
+            tab.changes,
+          ),
+        );
+        dispatchWorkspaceTabs({
+          type: "discard-table-data-changes",
+          tabId: tab.id,
+        });
+      }
+      await completeTableDataLeave(request);
+    } catch (error) {
+      setLeaveStatus({
+        status: "failed",
+        message: toCommandError(error).message,
+      });
+    }
+  }
+
+  function discardTableDataBeforeLeave() {
+    const request = leaveRequest;
+    if (!request || leaveStatus.status === "committing") return;
+    for (const tabId of request.tabIds) {
+      dispatchWorkspaceTabs({
+        type: "discard-table-data-changes",
+        tabId,
+      });
+    }
+    void completeTableDataLeave(request);
   }
 
   async function checkProfileSession(profile: ConnectionProfile) {
@@ -843,6 +997,27 @@ export function App() {
 
   async function deleteProfile(profile: ConnectionProfile) {
     if (!window.confirm(t("connection.deleteConfirm"))) return;
+    const pendingTabIds = workspaceTabs.tabs
+      .filter(
+        (tab): tab is TableDataTab =>
+          tab.kind === "table-data" &&
+          tab.profileId === profile.id &&
+          hasPendingTableDataChanges(tab.changes),
+      )
+      .map((tab) => tab.id);
+    if (pendingTabIds.length > 0) {
+      setLeaveStatus({ status: "idle" });
+      setLeaveRequest({
+        kind: "delete-profile",
+        profileId: profile.id,
+        tabIds: pendingTabIds,
+      });
+      return;
+    }
+    await deleteProfileImmediately(profile);
+  }
+
+  async function deleteProfileImmediately(profile: ConnectionProfile) {
     try {
       const sessionId = getConnectionSession(sessions, profile.id).sessionId;
       if (sessionId) {
@@ -1233,6 +1408,35 @@ export function App() {
             dispatchSession({ type: "failed", profileId, error: message })
           }
           onConnected={handleConnected}
+        />
+      )}
+      {leaveRequest && (
+        <TableDataLeaveDialog
+          items={leaveRequest.tabIds.flatMap((tabId) => {
+            const tab = workspaceTabs.tabs.find(
+              (item): item is TableDataTab =>
+                item.id === tabId && item.kind === "table-data",
+            );
+            return tab
+              ? [
+                  {
+                    id: tab.id,
+                    database: tab.database,
+                    schema: tab.schema,
+                    table: tab.table,
+                    changes: tab.changes,
+                  },
+                ]
+              : [];
+          })}
+          status={leaveStatus.status}
+          error={leaveStatus.status === "failed" ? leaveStatus.message : undefined}
+          onCommit={() => void commitTableDataBeforeLeave()}
+          onDiscard={discardTableDataBeforeLeave}
+          onCancel={() => {
+            setLeaveRequest(undefined);
+            setLeaveStatus({ status: "idle" });
+          }}
         />
       )}
     </main>

@@ -208,6 +208,13 @@ describe("workspaceTabsReducer", () => {
       ],
       changes: { insertedRows: [{ localId: "local-1" }] },
     });
+    state = workspaceTabsReducer(state, {
+      type: "discard-table-data-changes",
+      tabId: tableTabId,
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      changes: { insertedRows: [], updatedRows: [], deletedRows: [] },
+    });
   });
 
   it("keeps SQL drafts isolated by query tab", () => {

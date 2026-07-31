@@ -282,6 +282,14 @@ React、Rust 配置仓库与连接服务会分别独立执行这些校验。
 SSH 密码与私钥口令使用独立系统凭据引用。配置响应与 SQLite 只包含端点参数和文件路径，
 不包含这些秘密或私钥内容。
 
+## 本地数据模型
+
+共享 SQLite 使用 `PRAGMA user_version` 执行迁移。v5 保留连接配置与查询草稿表，并新增
+`query_history`、`workspace_snapshots`、`workspace_tabs`、带关联表的 `local_tags` 以及
+键值形式的 `local_settings`。历史记录只保存执行元数据和 SQL；快照只保存标签元数据与未保存
+SQL。结果集、密码、私钥和活动 PostgreSQL 会话永不写入该数据库。迁移在事务中完成，启用外键，
+遇到高于当前版本的数据库会拒绝读取，不会猜测其结构。
+
 ## 安全与隐私不变量
 
 - UI 不直接建立 PostgreSQL Socket。

@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-const CURRENT_SCHEMA_VERSION: i64 = 4;
+const CURRENT_SCHEMA_VERSION: i64 = 5;
 
 #[derive(Debug, Error)]
 pub enum ProfileError {
@@ -219,6 +219,75 @@ impl ProfileRepository {
                 "ALTER TABLE connection_profiles
                     ADD COLUMN sql_risk_policy TEXT NOT NULL DEFAULT 'all';
                  PRAGMA user_version = 4;",
+            )?;
+            transaction.commit()?;
+        }
+
+        let version: i64 = self
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        if version == 4 {
+            let transaction = self.connection.transaction()?;
+            transaction.execute_batch(
+                "CREATE TABLE query_history (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    profile_id TEXT REFERENCES connection_profiles(id) ON DELETE SET NULL,
+                    database_name TEXT NOT NULL,
+                    schema_name TEXT,
+                    sql TEXT NOT NULL,
+                    duration_ms INTEGER NOT NULL,
+                    result_status TEXT NOT NULL,
+                    executed_at INTEGER NOT NULL
+                 );
+                 CREATE INDEX query_history_executed_at_idx
+                    ON query_history(executed_at DESC, id DESC);
+                 CREATE INDEX query_history_profile_id_idx
+                    ON query_history(profile_id, executed_at DESC);
+
+                 CREATE TABLE workspace_snapshots (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    active_tab_id TEXT,
+                    next_tab_id INTEGER NOT NULL DEFAULT 1,
+                    next_query_number INTEGER NOT NULL DEFAULT 1,
+                    layout_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at INTEGER NOT NULL
+                 );
+                 CREATE TABLE workspace_tabs (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    snapshot_id TEXT NOT NULL REFERENCES workspace_snapshots(id) ON DELETE CASCADE,
+                    kind TEXT NOT NULL,
+                    profile_id TEXT,
+                    database_name TEXT,
+                    schema_name TEXT,
+                    title TEXT,
+                    table_name TEXT,
+                    sql TEXT,
+                    position INTEGER NOT NULL,
+                    state_json TEXT NOT NULL DEFAULT '{}'
+                 );
+                 CREATE INDEX workspace_tabs_snapshot_position_idx
+                    ON workspace_tabs(snapshot_id, position);
+
+                 CREATE TABLE local_tags (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL UNIQUE,
+                    created_at INTEGER NOT NULL
+                 );
+                 CREATE TABLE local_tag_assignments (
+                    tag_id TEXT NOT NULL REFERENCES local_tags(id) ON DELETE CASCADE,
+                    entity_kind TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    PRIMARY KEY(tag_id, entity_kind, entity_id)
+                 );
+                 CREATE INDEX local_tag_assignments_entity_idx
+                    ON local_tag_assignments(entity_kind, entity_id);
+
+                 CREATE TABLE local_settings (
+                    key TEXT PRIMARY KEY NOT NULL,
+                    value_json TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                 );
+                 PRAGMA user_version = 5;",
             )?;
             transaction.commit()?;
         }
@@ -1411,6 +1480,35 @@ mod tests {
             )
             .unwrap();
         assert!(draft_table_exists);
+        for table in [
+            "query_history",
+            "workspace_snapshots",
+            "workspace_tabs",
+            "local_tags",
+            "local_tag_assignments",
+            "local_settings",
+        ] {
+            let exists: bool = repository
+                .connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1)",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(exists, "migration should create {table}");
+        }
+        let snapshot_layout: String = repository
+            .connection
+            .query_row(
+                "SELECT layout_json FROM workspace_snapshots WHERE id = 'current'",
+                [],
+                |row| row.get(0),
+            )
+            .optional()
+            .unwrap()
+            .unwrap_or_else(|| "{}".to_owned());
+        assert_eq!(snapshot_layout, "{}");
         let migrated = repository.get("profile-1").unwrap();
         assert_eq!(migrated.sql_risk_policy, "all");
         drop(repository);

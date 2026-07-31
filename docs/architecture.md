@@ -390,6 +390,17 @@ SSH passwords and private-key passphrases use independent credential-store
 references. Profile responses and SQLite contain only endpoint parameters and
 file paths, never those secrets or private-key contents.
 
+## Local Data Model
+
+The shared SQLite store uses `PRAGMA user_version` migrations. Version 5 keeps
+the existing connection-profile and query-draft tables and adds `query_history`,
+`workspace_snapshots`, `workspace_tabs`, `local_tags` with their assignments,
+and key/value `local_settings`. History rows store execution metadata and SQL,
+while snapshots store tab metadata and unsaved SQL only; result sets, passwords,
+private keys, and active PostgreSQL sessions never enter this database. The
+migration is transactional, enables foreign keys, and rejects a database newer
+than the running application rather than guessing at its shape.
+
 ## Security and Privacy Invariants
 
 - The UI never opens raw PostgreSQL sockets.

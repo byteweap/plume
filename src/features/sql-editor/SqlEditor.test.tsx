@@ -54,7 +54,7 @@ describe("SqlEditor", () => {
     expect(view?.state.selection.main).toMatchObject({ from: 7, to: 10 });
   });
 
-  it("offers asynchronous PostgreSQL relation and column completions", async () => {
+  it("AC-05 offers asynchronous PostgreSQL relation and column completions", async () => {
     sqlCompletionCatalogCache.clear();
     const getCatalog = vi.spyOn(sqlCompletionApi, "getCatalog").mockResolvedValue({
       schemas: [
@@ -103,7 +103,7 @@ describe("SqlEditor", () => {
     getCatalog.mockRestore();
   });
 
-  it("offers local PostgreSQL keywords and common functions while offline", async () => {
+  it("AC-10 offers local PostgreSQL keywords and common functions while offline", async () => {
     render(
       <SqlEditor
         label="SQL query workspace"

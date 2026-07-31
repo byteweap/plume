@@ -239,7 +239,7 @@ describe("ConnectionDialog", () => {
     expect(status.closest(".dialog-footer")).not.toBeNull();
   });
 
-  it("persists a profile before opening its active session", async () => {
+  it("AC-01 saves a new profile before opening its active session", async () => {
     const profile = {
       id: "profile-1",
       name: "Local",

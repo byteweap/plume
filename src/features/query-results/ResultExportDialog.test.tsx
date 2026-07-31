@@ -92,7 +92,7 @@ describe("ResultExportDialog", () => {
     });
   });
 
-  it("exports the current selection with configurable CSV options", async () => {
+  it("AC-08 exports the current selection with configurable CSV options", async () => {
     csvApiMocks.execute.mockImplementation(
       async (
         request: CsvExportRequest,
@@ -147,7 +147,7 @@ describe("ResultExportDialog", () => {
     expect(await screen.findByText("CSV export completed")).toBeVisible();
   });
 
-  it("requests cancellation for a running CSV export", async () => {
+  it("AC-08 requests cancellation for a running CSV export", async () => {
     let resolveExport: ((result: CsvExportResult) => void) | undefined;
     csvApiMocks.execute.mockImplementation(
       (

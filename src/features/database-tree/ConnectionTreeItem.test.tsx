@@ -25,7 +25,7 @@ const connection: SavedConnection = {
 describe("ConnectionTreeItem", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("loads schemas and schema objects lazily", async () => {
+  it("AC-02 loads schemas and schema objects lazily", async () => {
     const onOpenTable = vi.fn();
     const getServerTree = vi
       .spyOn(databaseTreeApi, "getServerTree")

@@ -128,7 +128,7 @@ describe("App sidebar", () => {
     Reflect.deleteProperty(navigator, "clipboard");
   });
 
-  it("renders every connection environment with a persistent semantic tone", () => {
+  it("AC-07 renders every connection environment with a persistent semantic tone", () => {
     window.localStorage.setItem("plume.locale", "en-US");
     render(
       <I18nProvider>
@@ -400,7 +400,7 @@ describe("App sidebar", () => {
     expect(connectSaved).not.toHaveBeenCalled();
   });
 
-  it("restores a snapshot without reconnecting or replaying its query", async () => {
+  it("AC-09 restores a snapshot without reconnecting or replaying its query", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     const connectSaved = vi.spyOn(connectionApi, "connectSaved");
     vi.mocked(queryDraftApi.list).mockResolvedValue([
@@ -766,7 +766,7 @@ describe("App sidebar", () => {
     expect(screen.queryByRole("tab", { name: "Query 1" })).toBeNull();
   });
 
-  it("keeps a query tab offline and reuses its profile context after reconnect", async () => {
+  it("AC-10 keeps a query tab offline and reuses its profile context after reconnect", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     const connectSaved = vi
       .spyOn(connectionApi, "connectSaved")
@@ -895,7 +895,7 @@ describe("App sidebar", () => {
     expect(screen.getByText("Local saved / postgres")).toBeVisible();
   });
 
-  it("loads at most 200 rows when a table is opened from the tree", async () => {
+  it("AC-03 AC-04 browses, filters, pages, and safely edits table data", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
       sessionId: "session-1",
@@ -1133,7 +1133,7 @@ describe("App sidebar", () => {
 
   });
 
-  it("executes the cursor statement and all SQL with connection ownership", async () => {
+  it("AC-05 executes the cursor statement and all SQL with connection ownership", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
       sessionId: "session-1",
@@ -1293,7 +1293,7 @@ describe("App sidebar", () => {
     expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
   });
 
-  it("requires the exact database name for critical production SQL", async () => {
+  it("AC-07 requires the exact database name for critical production SQL", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([
       {
         ...savedProfile,
@@ -1341,7 +1341,7 @@ describe("App sidebar", () => {
     );
   });
 
-  it("reports query errors without marking a healthy session disconnected", async () => {
+  it("AC-06 reports query errors without marking a healthy session disconnected", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
       sessionId: "session-1",

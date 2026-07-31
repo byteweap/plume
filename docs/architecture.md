@@ -454,7 +454,7 @@ scopes never modify connection profiles or system credentials.
 - **Current automated tests:** frontend validation, transformations, grouping, and tree interactions, plus Rust error, connection, metadata, and session unit tests.
 - **Unit baseline:** `npm run test:unit-baseline` pins representative tests for PostgreSQL URL parsing, quoted identifiers, SQL execution boundaries, risk recognition, typed result-value presentation, and staged table-data changes. The baseline is included in `npm run check`.
 - **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Two OpenSSH services verify password and encrypted-key authentication, one-hop jump hosts, strict host keys, tunnel health/lifecycle, and SSH plus `verify-full`. Schema fixtures clean themselves up.
-- **Planned end-to-end tests:** the ten acceptance scenarios in the product requirements.
+- **Core end-to-end flows:** `npm run test:acceptance` exercises the real React application through its IPC API boundary and pins connection, object-tree, table-data, SQL, safety-confirmation, export, recovery, and offline-editing flows under AC-01 through AC-10. The suite is part of `npm run check`; the [acceptance test matrix](./验收测试.md) maps each scenario to its complementary backend coverage.
 
 The standard local gates are:
 

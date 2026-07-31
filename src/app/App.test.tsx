@@ -8,6 +8,7 @@ import { connectionApi } from "../features/connections/connectionApi";
 import { databaseTreeApi } from "../features/database-tree/databaseTreeApi";
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import { queryHistoryApi } from "../features/history/queryHistoryApi";
+import { localDataApi } from "../features/local-data/localDataApi";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
 import {
   sqlCompletionApi,
@@ -71,6 +72,7 @@ describe("App sidebar", () => {
       ...request,
       executedAt: 1,
     }));
+    vi.spyOn(localDataApi, "clear").mockResolvedValue();
     vi.spyOn(queryExecutionApi, "execute").mockImplementation(
       async (request) => ({
         queryId: request.queryId,
@@ -294,6 +296,70 @@ describe("App sidebar", () => {
     fireEvent.click(savedConnection);
     await waitFor(() => expect(connectSaved).toHaveBeenCalledWith("profile-1"));
     expect(await screen.findByText("PostgreSQL 18.0")).toBeVisible();
+  });
+
+  it("clears the selected cache scope from persistent and in-memory storage", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(queryHistoryApi, "list").mockResolvedValue([]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    await screen.findByRole("button", { name: /Local saved/ });
+    const clearCache = vi.spyOn(sqlCompletionCatalogCache, "clear");
+    fireEvent.change(screen.getByRole("combobox", { name: "Data to clear" }), {
+      target: { value: "cache" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    await waitFor(() => expect(localDataApi.clear).toHaveBeenCalledWith("cache"));
+    expect(clearCache).toHaveBeenCalledOnce();
+  });
+
+  it("disconnects active sessions before clearing all local state", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(queryHistoryApi, "list").mockResolvedValue([]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    const disconnect = vi.spyOn(connectionApi, "disconnect").mockResolvedValue();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    expect(await screen.findByRole("tab", { name: "Query 1" })).toBeVisible();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Data to clear" }), {
+      target: { value: "all" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+
+    await waitFor(() => expect(localDataApi.clear).toHaveBeenCalledWith("all"));
+    expect(disconnect).toHaveBeenCalledWith("session-1");
+    expect(disconnect.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(localDataApi.clear).mock.invocationCallOrder[0]!,
+    );
+    expect(screen.queryByRole("button", { name: /Local saved/ })).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Query 1" })).toBeNull();
+    expect(screen.getByRole("tab", { name: "Welcome" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("restores query drafts without connecting or executing them", async () => {

@@ -58,6 +58,9 @@ import { queryHistoryApi } from "../features/history/queryHistoryApi";
 import type { QueryHistoryStatus } from "../features/history/queryHistory";
 import type { QueryHistory } from "../features/history/queryHistory";
 import { QueryHistoryPanel } from "../features/history/QueryHistoryPanel";
+import type { LocalDataScope } from "../features/local-data/localData";
+import { localDataApi } from "../features/local-data/localDataApi";
+import { LocalDataPanel } from "../features/local-data/LocalDataPanel";
 import {
   createQueryId,
   DEFAULT_QUERY_ROW_LIMIT,
@@ -70,6 +73,7 @@ import {
 } from "../features/query-execution/queryExecution";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
 import { resolveQueryErrorRange } from "../features/query-execution/queryErrorPosition";
+import { sqlCompletionCatalogCache } from "../features/sql-editor/sqlCompletionApi";
 import type {
   SqlEditorController,
   SqlExecutionTarget,
@@ -220,6 +224,8 @@ export function App() {
   const [filter, setFilter] = useState("");
   const [historyEntries, setHistoryEntries] = useState<QueryHistory[]>([]);
   const [historySearch, setHistorySearch] = useState("");
+  const [localDataClearing, setLocalDataClearing] = useState(false);
+  const [cacheEpoch, setCacheEpoch] = useState(0);
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [workspacePersistenceReady, setWorkspacePersistenceReady] =
@@ -244,6 +250,7 @@ export function App() {
   );
   const discardedDraftIds = useRef(new Set<string>());
   const executingProfiles = useRef(new Set<string>());
+  const skipNextWorkspaceSave = useRef(false);
 
   const activeTab = getActiveWorkspaceTab(workspaceTabs);
   const activeProfile =
@@ -684,6 +691,10 @@ export function App() {
 
   useEffect(() => {
     if (!workspacePersistenceReady) return;
+    if (skipNextWorkspaceSave.current) {
+      skipNextWorkspaceSave.current = false;
+      return;
+    }
     const request = createWorkspaceSnapshotRequest(workspaceTabs, {
       sidebarWidth,
       sidebarCollapsed,
@@ -706,6 +717,13 @@ export function App() {
 
   useEffect(() => {
     const timers = draftSaveTimers.current;
+    if (localDataClearing) {
+      for (const pending of timers.values()) {
+        window.clearTimeout(pending.timeout);
+      }
+      timers.clear();
+      return;
+    }
     const queryTabs = workspaceTabs.tabs.filter(
       (tab): tab is QueryTab => tab.kind === "query",
     );
@@ -735,7 +753,7 @@ export function App() {
         }, 600),
       });
     }
-  }, [saveQueryDraft, workspaceTabs.tabs]);
+  }, [localDataClearing, saveQueryDraft, workspaceTabs.tabs]);
 
   useEffect(
     () => () => {
@@ -846,6 +864,64 @@ export function App() {
 
   function copyHistoryEntry(entry: QueryHistory) {
     void navigator.clipboard?.writeText(entry.sql);
+  }
+
+  async function clearLocalData(scope: LocalDataScope) {
+    if (!window.confirm(t(`localData.confirm.${scope}`))) return;
+
+    const clearsWorkspace = scope === "drafts" || scope === "all";
+    setLocalDataClearing(true);
+    if (clearsWorkspace) setWorkspacePersistenceReady(false);
+    setDraftError(undefined);
+
+    try {
+      if (scope === "all") {
+        for (const profile of profiles) {
+          const session = getConnectionSession(sessions, profile.id);
+          if (!session.sessionId) continue;
+          try {
+            await connectionApi.disconnect(session.sessionId);
+          } catch (error) {
+            if (toCommandError(error).code !== "session_not_found") throw error;
+          }
+          dispatchSession({ type: "disconnected", profileId: profile.id });
+        }
+      }
+
+      await localDataApi.clear(scope);
+
+      if (scope === "history" || scope === "all") {
+        setHistoryEntries([]);
+      }
+      if (scope === "cache" || scope === "all") {
+        sqlCompletionCatalogCache.clear();
+        setCacheEpoch((epoch) => epoch + 1);
+      }
+      if (clearsWorkspace) {
+        skipNextWorkspaceSave.current = true;
+        discardedDraftIds.current.clear();
+        dispatchWorkspaceTabs({
+          type: "restore-workspace",
+          ...createInitialWorkspaceTabsState(),
+        });
+      }
+      if (scope === "all") {
+        for (const profile of profiles) {
+          dispatchSession({ type: "remove", profileId: profile.id });
+        }
+        setProfiles([]);
+        setSelectedProfileId(undefined);
+      }
+      setProfileError(undefined);
+    } catch (error) {
+      const commandError = toCommandError(error);
+      if (commandError.code !== "desktop_required") {
+        setDraftError(commandError.message);
+      }
+    } finally {
+      if (clearsWorkspace) setWorkspacePersistenceReady(true);
+      setLocalDataClearing(false);
+    }
   }
 
   async function clearQueryHistory() {
@@ -1314,7 +1390,7 @@ export function App() {
           <div className="connection-tree" role="tree">
             {visibleConnections.map((connection) => (
               <ConnectionTreeItem
-                key={`${connection.id}:${getConnectionSession(sessions, connection.id).sessionId ?? "none"}`}
+                key={`${connection.id}:${getConnectionSession(sessions, connection.id).sessionId ?? "none"}:${cacheEpoch}`}
                 connection={connection}
                 sessionId={getConnectionSession(sessions, connection.id).sessionId}
                 lifecycleState={getConnectionSession(sessions, connection.id).state}
@@ -1351,6 +1427,10 @@ export function App() {
             onClear={() => void clearQueryHistory()}
             onOpen={openHistoryEntry}
             onCopy={copyHistoryEntry}
+          />
+          <LocalDataPanel
+            busy={localDataClearing}
+            onClear={(scope) => void clearLocalData(scope)}
           />
         </aside>
 

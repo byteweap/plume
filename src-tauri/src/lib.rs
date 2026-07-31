@@ -6,6 +6,7 @@ mod drafts;
 mod error;
 mod exports;
 mod history;
+mod local_data;
 mod profiles;
 mod replay;
 mod workspace;
@@ -18,6 +19,7 @@ use commands::{
     drafts::{delete_query_draft, list_query_drafts, save_query_draft},
     exports::{cancel_export, export_csv, export_json},
     history::{clear_query_history, list_query_history, record_query_history},
+    local_data::clear_local_data,
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
@@ -38,6 +40,7 @@ use database::session::ConnectionRegistry;
 use drafts::QueryDraftService;
 use exports::ExportRegistry;
 use history::QueryHistoryService;
+use local_data::LocalDataService;
 use profiles::ConnectionProfileService;
 use replay::OperationReplayGuard;
 use tauri::Manager;
@@ -60,11 +63,13 @@ pub fn run() {
                 ConnectionProfileService::open(database_path.clone(), platform_credential_store())?;
             let drafts = QueryDraftService::open(database_path.clone())?;
             let history = QueryHistoryService::open(database_path.clone())?;
-            let workspace = WorkspaceSnapshotService::open(database_path)?;
+            let workspace = WorkspaceSnapshotService::open(database_path.clone())?;
+            let local_data = LocalDataService::open(database_path)?;
             app.manage(profiles);
             app.manage(drafts);
             app.manage(history);
             app.manage(workspace);
+            app.manage(local_data);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -103,7 +108,8 @@ pub fn run() {
             list_query_history,
             clear_query_history,
             save_workspace_snapshot,
-            load_workspace_snapshot
+            load_workspace_snapshot,
+            clear_local_data
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

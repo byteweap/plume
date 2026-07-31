@@ -444,6 +444,14 @@ impl ProfileRepository {
         Ok(profile)
     }
 
+    fn clear_all(&mut self) -> Result<Vec<ConnectionProfile>, ProfileError> {
+        let profiles = self.list()?;
+        let transaction = self.connection.transaction()?;
+        transaction.execute("DELETE FROM connection_profiles", [])?;
+        transaction.commit()?;
+        Ok(profiles)
+    }
+
     fn read_profile(row: &rusqlite::Row<'_>) -> rusqlite::Result<ConnectionProfile> {
         let ssl_mode: String = row.get(8)?;
         let ssh_json: Option<String> = row.get(12)?;
@@ -612,6 +620,14 @@ impl ConnectionProfileService {
     pub fn delete(&self, id: &str) -> Result<(), ProfileError> {
         let profile = self.repository()?.delete(id)?;
         self.delete_all_credentials(&profile.id, &profile.credential_ref);
+        Ok(())
+    }
+
+    pub fn clear_all(&self) -> Result<(), ProfileError> {
+        let profiles = self.repository()?.clear_all()?;
+        for profile in profiles {
+            self.delete_all_credentials(&profile.id, &profile.credential_ref);
+        }
         Ok(())
     }
 

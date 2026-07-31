@@ -423,6 +423,16 @@ table tab starts with empty rows, edits, editability, and execution state. The
 active tab and layout may be restored, but no connection, SQL, write operation,
 transaction, or replay-protection operation ID is recreated automatically.
 
+The local-data command exposes four explicit, separately confirmed scopes:
+`history` removes query history only; `drafts` removes query drafts, workspace
+tabs, and snapshots; `cache` removes `cache.`-prefixed local settings and also
+invalidates the in-process object-tree and SQL-completion catalogs; and `all`
+removes those records, tags, settings, and every connection profile. A full
+clear disconnects active database sessions before deleting database, SSH, and
+jump-host secrets from the system credential store. It does not delete
+user-selected certificate, private-key, or `known_hosts` files. The narrower
+scopes never modify connection profiles or system credentials.
+
 ## Security and Privacy Invariants
 
 - The UI never opens raw PostgreSQL sockets.

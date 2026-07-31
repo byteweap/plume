@@ -2,6 +2,7 @@ pub mod connections;
 pub mod drafts;
 pub mod exports;
 pub mod history;
+pub mod local_data;
 pub mod metadata;
 pub mod profiles;
 pub mod queries;

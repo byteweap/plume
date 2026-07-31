@@ -8,6 +8,7 @@ use crate::{
     drafts::DraftError,
     exports::ExportError,
     history::HistoryError,
+    local_data::LocalDataError,
     profiles::ProfileError,
     replay::ReplayProtectionError,
     workspace::WorkspaceSnapshotError,
@@ -471,6 +472,17 @@ impl From<WorkspaceSnapshotError> for CommandError {
                 detail: Some(error.to_string()),
                 diagnostic: None,
             },
+        }
+    }
+}
+
+impl From<LocalDataError> for CommandError {
+    fn from(error: LocalDataError) -> Self {
+        Self {
+            code: "local_data_cleanup_failed",
+            message: "Plume could not clear the requested local data.".to_owned(),
+            detail: Some(error.to_string()),
+            diagnostic: None,
         }
     }
 }

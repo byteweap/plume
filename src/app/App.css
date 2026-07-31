@@ -549,6 +549,44 @@
   white-space: nowrap;
 }
 
+.table-data-editability {
+  display: flex;
+  min-width: 0;
+  max-width: 420px;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: #68746c;
+  font-size: 9px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.table-data-editability svg,
+.table-data-editability strong {
+  flex: 0 0 auto;
+}
+
+.table-data-editability > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-data-editability strong {
+  color: #526158;
+  font-weight: 650;
+}
+
+.table-data-editable,
+.table-data-editable strong {
+  color: #357052;
+}
+
+.table-data-read-only,
+.table-data-read-only strong {
+  color: #815e32;
+}
+
 .table-data-header small,
 .table-data-context {
   overflow: hidden;
@@ -1084,8 +1122,23 @@
 
   .table-data-header small,
   .table-data-context,
+  .table-data-editability,
   .table-data-loading {
     color: #a6b0a9;
+  }
+
+  .table-data-editability strong {
+    color: #c5cec8;
+  }
+
+  .table-data-editable,
+  .table-data-editable strong {
+    color: #9bc9ad;
+  }
+
+  .table-data-read-only,
+  .table-data-read-only strong {
+    color: #d4b977;
   }
 
   .table-data-error {

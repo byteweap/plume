@@ -6,7 +6,13 @@ import type {
   QueryExecutionState,
 } from "../query-execution/queryExecution";
 import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
-import type { TableDataFilter, TableDataSort } from "../table-data/tableData";
+import {
+  resolveTableDataEditability,
+  type TableDataEditability,
+  type TableDataFilter,
+  type TableDataSort,
+  type TableEditabilityResponse,
+} from "../table-data/tableData";
 
 export interface WorkspaceContext {
   profileId: string;
@@ -46,6 +52,7 @@ export interface TableDataTab extends WorkspaceContext {
   hasNextPage: boolean;
   sorts: TableDataSort[];
   filters: TableDataFilter[];
+  editability: TableDataEditability;
   columns: QueryColumn[];
   execution?: QueryExecutionState;
 }
@@ -79,6 +86,22 @@ export type WorkspaceTabsAction =
       type: "set-table-data-filters";
       tabId: string;
       filters: TableDataFilter[];
+    }
+  | {
+      type: "table-data-editability-loading";
+      tabId: string;
+      sessionId: string;
+    }
+  | {
+      type: "table-data-editability-loaded";
+      tabId: string;
+      sessionId: string;
+      result: TableEditabilityResponse;
+    }
+  | {
+      type: "table-data-editability-failed";
+      tabId: string;
+      sessionId: string;
     }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
@@ -229,6 +252,7 @@ export function workspaceTabsReducer(
         hasNextPage: false,
         sorts: [],
         filters: [],
+        editability: { status: "idle" },
         columns: [],
       };
       return {
@@ -284,6 +308,34 @@ export function workspaceTabsReducer(
             : tab,
         ),
       };
+    case "table-data-editability-loading":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "table-data"
+            ? {
+                ...tab,
+                editability: {
+                  status: "loading" as const,
+                  sessionId: action.sessionId,
+                },
+              }
+            : tab,
+        ),
+      };
+    case "table-data-editability-loaded":
+      return updateTableEditability(
+        state,
+        action.tabId,
+        action.sessionId,
+        resolveTableDataEditability(action.result, action.sessionId),
+      );
+    case "table-data-editability-failed":
+      return updateTableEditability(state, action.tabId, action.sessionId, {
+        status: "read-only",
+        sessionId: action.sessionId,
+        reason: "metadata-unavailable",
+      });
     case "restore-queries": {
       const existingIds = new Set(state.tabs.map((tab) => tab.id));
       const restored = action.tabs.filter((tab) => !existingIds.has(tab.id));
@@ -478,6 +530,25 @@ const idleQueryExecution: QueryExecutionState = { status: "idle" };
 
 export function getQueryExecution(tab: ExecutableTab): QueryExecutionState {
   return tab.execution ?? idleQueryExecution;
+}
+
+function updateTableEditability(
+  state: WorkspaceTabsState,
+  tabId: string,
+  sessionId: string,
+  editability: TableDataEditability,
+): WorkspaceTabsState {
+  return {
+    ...state,
+    tabs: state.tabs.map((tab) =>
+      tab.id === tabId &&
+      tab.kind === "table-data" &&
+      tab.editability.status === "loading" &&
+      tab.editability.sessionId === sessionId
+        ? { ...tab, editability }
+        : tab,
+    ),
+  };
 }
 
 function updateActiveQuery(

@@ -91,6 +91,35 @@ pub struct DatabaseObject {
     pub kind: DatabaseObjectKind,
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableEditability {
+    pub editable: bool,
+    pub key: Option<TableIdentityKey>,
+    pub reason: Option<TableReadOnlyReason>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TableIdentityKey {
+    pub name: String,
+    pub kind: TableIdentityKeyKind,
+    pub columns: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TableIdentityKeyKind {
+    PrimaryKey,
+    UniqueKey,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TableReadOnlyReason {
+    NoReliableKey,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DatabaseObjectKind {
@@ -373,6 +402,76 @@ pub async fn list_schema_objects(
         .collect()
 }
 
+pub async fn get_table_editability(
+    client: &Client,
+    schema: &str,
+    table: &str,
+) -> Result<TableEditability, DatabaseError> {
+    let row = client
+        .query_opt(
+            "SELECT index_relation.relname,
+                    index_definition.indisprimary,
+                    pg_catalog.array_agg(attribute.attname ORDER BY key_column.ordinality)
+               FROM pg_catalog.pg_class relation
+               JOIN pg_catalog.pg_namespace namespace
+                 ON namespace.oid = relation.relnamespace
+               JOIN pg_catalog.pg_index index_definition
+                 ON index_definition.indrelid = relation.oid
+               JOIN pg_catalog.pg_class index_relation
+                 ON index_relation.oid = index_definition.indexrelid
+               CROSS JOIN LATERAL pg_catalog.unnest(index_definition.indkey)
+                 WITH ORDINALITY AS key_column(attribute_number, ordinality)
+               JOIN pg_catalog.pg_attribute attribute
+                 ON attribute.attrelid = relation.oid
+                AND attribute.attnum = key_column.attribute_number
+              WHERE namespace.nspname = $1
+                AND relation.relname = $2
+                AND relation.relkind IN ('r', 'p')
+                AND index_definition.indisunique
+                AND index_definition.indisvalid
+                AND index_definition.indisready
+                AND index_definition.indislive
+                AND index_definition.indimmediate
+                AND index_definition.indpred IS NULL
+                AND index_definition.indexprs IS NULL
+                AND key_column.ordinality <= index_definition.indnkeyatts
+              GROUP BY index_relation.oid,
+                       index_relation.relname,
+                       index_definition.indisprimary,
+                       index_definition.indnkeyatts
+             HAVING pg_catalog.count(*) = index_definition.indnkeyatts
+                AND pg_catalog.bool_and(attribute.attnotnull)
+              ORDER BY index_definition.indisprimary DESC,
+                       index_definition.indnkeyatts,
+                       index_relation.oid
+              LIMIT 1",
+            &[&schema, &table],
+        )
+        .await?;
+
+    let Some(row) = row else {
+        return Ok(TableEditability {
+            editable: false,
+            key: None,
+            reason: Some(TableReadOnlyReason::NoReliableKey),
+        });
+    };
+    let primary: bool = row.get(1);
+    Ok(TableEditability {
+        editable: true,
+        key: Some(TableIdentityKey {
+            name: row.get(0),
+            kind: if primary {
+                TableIdentityKeyKind::PrimaryKey
+            } else {
+                TableIdentityKeyKind::UniqueKey
+            },
+            columns: row.get(2),
+        }),
+        reason: None,
+    })
+}
+
 pub async fn get_sql_completion_catalog(
     client: &Client,
 ) -> Result<SqlCompletionCatalog, DatabaseError> {
@@ -474,9 +573,9 @@ mod tests {
     };
 
     use super::{
-        DatabaseCollectionKind, DatabaseObjectKind, get_database_collection,
-        get_database_collections, get_server_overview, get_sql_completion_catalog,
-        list_schema_objects, parse_object_kind,
+        DatabaseCollectionKind, DatabaseObjectKind, TableIdentityKeyKind, TableReadOnlyReason,
+        get_database_collection, get_database_collections, get_server_overview,
+        get_sql_completion_catalog, get_table_editability, list_schema_objects, parse_object_kind,
     };
     use crate::{database::test_support, error::DatabaseError};
 
@@ -495,6 +594,76 @@ mod tests {
     #[test]
     fn rejects_unknown_object_kinds() {
         assert!(parse_object_kind("unknown").is_err());
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn identifies_only_reliable_table_keys() {
+        tauri::async_runtime::block_on(async {
+            let client = test_support::connect().await;
+            client
+                .batch_execute(
+                    "DROP SCHEMA IF EXISTS plume_editability_test CASCADE;
+                     CREATE SCHEMA plume_editability_test;
+                     CREATE TABLE plume_editability_test.primary_table (
+                       id bigint PRIMARY KEY,
+                       code text NOT NULL UNIQUE
+                     );
+                     CREATE TABLE plume_editability_test.unique_table (
+                       tenant_id bigint NOT NULL,
+                       external_id text NOT NULL,
+                       UNIQUE (tenant_id, external_id)
+                     );
+                     CREATE TABLE plume_editability_test.unsafe_table (
+                       id bigint,
+                       email text UNIQUE,
+                       code text NOT NULL,
+                       UNIQUE (code) DEFERRABLE
+                     );
+                     CREATE UNIQUE INDEX unsafe_partial
+                       ON plume_editability_test.unsafe_table (code)
+                       WHERE id IS NOT NULL;
+                     CREATE UNIQUE INDEX unsafe_expression
+                       ON plume_editability_test.unsafe_table (lower(code));",
+                )
+                .await
+                .expect("editability fixtures should be created");
+
+            let validation: Result<(), DatabaseError> = async {
+                let primary =
+                    get_table_editability(&client, "plume_editability_test", "primary_table")
+                        .await?;
+                assert!(primary.editable);
+                let primary_key = primary.key.expect("primary key should be selected");
+                assert_eq!(primary_key.kind, TableIdentityKeyKind::PrimaryKey);
+                assert_eq!(primary_key.columns, ["id"]);
+
+                let unique =
+                    get_table_editability(&client, "plume_editability_test", "unique_table")
+                        .await?;
+                let unique_key = unique.key.expect("non-null unique key should be selected");
+                assert_eq!(unique_key.kind, TableIdentityKeyKind::UniqueKey);
+                assert_eq!(unique_key.columns, ["tenant_id", "external_id"]);
+
+                let unsafe_table =
+                    get_table_editability(&client, "plume_editability_test", "unsafe_table")
+                        .await?;
+                assert!(!unsafe_table.editable);
+                assert_eq!(unsafe_table.key, None);
+                assert_eq!(
+                    unsafe_table.reason,
+                    Some(TableReadOnlyReason::NoReliableKey)
+                );
+                Ok(())
+            }
+            .await;
+
+            client
+                .batch_execute("DROP SCHEMA IF EXISTS plume_editability_test CASCADE")
+                .await
+                .expect("editability fixtures should be removed");
+            validation.expect("table editability should use only reliable keys");
+        });
     }
 
     #[test]

@@ -12,7 +12,8 @@ import {
   sqlCompletionApi,
   sqlCompletionCatalogCache,
 } from "../features/sql-editor/sqlCompletionApi";
-import { App } from "./App";
+import { tableDataApi } from "../features/table-data/tableDataApi";
+import { App, TableEditabilityStatus } from "./App";
 
 const savedProfile: ConnectionProfile = {
   id: "profile-1",
@@ -93,12 +94,56 @@ describe("App sidebar", () => {
       queryId: request.queryId,
       status: "requested",
     }));
+    vi.spyOn(tableDataApi, "getEditability").mockResolvedValue({
+      editable: true,
+      key: {
+        name: "users_pkey",
+        kind: "primary-key",
+        columns: ["id"],
+      },
+    });
     vi.spyOn(sqlCompletionApi, "getCatalog").mockResolvedValue({ schemas: [] });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("shows the reliable row key or a concrete read-only reason", () => {
+    const { rerender } = render(
+      <I18nProvider>
+        <TableEditabilityStatus
+          editability={{
+            status: "editable",
+            sessionId: "session-1",
+            key: {
+              name: "users_pkey",
+              kind: "primary-key",
+              columns: ["tenant_id", "id"],
+            },
+          }}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("Editable")).toBeVisible();
+    expect(screen.getByText("Primary key: tenant_id, id")).toBeVisible();
+
+    rerender(
+      <I18nProvider>
+        <TableEditabilityStatus
+          editability={{
+            status: "read-only",
+            sessionId: "session-1",
+            reason: "no-reliable-key",
+          }}
+        />
+      </I18nProvider>,
+    );
+    expect(screen.getByText("Read only")).toBeVisible();
+    expect(
+      screen.getByText("No primary key or non-null unique key can locate rows"),
+    ).toBeVisible();
   });
 
   it("resizes by dragging the right divider", () => {
@@ -639,6 +684,23 @@ describe("App sidebar", () => {
     fireEvent.doubleClick(await screen.findByRole("button", { name: "users" }));
 
     await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    await waitFor(() => expect(tableDataApi.getEditability).toHaveBeenCalledOnce());
+    expect(tableDataApi.getEditability).toHaveBeenCalledWith("session-1", {
+      id: expect.any(String),
+      kind: "table-data",
+      profileId: "profile-1",
+      database: "postgres",
+      schema: "public",
+      table: "users",
+      title: "users",
+      pageIndex: 0,
+      pageSize: 200,
+      hasNextPage: false,
+      sorts: [],
+      filters: [],
+      editability: { status: "idle" },
+      columns: [],
+    });
     expect(queryExecutionApi.execute).toHaveBeenCalledWith({
       queryId: expect.any(String),
       sessionId: "session-1",
@@ -651,6 +713,8 @@ describe("App sidebar", () => {
       "true",
     );
     expect(await screen.findByText("Page 1")).toBeVisible();
+    expect(await screen.findByText("Editable")).toBeVisible();
+    expect(screen.getByText("Primary key: id")).toBeVisible();
     expect(await screen.findByRole("grid", { name: "Result 1" })).toBeVisible();
     const nextPage = screen.getByRole("button", { name: "Next page" });
     expect(nextPage).toBeEnabled();

@@ -182,7 +182,15 @@ Sorts are persisted in the table-data tab, shown with priority and direction,
 reset pagination to page one, and compile to PostgreSQL `ORDER BY` ordinals so
 duplicate or unusual column names remain unambiguous. With no sort, the toolbar
 warns that rows may move between page requests. Editability is layered onto
-this tab model by the subsequent P0-G tasks.
+this tab model by querying PostgreSQL's index catalogs once per table and
+session. A table is editable only when the catalog exposes a valid, ready,
+immediate, non-partial, non-expression primary or unique index whose key
+columns are all `NOT NULL`; primary keys are preferred. The selected key name,
+kind, and ordered columns are retained for later change tracking. Missing or
+unavailable metadata fails closed, and the table header explains the read-only
+reason instead of allowing ambiguous row targeting. A new session always
+refreshes the decision, and stale responses from an earlier session are
+ignored.
 
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including

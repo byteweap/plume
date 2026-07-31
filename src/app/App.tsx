@@ -23,8 +23,10 @@ import {
   Database,
   FileText,
   Globe2,
+  KeyRound,
   ListStart,
   LoaderCircle,
+  LockKeyhole,
   PanelLeftClose,
   PanelLeftOpen,
   Play,
@@ -72,6 +74,7 @@ import {
   TABLE_DATA_PAGE_SIZE_OPTIONS,
   type TableDataReference,
 } from "../features/table-data/tableData";
+import { tableDataApi } from "../features/table-data/tableDataApi";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
 import {
   createInitialWorkspaceTabsState,
@@ -354,6 +357,42 @@ export function App() {
       });
     }
   }
+
+  useEffect(() => {
+    if (
+      activeTab.kind !== "table-data" ||
+      activeSession?.state !== "connected" ||
+      !activeConnection ||
+      (activeTab.editability.status !== "idle" &&
+        activeTab.editability.sessionId === activeConnection.sessionId)
+    ) {
+      return;
+    }
+
+    const sessionId = activeConnection.sessionId;
+    dispatchWorkspaceTabs({
+      type: "table-data-editability-loading",
+      tabId: activeTab.id,
+      sessionId,
+    });
+    void tableDataApi
+      .getEditability(sessionId, activeTab)
+      .then((result) =>
+        dispatchWorkspaceTabs({
+          type: "table-data-editability-loaded",
+          tabId: activeTab.id,
+          sessionId,
+          result,
+        }),
+      )
+      .catch(() =>
+        dispatchWorkspaceTabs({
+          type: "table-data-editability-failed",
+          tabId: activeTab.id,
+          sessionId,
+        }),
+      );
+  }, [activeConnection, activeSession?.state, activeTab]);
 
   useEffect(() => {
     if (
@@ -1293,11 +1332,12 @@ function TableDataWorkspace({
       aria-label={t("tableData.workspace")}
     >
       <header className="table-data-header">
-        <div>
+        <div className="table-data-title">
           <span className="table-data-context">
             {tab.database} / {tab.schema}
           </span>
           <h1>{tab.table}</h1>
+          <TableEditabilityStatus editability={tab.editability} />
         </div>
         <div className="table-data-toolbar">
           {tab.sorts.length === 0 ? (
@@ -1447,6 +1487,47 @@ function TableDataWorkspace({
         )}
       </div>
     </section>
+  );
+}
+
+export function TableEditabilityStatus({
+  editability,
+}: {
+  editability: TableDataTab["editability"];
+}) {
+  const { t } = useI18n();
+  if (editability.status === "idle" || editability.status === "loading") {
+    return (
+      <span className="table-data-editability" role="status">
+        <LoaderCircle className="spin" size={10} />
+        {t("tableData.editabilityChecking")}
+      </span>
+    );
+  }
+  if (editability.status === "editable") {
+    const keyLabel =
+      editability.key.kind === "primary-key"
+        ? t("tableData.primaryKey")
+        : t("tableData.uniqueKey");
+    const detail = `${keyLabel}: ${editability.key.columns.join(", ")}`;
+    return (
+      <span className="table-data-editability table-data-editable" title={detail}>
+        <KeyRound size={10} />
+        <strong>{t("tableData.editable")}</strong>
+        <span>{detail}</span>
+      </span>
+    );
+  }
+  const reason =
+    editability.reason === "no-reliable-key"
+      ? t("tableData.noReliableKey")
+      : t("tableData.editabilityUnavailable");
+  return (
+    <span className="table-data-editability table-data-read-only" title={reason}>
+      <LockKeyhole size={10} />
+      <strong>{t("tableData.readOnly")}</strong>
+      <span>{reason}</span>
+    </span>
   );
 }
 

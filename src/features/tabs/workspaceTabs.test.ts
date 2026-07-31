@@ -78,7 +78,61 @@ describe("workspaceTabsReducer", () => {
       kind: "table-data",
       title: "users",
       table: "users",
+      editability: { status: "idle" },
       ...context,
+    });
+
+    state = workspaceTabsReducer(state, {
+      type: "table-data-editability-loading",
+      tabId: tableTabId,
+      sessionId: "session-1",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "table-data-editability-loaded",
+      tabId: tableTabId,
+      sessionId: "session-1",
+      result: {
+        editable: true,
+        key: {
+          name: "users_pkey",
+          kind: "primary-key",
+          columns: ["id"],
+        },
+      },
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      editability: {
+        status: "editable",
+        sessionId: "session-1",
+        key: { name: "users_pkey", columns: ["id"] },
+      },
+    });
+
+    state = workspaceTabsReducer(state, {
+      type: "table-data-editability-loading",
+      tabId: tableTabId,
+      sessionId: "session-2",
+    });
+    state = workspaceTabsReducer(state, {
+      type: "table-data-editability-loaded",
+      tabId: tableTabId,
+      sessionId: "session-1",
+      result: { editable: false, reason: "no-reliable-key" },
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      editability: { status: "loading", sessionId: "session-2" },
+    });
+    state = workspaceTabsReducer(state, {
+      type: "table-data-editability-failed",
+      tabId: tableTabId,
+      sessionId: "session-2",
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      editability: {
+        status: "read-only",
+        sessionId: "session-2",
+        reason: "metadata-unavailable",
+      },
     });
 
     state = workspaceTabsReducer(state, {

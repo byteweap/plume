@@ -6,6 +6,7 @@ import {
   INITIAL_TABLE_DATA_LIMIT,
   normalizeTableDataPage,
   quotePostgresIdentifier,
+  resolveTableDataEditability,
 } from "./tableData";
 
 describe("table data initial query", () => {
@@ -140,5 +141,36 @@ describe("table data initial query", () => {
     );
     expect(query.target.sql).not.toContain("O'Reilly%");
     expect(query.resultColumns).toEqual(columns);
+  });
+
+  it("fails closed when editability metadata lacks a reliable key", () => {
+    expect(
+      resolveTableDataEditability(
+        {
+          editable: true,
+        },
+        "session-1",
+      ),
+    ).toEqual({
+      status: "read-only",
+      sessionId: "session-1",
+      reason: "metadata-unavailable",
+    });
+    expect(
+      resolveTableDataEditability(
+        {
+          editable: true,
+          key: {
+            name: "users_pkey",
+            kind: "primary-key",
+            columns: ["tenant_id", "id"],
+          },
+        },
+        "session-1",
+      ),
+    ).toMatchObject({
+      status: "editable",
+      key: { kind: "primary-key", columns: ["tenant_id", "id"] },
+    });
   });
 });

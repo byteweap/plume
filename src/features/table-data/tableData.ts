@@ -15,6 +15,28 @@ export interface TableDataReference {
   table: string;
 }
 
+export interface TableIdentityKey {
+  name: string;
+  kind: "primary-key" | "unique-key";
+  columns: string[];
+}
+
+export interface TableEditabilityResponse {
+  editable: boolean;
+  key?: TableIdentityKey | null;
+  reason?: "no-reliable-key" | null;
+}
+
+export type TableDataEditability =
+  | { status: "idle" }
+  | { status: "loading"; sessionId: string }
+  | { status: "editable"; sessionId: string; key: TableIdentityKey }
+  | {
+      status: "read-only";
+      sessionId: string;
+      reason: "no-reliable-key" | "metadata-unavailable";
+    };
+
 export interface TableDataPage {
   pageIndex: number;
   pageSize: number;
@@ -49,6 +71,20 @@ export interface TableDataQuery {
   target: SqlExecutionTarget;
   parameters: Array<string | null>;
   resultColumns?: QueryColumn[];
+}
+
+export function resolveTableDataEditability(
+  response: TableEditabilityResponse,
+  sessionId: string,
+): TableDataEditability {
+  if (response.editable && response.key) {
+    return { status: "editable", sessionId, key: response.key };
+  }
+  return {
+    status: "read-only",
+    sessionId,
+    reason: response.reason ?? "metadata-unavailable",
+  };
 }
 
 export function quotePostgresIdentifier(identifier: string): string {

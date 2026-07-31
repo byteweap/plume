@@ -8,9 +8,9 @@ use crate::{
         },
         metadata::{
             DatabaseCollectionKind, DatabaseCollectionSummary, DatabaseObject, NamedObject,
-            ServerOverview, SqlCompletionCatalog, get_database_collection,
+            ServerOverview, SqlCompletionCatalog, TableEditability, get_database_collection,
             get_database_collections, get_server_overview, get_sql_completion_catalog,
-            list_schema_objects,
+            get_table_editability, list_schema_objects,
         },
         session::ConnectionRegistry,
     },
@@ -74,6 +74,23 @@ pub async fn get_schema_objects(
         .await
         .map_err(CommandError::from)?;
     list_schema_objects(&client, &schema)
+        .await
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn get_table_data_editability(
+    registry: State<'_, ConnectionRegistry>,
+    session_id: String,
+    database: String,
+    schema: String,
+    table: String,
+) -> Result<TableEditability, CommandError> {
+    let client = registry
+        .database_client(&session_id, &database)
+        .await
+        .map_err(CommandError::from)?;
+    get_table_editability(&client, &schema, &table)
         .await
         .map_err(CommandError::from)
 }

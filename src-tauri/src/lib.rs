@@ -16,6 +16,7 @@ use commands::{
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
+        get_table_data_editability,
     },
     profiles::{
         create_connection_profile, delete_connection_profile, duplicate_connection_profile,
@@ -71,6 +72,7 @@ pub fn run() {
             get_database_tree,
             get_database_collection_items,
             get_schema_objects,
+            get_table_data_editability,
             get_sql_completions,
             get_catalog_tree,
             get_catalog_collection_items,

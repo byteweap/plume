@@ -455,6 +455,7 @@ scopes never modify connection profiles or system credentials.
 - **Unit baseline:** `npm run test:unit-baseline` pins representative tests for PostgreSQL URL parsing, quoted identifiers, SQL execution boundaries, risk recognition, typed result-value presentation, and staged table-data changes. The baseline is included in `npm run check`.
 - **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Two OpenSSH services verify password and encrypted-key authentication, one-hop jump hosts, strict host keys, tunnel health/lifecycle, and SSH plus `verify-full`. Schema fixtures clean themselves up.
 - **Core end-to-end flows:** `npm run test:acceptance` exercises the real React application through its IPC API boundary and pins connection, object-tree, table-data, SQL, safety-confirmation, export, recovery, and offline-editing flows under AC-01 through AC-10. The suite is part of `npm run check`; the [acceptance test matrix](./验收测试.md) maps each scenario to its complementary backend coverage.
+- **Performance regression:** `npm run benchmark:regression` gates application-shell startup and idle heap, 100,000-object grouping, first-page table data, large-result projection, the SQL editor, the virtualized grid, and the production startup bundle. Budgets, current measurements, and measurement boundaries are recorded in the [performance baseline](./性能回归基线.md). CI runs the suite independently on macOS and Windows.
 
 The standard local gates are:
 
@@ -469,7 +470,7 @@ cargo test
 
 The repository-level `npm run check:all` command runs the complete local gate.
 Use `npm run postgres:up`, `npm run test:postgres`, and `npm run postgres:down`
-for the isolated database suite. CI additionally builds unsigned macOS and
+for the isolated database suite. CI additionally runs the performance regression, builds unsigned macOS and
 Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 
 ## Current Limitations

@@ -60,11 +60,8 @@ jobs:
       - name: Check frontend
         run: npm run check
 
-      - name: Benchmark SQL editor
-        run: npm run benchmark:editor
-
-      - name: Benchmark data grid
-        run: npm run benchmark:grid
+      - name: Run performance regression suite
+        run: npm run benchmark:regression
 
       - name: Check Rust
         run: npm run check:rust

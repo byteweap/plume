@@ -327,6 +327,7 @@ SQL。结果集、密码、私钥和活动 PostgreSQL 会话永不写入该数�
 - **单元测试基线：** `npm run test:unit-baseline` 固定覆盖 PostgreSQL URL 解析、标识符引用、SQL 执行边界、风险识别、类型化结果展示和表数据暂存变更；该基线已纳入 `npm run check`。
 - **PostgreSQL 集成测试：** 使用一次性的 `plume` 与 `plume_secondary` 数据库验证真实连接、跨数据库会话和系统目录查询；第二套启用 TLS 的服务验证明文回退、加密协商、CA 与主机名校验及客户端证书认证；两套 OpenSSH 服务验证密码、加密私钥、单级跳板机、严格主机密钥、隧道健康与生命周期，以及 SSH + `verify-full`。Schema 测试数据会自行清理。
 - **端到端核心流程测试：** `npm run test:acceptance` 从真实 React 应用交互覆盖到 IPC API 边界，按 AC-01 至 AC-10 编号固定连接、对象树、表数据、SQL、安全确认、导出、恢复和离线编辑流程；场景与后端集成测试的对应关系见 [验收测试矩阵](./验收测试.md)。该套件已纳入 `npm run check`。
+- **性能回归：** `npm run benchmark:regression` 统一检查应用壳启动与空闲堆、10 万对象分组、表数据首屏、大结果协议投影、编辑器、虚拟化网格和生产启动包体；预算、当前实测和测量边界见 [性能回归基线](./性能回归基线.md)。CI 在 macOS 与 Windows 上分别执行。
 
 标准本地门禁：
 
@@ -339,7 +340,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
-仓库级 `npm run check:all` 会运行完整本地门禁。隔离数据库测试依次使用 `npm run postgres:up`、`npm run test:postgres` 和 `npm run postgres:down`；CI 还会构建未签名的 macOS/Windows 安装包，并在 PostgreSQL 14、16 和 18 上运行测试矩阵。
+仓库级 `npm run check:all` 会运行完整本地门禁。隔离数据库测试依次使用 `npm run postgres:up`、`npm run test:postgres` 和 `npm run postgres:down`；CI 还会执行性能回归、构建未签名的 macOS/Windows 安装包，并在 PostgreSQL 14、16 和 18 上运行测试矩阵。
 
 ## 当前限制
 

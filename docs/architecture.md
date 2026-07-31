@@ -456,6 +456,7 @@ scopes never modify connection profiles or system credentials.
 - **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Two OpenSSH services verify password and encrypted-key authentication, one-hop jump hosts, strict host keys, tunnel health/lifecycle, and SSH plus `verify-full`. Schema fixtures clean themselves up.
 - **Core end-to-end flows:** `npm run test:acceptance` exercises the real React application through its IPC API boundary and pins connection, object-tree, table-data, SQL, safety-confirmation, export, recovery, and offline-editing flows under AC-01 through AC-10. The suite is part of `npm run check`; the [acceptance test matrix](./验收测试.md) maps each scenario to its complementary backend coverage.
 - **Performance regression:** `npm run benchmark:regression` gates application-shell startup and idle heap, 100,000-object grouping, first-page table data, large-result projection, the SQL editor, the virtualized grid, and the production startup bundle. Budgets, current measurements, and measurement boundaries are recorded in the [performance baseline](./性能回归基线.md). CI runs the suite independently on macOS and Windows.
+- **Security regression:** `npm run check:security` verifies the main-window capability allowlist, production CSP, prototype freezing, removal of the unused opener capability, lockfile integrity metadata, and npm/Cargo Dependabot coverage. Focused Rust tests cover credential isolation, diagnostic redaction, and atomic export failure/cancellation behavior. The [security review](./安全检查报告.md) records scope, evidence, and advisory-database limitations.
 
 The standard local gates are:
 
@@ -468,10 +469,9 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
 
-The repository-level `npm run check:all` command runs the complete local gate.
+The repository-level `npm run check:all` command runs the complete local gate, including `npm run check:security`.
 Use `npm run postgres:up`, `npm run test:postgres`, and `npm run postgres:down`
-for the isolated database suite. CI additionally runs the performance regression, builds unsigned macOS and
-Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
+for the isolated database suite. CI additionally reviews dependency changes on pull requests, runs the performance regression, builds unsigned macOS and Windows bundles, and runs the suite against PostgreSQL 14, 16, and 18.
 
 ## Current Limitations
 

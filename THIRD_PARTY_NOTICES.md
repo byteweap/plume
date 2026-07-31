@@ -11,13 +11,13 @@ inventory for a particular source revision:
 
 | Package | Purpose | License |
 |---|---|---|
-| `@tauri-apps/api`, `@tauri-apps/plugin-opener` | Desktop IPC and platform integration | Apache-2.0 OR MIT |
+| `@tauri-apps/api` | Desktop IPC and platform integration | Apache-2.0 OR MIT |
 | `react`, `react-dom` | User interface | MIT |
 | `react-data-grid` | Virtualized query-result grid, keyboard navigation, selection, and column resizing | MIT |
 | `codemirror`, `@codemirror/autocomplete`, `@codemirror/lang-sql` | SQL editing, asynchronous completion, and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
 | `lucide-react` | Interface icons | ISC |
 | `zod` | Runtime validation | MIT |
-| `tauri`, `tauri-plugin-opener` | Desktop application runtime | Apache-2.0 OR MIT |
+| `tauri` | Desktop application runtime | Apache-2.0 OR MIT |
 | `serde`, `serde_json` | IPC serialization | Apache-2.0 OR MIT |
 | `thiserror` | Rust error definitions | Apache-2.0 OR MIT |
 | `tokio` | Asynchronous runtime | MIT |

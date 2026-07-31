@@ -51,7 +51,6 @@ pub fn run() {
     diagnostics::install_panic_hook();
 
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(ConnectionRegistry::default())
         .manage(QueryRegistry::default())

@@ -16,6 +16,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Reject vulnerable dependency changes
+        uses: actions/dependency-review-action@v4
+
   desktop:
     name: Desktop (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
@@ -56,6 +67,9 @@ jobs:
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Check security boundaries
+        run: npm run check:security
 
       - name: Check frontend
         run: npm run check

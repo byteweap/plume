@@ -12,8 +12,11 @@ import {
   type PointerEvent,
 } from "react";
 import {
+  AlertTriangle,
   Braces,
   Check,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Database,
   FileText,
@@ -61,8 +64,9 @@ import type {
   SqlExecutionTarget,
 } from "../features/sql-editor/SqlEditor";
 import {
-  createInitialTableDataTarget,
-  INITIAL_TABLE_DATA_LIMIT,
+  createTableDataTarget,
+  normalizeTableDataPage,
+  TABLE_DATA_PAGE_SIZE_OPTIONS,
   type TableDataReference,
 } from "../features/table-data/tableData";
 import {
@@ -264,11 +268,16 @@ export function App() {
           sql: target.sql,
           rowLimit,
         });
+        const tablePage =
+          tab.kind === "table-data"
+            ? normalizeTableDataPage(result, tab.pageSize)
+            : undefined;
         dispatchWorkspaceTabs({
           type: "query-succeeded",
           tabId: tab.id,
-          result,
+          result: tablePage?.result ?? result,
           finishedAt: Date.now(),
+          hasNextPage: tablePage?.hasNextPage,
         });
         dispatchSession({ type: "ready", profileId: tab.profileId });
       } catch (error) {
@@ -348,8 +357,8 @@ export function App() {
     void executeQuery(
       activeTab,
       activeConnection.sessionId,
-      createInitialTableDataTarget(activeTab),
-      INITIAL_TABLE_DATA_LIMIT,
+      createTableDataTarget(activeTab, activeTab),
+      activeTab.pageSize + 1,
     );
   }, [activeConnection, activeSession?.state, activeTab, executeQuery]);
 
@@ -1042,10 +1051,18 @@ export function App() {
                   void executeQuery(
                     activeTab,
                     activeConnection.sessionId,
-                    createInitialTableDataTarget(activeTab),
-                    INITIAL_TABLE_DATA_LIMIT,
+                    createTableDataTarget(activeTab, activeTab),
+                    activeTab.pageSize + 1,
                   );
                 }}
+                onPageChange={(pageIndex, pageSize) =>
+                  dispatchWorkspaceTabs({
+                    type: "set-table-data-page",
+                    tabId: activeTab.id,
+                    pageIndex,
+                    pageSize,
+                  })
+                }
                 onCancel={() => {
                   if (activeConnection) {
                     void cancelQuery(activeTab, activeConnection.sessionId);
@@ -1199,6 +1216,7 @@ function TableDataWorkspace({
   state,
   onReconnect,
   onReload,
+  onPageChange,
   onCancel,
 }: {
   tab: TableDataTab;
@@ -1206,6 +1224,7 @@ function TableDataWorkspace({
   state: ConnectionLifecycleState;
   onReconnect: () => void;
   onReload: () => void;
+  onPageChange: (pageIndex: number, pageSize: number) => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
@@ -1214,9 +1233,9 @@ function TableDataWorkspace({
     execution.status === "idle" ||
     execution.status === "running" ||
     execution.status === "cancelling";
-  const limitLabel = t("tableData.initialLimit").replace(
-    "{count}",
-    INITIAL_TABLE_DATA_LIMIT.toLocaleString(),
+  const pageLabel = t("tableData.page").replace(
+    "{page}",
+    (tab.pageIndex + 1).toLocaleString(),
   );
 
   if (!connection) {
@@ -1234,30 +1253,63 @@ function TableDataWorkspace({
             {tab.database} / {tab.schema}
           </span>
           <h1>{tab.table}</h1>
-          <small>{limitLabel}</small>
         </div>
-        {execution.status === "running" ? (
-          <button
-            className="button button-quiet button-compact"
-            type="button"
-            onClick={onCancel}
-          >
-            <Square size={12} fill="currentColor" />
-            {t("query.cancel")}
-          </button>
-        ) : (
-          <IconButton
-            label={t("tableData.reload")}
-            disabled={loading}
-            onClick={onReload}
-          >
-            {execution.status === "cancelling" ? (
-              <LoaderCircle className="spin" size={14} />
-            ) : (
-              <RefreshCw size={14} />
-            )}
-          </IconButton>
-        )}
+        <div className="table-data-toolbar">
+          <span className="table-data-order-warning">
+            <AlertTriangle size={12} />
+            {t("tableData.unstableOrder")}
+          </span>
+          <label className="table-data-page-size">
+            <span>{t("tableData.pageSize")}</span>
+            <select
+              value={tab.pageSize}
+              disabled={loading}
+              onChange={(event) =>
+                onPageChange(0, Number(event.currentTarget.value))
+              }
+            >
+              {TABLE_DATA_PAGE_SIZE_OPTIONS.map((pageSize) => (
+                <option key={pageSize} value={pageSize}>
+                  {pageSize}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="table-data-pager" aria-label={t("tableData.pagination")}>
+            <IconButton
+              label={t("tableData.previousPage")}
+              disabled={loading || tab.pageIndex === 0}
+              onClick={() => onPageChange(tab.pageIndex - 1, tab.pageSize)}
+            >
+              <ChevronLeft size={14} />
+            </IconButton>
+            <span aria-live="polite">{pageLabel}</span>
+            <IconButton
+              label={t("tableData.nextPage")}
+              disabled={loading || !tab.hasNextPage}
+              onClick={() => onPageChange(tab.pageIndex + 1, tab.pageSize)}
+            >
+              <ChevronRight size={14} />
+            </IconButton>
+          </div>
+          {execution.status === "running" ? (
+            <IconButton label={t("query.cancel")} onClick={onCancel}>
+              <Square size={12} fill="currentColor" />
+            </IconButton>
+          ) : (
+            <IconButton
+              label={t("tableData.reload")}
+              disabled={loading}
+              onClick={onReload}
+            >
+              {execution.status === "cancelling" ? (
+                <LoaderCircle className="spin" size={14} />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+            </IconButton>
+          )}
+        </div>
       </header>
 
       <div className="table-data-content">

@@ -80,6 +80,19 @@ describe("workspaceTabsReducer", () => {
       table: "users",
       ...context,
     });
+
+    state = workspaceTabsReducer(state, {
+      type: "set-table-data-page",
+      tabId: tableTabId,
+      pageIndex: 3,
+      pageSize: 50,
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      kind: "table-data",
+      pageIndex: 3,
+      pageSize: 50,
+      hasNextPage: false,
+    });
   });
 
   it("keeps SQL drafts isolated by query tab", () => {

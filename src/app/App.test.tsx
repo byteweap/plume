@@ -591,6 +591,33 @@ describe("App sidebar", () => {
     vi.spyOn(databaseTreeApi, "getSchemaObjects").mockResolvedValue([
       { name: "users", kind: "table" },
     ]);
+    vi.mocked(queryExecutionApi.execute).mockImplementationOnce(
+      async (request) => ({
+        queryId: request.queryId,
+        status: "succeeded",
+        results: [
+          {
+            statementIndex: 0,
+            status: "succeeded",
+            kind: "rows",
+            columns: [
+              { name: "id", ordinal: 0, dataType: { kind: "simple" } },
+            ],
+            batches: [
+              {
+                offset: 0,
+                rows: Array.from({ length: 201 }, (_, index) => [
+                  String(index + 1),
+                ]),
+              },
+            ],
+            rowCount: 201,
+            retainedRowCount: 201,
+            truncated: false,
+          },
+        ],
+      }),
+    );
 
     render(
       <I18nProvider>
@@ -616,15 +643,42 @@ describe("App sidebar", () => {
       queryId: expect.any(String),
       sessionId: "session-1",
       database: "postgres",
-      sql: 'SELECT *\nFROM "public"."users"\nLIMIT 200;',
-      rowLimit: 200,
+      sql: 'SELECT *\nFROM "public"."users"\nLIMIT 201\nOFFSET 0;',
+      rowLimit: 201,
     });
     expect(screen.getByRole("tab", { name: "users" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(await screen.findByText("Initial view up to 200 rows")).toBeVisible();
+    expect(await screen.findByText("Page 1")).toBeVisible();
     expect(await screen.findByRole("grid", { name: "Result 1" })).toBeVisible();
+    const nextPage = screen.getByRole("button", { name: "Next page" });
+    expect(nextPage).toBeEnabled();
+    fireEvent.click(nextPage);
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(2));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: 'SELECT *\nFROM "public"."users"\nLIMIT 201\nOFFSET 200;',
+      rowLimit: 201,
+    });
+    expect(await screen.findByText("Page 2")).toBeVisible();
+    expect(nextPage).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Previous page" })).toBeEnabled();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Rows per page" }), {
+      target: { value: "50" },
+    });
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(3));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: 'SELECT *\nFROM "public"."users"\nLIMIT 51\nOFFSET 0;',
+      rowLimit: 51,
+    });
+    expect(await screen.findByText("Page 1")).toBeVisible();
   });
 
   it("executes the cursor statement and all SQL with connection ownership", async () => {

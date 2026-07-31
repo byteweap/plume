@@ -39,6 +39,9 @@ export interface TableDataTab extends WorkspaceContext {
   title: string;
   schema: string;
   table: string;
+  pageIndex: number;
+  pageSize: number;
+  hasNextPage: boolean;
   execution?: QueryExecutionState;
 }
 
@@ -56,6 +59,12 @@ export type WorkspaceTabsAction =
   | ({ type: "open-connection" } & WorkspaceContext)
   | ({ type: "open-query"; titlePrefix: string } & WorkspaceContext)
   | ({ type: "open-table-data"; table: string } & WorkspaceContext)
+  | {
+      type: "set-table-data-page";
+      tabId: string;
+      pageIndex: number;
+      pageSize: number;
+    }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
@@ -81,6 +90,7 @@ export type WorkspaceTabsAction =
       tabId: string;
       result: QueryExecutionResult;
       finishedAt: number;
+      hasNextPage?: boolean;
     }
   | {
       type: "query-failed";
@@ -199,6 +209,9 @@ export function workspaceTabsReducer(
         schema: action.schema,
         table: action.table,
         title: action.table,
+        pageIndex: 0,
+        pageSize: 200,
+        hasNextPage: false,
       };
       return {
         ...state,
@@ -207,6 +220,22 @@ export function workspaceTabsReducer(
         nextTabId: state.nextTabId + 1,
       };
     }
+    case "set-table-data-page":
+      if (action.pageIndex < 0 || action.pageSize < 1) return state;
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "table-data"
+            ? {
+                ...tab,
+                pageIndex: action.pageIndex,
+                pageSize: action.pageSize,
+                hasNextPage: false,
+                execution: undefined,
+              }
+            : tab,
+        ),
+      };
     case "restore-queries": {
       const existingIds = new Set(state.tabs.map((tab) => tab.id));
       const restored = action.tabs.filter((tab) => !existingIds.has(tab.id));
@@ -280,8 +309,8 @@ export function workspaceTabsReducer(
           startedAt: action.startedAt,
         },
       }));
-    case "query-succeeded":
-      return updateActiveQuery(
+    case "query-succeeded": {
+      const updated = updateActiveQuery(
         state,
         action.tabId,
         action.result.queryId,
@@ -295,6 +324,19 @@ export function workspaceTabsReducer(
           },
         }),
       );
+      if (action.hasNextPage === undefined) return updated;
+      return {
+        ...updated,
+        tabs: updated.tabs.map((tab) =>
+          tab.id === action.tabId &&
+          tab.kind === "table-data" &&
+          tab.execution?.status === "succeeded" &&
+          tab.execution.queryId === action.result.queryId
+            ? { ...tab, hasNextPage: action.hasNextPage! }
+            : tab,
+        ),
+      };
+    }
     case "query-failed":
       return updateActiveQuery(
         state,

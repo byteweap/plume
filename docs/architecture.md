@@ -170,11 +170,15 @@ drops the temporary file and leaves an existing target untouched.
 Opening a regular table from the object tree creates or activates a dedicated
 table-data tab scoped by profile, database, Schema, and table. The initial load
 uses the existing cancellable query protocol and virtualized result grid, but
-generates a read-only `SELECT *` with quoted PostgreSQL identifiers and an
-explicit `LIMIT 200`; the request row budget is also fixed at 200. This ensures
-the first view never issues an unbounded table scan or drains a full result set.
-Pagination, sorting, filtering, and editability are layered onto this tab model
-by the subsequent P0-G tasks.
+generates a read-only `SELECT *` with quoted PostgreSQL identifiers and a
+bounded `LIMIT`/`OFFSET`. The initial page size is 200. Each page requests one
+additional probe row, which is removed before rendering, to determine whether
+the next-page action is available without running a full count or draining the
+result set. Users can move backward and forward or select 50, 100, 200, or 500
+rows per page; changing the size returns to page one. Until an explicit sort is
+added, the toolbar continuously warns that PostgreSQL may return rows in a
+different order between page requests. Sorting, filtering, and editability are
+layered onto this tab model by the subsequent P0-G tasks.
 
 ## SQL Completion Boundary
 

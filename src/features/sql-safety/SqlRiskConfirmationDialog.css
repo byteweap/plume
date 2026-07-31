@@ -1,0 +1,307 @@
+.sql-risk-backdrop {
+  position: fixed;
+  z-index: 130;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(25 28 26 / 48%);
+  backdrop-filter: blur(2px);
+}
+
+.sql-risk-dialog {
+  display: flex;
+  width: min(620px, calc(100vw - 40px));
+  max-height: min(680px, calc(100vh - 40px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d2c5c0;
+  border-radius: 8px;
+  color: #342f2d;
+  background: #ffffff;
+  box-shadow: 0 20px 58px rgb(34 25 22 / 28%);
+}
+
+.sql-risk-dialog > header {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 30px;
+  align-items: start;
+  gap: 10px;
+  border-bottom: 1px solid #e6dcda;
+  padding: 16px 15px 14px 18px;
+  background: #fffaf8;
+}
+
+.sql-risk-dialog > header > svg {
+  margin-top: 1px;
+  color: #a74834;
+}
+
+.sql-risk-dialog h2,
+.sql-risk-dialog h3,
+.sql-risk-dialog p,
+.sql-risk-dialog dl,
+.sql-risk-dialog dd,
+.sql-risk-dialog ol,
+.sql-risk-dialog pre {
+  margin: 0;
+}
+
+.sql-risk-dialog h2 {
+  font-size: 14px;
+}
+
+.sql-risk-dialog header p {
+  margin-top: 4px;
+  color: #756762;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sql-risk-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 15px 18px 17px;
+}
+
+.sql-risk-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #e0e4e1;
+  border-radius: 6px;
+  background: #e0e4e1;
+}
+
+.sql-risk-context > div {
+  min-width: 0;
+  padding: 8px 10px;
+  background: #fafbfa;
+}
+
+.sql-risk-context dt,
+.sql-risk-target > span {
+  color: #7a817c;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.sql-risk-context dd {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-risk-environment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sql-risk-environment > span {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #64748b;
+}
+
+.sql-risk-environment-development > span {
+  background: #2f8a62;
+}
+
+.sql-risk-environment-test > span {
+  background: #2f6fab;
+}
+
+.sql-risk-environment-staging > span {
+  background: #a66f22;
+}
+
+.sql-risk-environment-production > span {
+  background: #b34435;
+}
+
+.sql-risk-findings {
+  margin-top: 15px;
+}
+
+.sql-risk-findings h3 {
+  color: #5f5551;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.sql-risk-findings ol {
+  margin-top: 6px;
+  list-style: none;
+  padding: 0;
+}
+
+.sql-risk-findings li {
+  padding: 10px 0 11px;
+  border-top: 1px solid #ebe5e2;
+}
+
+.sql-risk-findings li:first-child {
+  border-top: 0;
+}
+
+.sql-risk-finding-heading,
+.sql-risk-target {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.sql-risk-finding-heading {
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.sql-risk-severity {
+  flex: 0 0 auto;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.sql-risk-severity-critical {
+  color: #923825;
+  background: #f7dfd8;
+}
+
+.sql-risk-severity-high {
+  color: #8a561b;
+  background: #f5e7cf;
+}
+
+.sql-risk-target {
+  margin-top: 6px;
+}
+
+.sql-risk-target code {
+  min-width: 0;
+  overflow: hidden;
+  color: #514944;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-risk-findings pre {
+  margin-top: 7px;
+  overflow: auto;
+  border-left: 3px solid #d7aaa0;
+  padding: 7px 9px;
+  color: #4c4643;
+  background: #f8f6f5;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sql-risk-dialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid #e6dcda;
+  padding: 10px 15px;
+  background: #faf8f7;
+}
+
+.sql-risk-confirm {
+  color: #ffffff;
+  border-color: #a74331;
+  background: #a74331;
+}
+
+.sql-risk-confirm:hover:not(:disabled) {
+  border-color: #913725;
+  background: #913725;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sql-risk-dialog {
+    border-color: #5b4842;
+    color: #e5deda;
+    background: #211f1e;
+  }
+
+  .sql-risk-dialog > header,
+  .sql-risk-dialog > footer {
+    border-color: #4b3e39;
+    background: #292320;
+  }
+
+  .sql-risk-dialog header p,
+  .sql-risk-findings h3 {
+    color: #b9aba5;
+  }
+
+  .sql-risk-context {
+    border-color: #454a46;
+    background: #454a46;
+  }
+
+  .sql-risk-context > div {
+    background: #282b29;
+  }
+
+  .sql-risk-context dt,
+  .sql-risk-target > span {
+    color: #969f99;
+  }
+
+  .sql-risk-findings li {
+    border-color: #463d39;
+  }
+
+  .sql-risk-target code,
+  .sql-risk-findings pre {
+    color: #d4cbc6;
+  }
+
+  .sql-risk-findings pre {
+    border-color: #8f5c50;
+    background: #2a2725;
+  }
+
+  .sql-risk-severity-critical {
+    color: #f1b3a3;
+    background: #552d26;
+  }
+
+  .sql-risk-severity-high {
+    color: #e9c18d;
+    background: #4d3c25;
+  }
+}
+
+@media (max-width: 560px) {
+  .sql-risk-backdrop {
+    padding: 10px;
+  }
+
+  .sql-risk-dialog {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .sql-risk-context {
+    grid-template-columns: 1fr;
+  }
+
+  .sql-risk-dialog > footer {
+    flex-wrap: wrap;
+  }
+}

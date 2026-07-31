@@ -71,6 +71,11 @@ import type {
   SqlExecutionTarget,
 } from "../features/sql-editor/SqlEditor";
 import {
+  SqlRiskConfirmationDialog,
+  type SqlRiskExecutionContext,
+} from "../features/sql-safety/SqlRiskConfirmationDialog";
+import type { SqlRisk } from "../features/sql-safety/sqlRiskAnalysis";
+import {
   createTableDataQuery,
   normalizeTableDataPage,
   TABLE_DATA_PAGE_SIZE_OPTIONS,
@@ -127,6 +132,15 @@ type TableDataLeaveRequest =
   | { kind: "disconnect"; profileId: string; tabIds: string[] }
   | { kind: "delete-profile"; profileId: string; tabIds: string[] }
   | { kind: "exit"; tabIds: string[] };
+interface PendingSqlRiskExecution {
+  tabId: string;
+  profileId: string;
+  sessionId: string;
+  target: SqlExecutionTarget;
+  rowLimit: number;
+  risks: SqlRisk[];
+  context: SqlRiskExecutionContext;
+}
 const sidebarKeyboardStep = 16;
 const defaultQueryResultHeight = 260;
 const minimumQueryResultHeight = 120;
@@ -176,6 +190,8 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [queryRowLimit, setQueryRowLimit] = useState(DEFAULT_QUERY_ROW_LIMIT);
+  const [sqlRiskRequest, setSqlRiskRequest] =
+    useState<PendingSqlRiskExecution>();
   const [leaveRequest, setLeaveRequest] = useState<TableDataLeaveRequest>();
   const [leaveStatus, setLeaveStatus] = useState<
     | { status: "idle" }
@@ -394,6 +410,66 @@ export function App() {
     },
     [],
   );
+
+  async function requestSqlExecution(
+    tab: QueryTab,
+    connection: ActiveConnection,
+    target: SqlExecutionTarget,
+    rowLimit: number,
+  ) {
+    const { analyzeSqlRisks } = await import(
+      "../features/sql-safety/sqlRiskAnalysis"
+    );
+    const risks = analyzeSqlRisks(target.sql);
+    if (risks.length === 0) {
+      void executeQuery(tab, connection.sessionId, target, rowLimit);
+      return;
+    }
+
+    setSqlRiskRequest({
+      tabId: tab.id,
+      profileId: tab.profileId,
+      sessionId: connection.sessionId,
+      target,
+      rowLimit,
+      risks,
+      context: {
+        profile: connection,
+        database: tab.database,
+        schema: tab.schema ?? "public",
+      },
+    });
+  }
+
+  function confirmSqlRiskExecution() {
+    if (!sqlRiskRequest) return;
+
+    const request = sqlRiskRequest;
+    setSqlRiskRequest(undefined);
+    const tab = workspaceTabs.tabs.find(
+      (item): item is QueryTab =>
+        item.id === request.tabId &&
+        item.kind === "query" &&
+        item.profileId === request.profileId &&
+        item.database === request.context.database,
+    );
+    const session = getConnectionSession(sessions, request.profileId);
+    if (
+      !tab ||
+      session.state !== "connected" ||
+      session.sessionId !== request.sessionId ||
+      tab.sql.slice(request.target.from, request.target.to) !== request.target.sql
+    ) {
+      return;
+    }
+
+    void executeQuery(
+      tab,
+      request.sessionId,
+      request.target,
+      request.rowLimit,
+    );
+  }
 
   async function cancelQuery(tab: ExecutableTab, sessionId: string) {
     const execution = getQueryExecution(tab);
@@ -1273,9 +1349,9 @@ export function App() {
                   ) {
                     return;
                   }
-                  void executeQuery(
+                  void requestSqlExecution(
                     activeTab,
-                    activeConnection.sessionId,
+                    activeConnection,
                     target,
                     queryRowLimit,
                   );
@@ -1439,6 +1515,14 @@ export function App() {
             setLeaveRequest(undefined);
             setLeaveStatus({ status: "idle" });
           }}
+        />
+      )}
+      {sqlRiskRequest && (
+        <SqlRiskConfirmationDialog
+          context={sqlRiskRequest.context}
+          risks={sqlRiskRequest.risks}
+          onCancel={() => setSqlRiskRequest(undefined)}
+          onConfirm={confirmSqlRiskExecution}
         />
       )}
     </main>

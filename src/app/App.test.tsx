@@ -949,6 +949,60 @@ describe("App sidebar", () => {
     });
   });
 
+  it("requires explicit confirmation before executing detected dangerous SQL", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("DELETE FROM public.sessions;");
+
+    const run = screen.getByRole("button", {
+      name: "Run selection or current statement",
+    });
+    fireEvent.click(run);
+
+    const dialog = await screen.findByRole("alertdialog", {
+      name: "Confirm dangerous SQL",
+    });
+    expect(dialog).toHaveTextContent("Local saved");
+    expect(dialog).toHaveTextContent("localhost:5432");
+    expect(dialog).toHaveTextContent("postgres");
+    expect(dialog).toHaveTextContent("public");
+    expect(dialog).toHaveTextContent("DELETE without WHERE");
+    expect(queryExecutionApi.execute).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(queryExecutionApi.execute).not.toHaveBeenCalled();
+
+    fireEvent.click(run);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Execute anyway" }),
+    );
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    expect(queryExecutionApi.execute).toHaveBeenCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: "DELETE FROM public.sessions;",
+      rowLimit: 10_000,
+    });
+  });
+
   it("reports query errors without marking a healthy session disconnected", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({

@@ -141,8 +141,13 @@ bounded statement summary, and identifiable target objects. Detection reads
 only syntax-tree keyword nodes, so comments, strings, quoted identifiers,
 dollar-quoted function bodies, and `ALTER TABLE ... DROP COLUMN` do not become
 executable operations by textual coincidence. This module only classifies SQL;
-the query execution boundary remains responsible for deciding how a reported
-risk must be confirmed.
+the query workspace intercepts classified user SQL before allocating a query ID
+or calling the backend. Its modal lists the connection name, host and port,
+database, effective Schema, environment, risk type, target, and bounded statement
+summary. Cancel has no execution side effect. Confirmation dispatches the frozen
+execution target only if the tab, SQL text, profile, session, and database still
+match the displayed context; otherwise the stale request is discarded. Internal
+table-data reads remain on their separate structured execution path.
 
 The response echoes the query ID, and the frontend accepts it only for the
 matching request that is still active in that tab. A successful cancel-packet

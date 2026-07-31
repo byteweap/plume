@@ -405,6 +405,11 @@ the connection profile ID, database/schema, exact execution target, elapsed
 milliseconds, outcome (`succeeded`, `failed`, or `cancelled`), and timestamp.
 Structured table-data reads are excluded. A history write is best-effort and
 never changes the database operation's user-visible result.
+The history insert and retention cleanup share one SQLite transaction. The
+default policy removes rows older than 90 days and, independently, rows beyond
+the newest 10,000 entries; either bound is sufficient for deletion. The Rust
+service accepts an explicit validated policy so a later settings surface can
+change either limit without changing persistence semantics.
 
 ## Security and Privacy Invariants
 

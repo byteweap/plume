@@ -4,6 +4,7 @@ import type { QueryExecutionResult } from "../query-execution/queryExecution";
 import { useI18n } from "../../i18n/I18nContext";
 import {
   QueryResultGrid,
+  type QueryResultGridEditing,
   type QueryResultSort,
 } from "./QueryResultGrid";
 import "./QueryResults.css";
@@ -12,6 +13,7 @@ export interface QueryResultPanelProps {
   result: QueryExecutionResult;
   sorts?: QueryResultSort[];
   onSortsChange?: (sorts: QueryResultSort[]) => void;
+  editing?: QueryResultGridEditing;
 }
 
 function getInitialStatementIndex(result: QueryExecutionResult) {
@@ -25,6 +27,7 @@ export function QueryResultPanel({
   result,
   sorts,
   onSortsChange,
+  editing,
 }: QueryResultPanelProps) {
   const { t } = useI18n();
   const [activeIndex, setActiveIndex] = useState(() =>
@@ -123,6 +126,7 @@ export function QueryResultPanel({
             emptyLabel={t("query.results.empty")}
             sorts={sorts}
             onSortsChange={onSortsChange}
+            editing={editing}
           />
         ) : (
           <div className="query-result-command" role="status">

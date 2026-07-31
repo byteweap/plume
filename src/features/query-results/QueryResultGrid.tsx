@@ -8,6 +8,7 @@ import {
   type CellMouseEvent,
   type Column,
   type ColumnWidths,
+  type RenderEditCellProps,
   type SortColumn,
 } from "react-data-grid";
 import "react-data-grid/lib/styles.css";
@@ -15,6 +16,7 @@ import type {
   QueryColumn,
   QueryStatementResult,
 } from "../query-execution/queryExecution";
+import type { PendingTableValue } from "../table-data/tableDataChanges";
 import { useI18n } from "../../i18n/I18nContext";
 import { IconButton } from "../../shared/IconButton";
 import {
@@ -27,6 +29,7 @@ import {
   type QueryGridRow,
 } from "./queryResultRows";
 import { presentQueryResultValue } from "./queryResultValue";
+import { QueryResultCellEditor } from "./QueryResultCellEditor";
 import {
   ResultExportDialog,
   type ResultExportFormat,
@@ -43,6 +46,19 @@ export interface QueryResultGridProps {
   emptyLabel: string;
   sorts?: QueryResultSort[];
   onSortsChange?: (sorts: QueryResultSort[]) => void;
+  editing?: QueryResultGridEditing;
+}
+
+export interface QueryResultGridEditing {
+  getPendingValue: (
+    row: QueryGridRow,
+    columnIndex: number,
+  ) => PendingTableValue | undefined;
+  onCellValueChange: (
+    row: QueryGridRow,
+    columnIndex: number,
+    value: PendingTableValue,
+  ) => void;
 }
 
 export interface QueryResultSort {
@@ -103,10 +119,12 @@ function getResultCellClass(
   column: QueryColumn,
   columnIndex: number,
   selection: GridSelection | undefined,
+  pendingValue?: PendingTableValue,
 ): string {
-  const presentation = presentQueryResultValue(
+  const presentation = presentGridCellValue(
     row.values[columnIndex],
     column,
+    pendingValue,
   );
   const isSelected = isPositionSelected(selection, {
     rowIndex: row.rowIndex,
@@ -115,10 +133,32 @@ function getResultCellClass(
 
   return [
     `query-result-cell-${presentation.kind}`,
+    pendingValue ? "query-result-cell-pending" : undefined,
     isSelected ? "query-result-cell-selected" : undefined,
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+function presentGridCellValue(
+  originalValue: QueryGridRow["values"][number] | undefined,
+  column: QueryColumn,
+  pendingValue?: PendingTableValue,
+) {
+  if (pendingValue?.kind === "default") {
+    return {
+      kind: "default",
+      displayText: "DEFAULT",
+      titleText: "DEFAULT",
+    };
+  }
+  const value =
+    pendingValue?.kind === "value"
+      ? pendingValue.value
+      : pendingValue?.kind === "null"
+        ? null
+        : originalValue;
+  return presentQueryResultValue(value, column);
 }
 
 function isRangeNavigationKey(key: string) {
@@ -162,6 +202,7 @@ export function QueryResultGrid({
   emptyLabel,
   sorts = [],
   onSortsChange,
+  editing,
 }: QueryResultGridProps) {
   const { t } = useI18n();
   const rows = useMemo(() => buildQueryGridRows(statement), [statement]);
@@ -203,7 +244,7 @@ export function QueryResultGrid({
         key: `column-${columnIndex}`,
         name: column.name,
         width: estimateColumnWidth(statement, columnIndex),
-        minWidth: 80,
+        minWidth: editing ? 220 : 80,
         maxWidth: 560,
         resizable: true,
         sortable,
@@ -223,26 +264,66 @@ export function QueryResultGrid({
             </span>
           );
         },
-        cellClass: (row: QueryGridRow) =>
-          getResultCellClass(row, column, columnIndex, selection),
+        cellClass: (row: QueryGridRow) => {
+          const pendingValue = editing?.getPendingValue(row, columnIndex);
+          return getResultCellClass(
+            row,
+            column,
+            columnIndex,
+            selection,
+            pendingValue,
+          );
+        },
         renderCell: ({ row }: { row: QueryGridRow }) => {
-          const presentation = presentQueryResultValue(
+          const pendingValue = editing?.getPendingValue(row, columnIndex);
+          const presentation = presentGridCellValue(
+            row.values[columnIndex],
+            column,
+            pendingValue,
+          );
+          const originalPresentation = presentQueryResultValue(
             row.values[columnIndex],
             column,
           );
+          const titleText = pendingValue
+            ? `${t("tableData.editor.original")}: ${originalPresentation.displayText}\n${t("tableData.editor.staged")}: ${presentation.displayText}`
+            : presentation.titleText;
           return (
             <span
               className={`query-result-value query-result-value-${presentation.kind}`}
               data-query-result-value={presentation.displayText}
-              title={presentation.titleText}
+              data-query-result-original-value={
+                pendingValue ? originalPresentation.displayText : undefined
+              }
+              title={titleText}
             >
               {presentation.displayText}
             </span>
           );
         },
+        ...(editing
+          ? {
+              editable: true,
+              editorOptions: { commitOnOutsideClick: false },
+              renderEditCell: ({
+                row,
+                onClose,
+              }: RenderEditCellProps<QueryGridRow>) => (
+                <QueryResultCellEditor
+                  column={column}
+                  originalValue={row.values[columnIndex] ?? null}
+                  pendingValue={editing.getPendingValue(row, columnIndex)}
+                  onCommit={(value) =>
+                    editing.onCellValueChange(row, columnIndex, value)
+                  }
+                  onClose={() => onClose(false, true)}
+                />
+              ),
+            }
+          : {}),
       })),
     ];
-  }, [lastColumnIndex, selection, sortable, statement, t]);
+  }, [editing, lastColumnIndex, selection, sortable, statement, t]);
   const sortColumns = useMemo<readonly SortColumn[]>(
     () =>
       sorts.map((sort) => ({
@@ -372,6 +453,7 @@ export function QueryResultGrid({
           className="query-result-grid"
           columns={columns}
           rows={rows}
+          onRowsChange={editing ? () => undefined : undefined}
           rowKeyGetter={rowKeyGetter}
           rowHeight={rowHeight}
           headerRowHeight={headerRowHeight}

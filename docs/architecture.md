@@ -204,6 +204,17 @@ not a database command: paging, sorting, filtering, and query completion leave
 the change set intact, and the workspace reducer accepts new staged changes
 only while reliable-key editability is active.
 
+Editable result columns use React Data Grid's native edit lifecycle, but a
+Plume editor owns the staged value. Its explicit mode selector distinguishes a
+text value from `NULL` and `DEFAULT`; the text mode preserves raw PostgreSQL
+representations without JavaScript coercion, so an empty string, numeric text,
+JSON, dates, arrays, and other server-typed values remain distinct until the
+transaction command performs the PostgreSQL cast. Committing the editor only
+updates the local change set. Pending cells render the staged value with a
+visible marker and expose both original and staged presentations in their
+tooltip. Read-only tables and result sets missing any selected key column do
+not receive an editor.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

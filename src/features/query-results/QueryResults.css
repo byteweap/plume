@@ -241,6 +241,63 @@
   color: #855237;
 }
 
+.query-result-value-default {
+  color: #80651d;
+  font-style: italic;
+  font-weight: 600;
+}
+
+.query-result-grid .query-result-cell-pending {
+  background: #fff9e8;
+  box-shadow: inset 2px 0 0 #c79a32;
+}
+
+.query-result-cell-editor {
+  position: absolute;
+  z-index: 3;
+  inset: -1px;
+  display: grid;
+  min-width: 218px;
+  align-items: center;
+  grid-template-columns: 68px minmax(54px, 1fr) 24px 24px;
+  gap: 2px;
+  border: 1px solid #5e9076;
+  padding: 1px 2px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgb(40 58 48 / 18%);
+}
+
+.query-result-cell-editor select,
+.query-result-cell-editor input {
+  min-width: 0;
+  height: 24px;
+  border: 1px solid #cbd4ce;
+  border-radius: 3px;
+  padding: 0 5px;
+  color: #2f3a33;
+  background: #ffffff;
+  font: inherit;
+}
+
+.query-result-cell-editor input:disabled {
+  color: #7d7160;
+  background: #f5f2eb;
+  font-style: italic;
+}
+
+.query-result-cell-editor select:focus-visible,
+.query-result-cell-editor input:focus-visible {
+  border-color: #5e9076;
+  outline: 1px solid #5e9076;
+  outline-offset: 0;
+}
+
+.icon-button.query-result-editor-action {
+  width: 24px;
+  height: 24px;
+  flex-basis: 24px;
+}
+
 .query-result-grid .query-result-cell-selected {
   background: #e4f0e8;
   box-shadow: inset 0 0 0 1px rgb(91 142 115 / 24%);
@@ -393,6 +450,33 @@
 
   .query-result-value-binary {
     color: #e0a880;
+  }
+
+  .query-result-value-default {
+    color: #e2c46f;
+  }
+
+  .query-result-grid .query-result-cell-pending {
+    background: #3d3623;
+    box-shadow: inset 2px 0 0 #c9a54d;
+  }
+
+  .query-result-cell-editor {
+    border-color: #79aa90;
+    background: #242925;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 34%);
+  }
+
+  .query-result-cell-editor select,
+  .query-result-cell-editor input {
+    border-color: #465048;
+    color: #dce3de;
+    background: #1f2420;
+  }
+
+  .query-result-cell-editor input:disabled {
+    color: #c5bda9;
+    background: #322f28;
   }
 
   .query-result-command strong {

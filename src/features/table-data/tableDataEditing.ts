@@ -1,0 +1,63 @@
+import type { QueryStatementResult } from "../query-execution/queryExecution";
+import type { QueryResultGridEditing } from "../query-results/QueryResultGrid";
+import type { TableIdentityKey } from "./tableData";
+import {
+  createTableRowLocator,
+  findPendingTableCellUpdate,
+  stageTableCellUpdate,
+  type TableDataChangeSet,
+} from "./tableDataChanges";
+
+interface TableDataEditingContext {
+  pageIndex: number;
+  key: TableIdentityKey;
+  changes: TableDataChangeSet;
+}
+
+export function createTableDataGridEditing(
+  context: TableDataEditingContext,
+  statement: QueryStatementResult,
+  onChangesChange: (changes: TableDataChangeSet) => void,
+): QueryResultGridEditing | undefined {
+  if (
+    context.key.columns.some(
+      (keyColumn) => !statement.columns.some((column) => column.name === keyColumn),
+    )
+  ) {
+    return undefined;
+  }
+
+  function getLocator(values: QueryStatementResult["batches"][number]["rows"][number]) {
+    return createTableRowLocator(
+      context.key.name,
+      context.key.columns,
+      statement.columns,
+      values,
+    );
+  }
+
+  return {
+    getPendingValue: (row, columnIndex) => {
+      const locator = getLocator(row.values);
+      return locator
+        ? findPendingTableCellUpdate(context.changes, locator, columnIndex)?.newValue
+        : undefined;
+    },
+    onCellValueChange: (row, columnIndex, newValue) => {
+      const column = statement.columns[columnIndex];
+      const locator = getLocator(row.values);
+      if (!column || !locator) return;
+      onChangesChange(
+        stageTableCellUpdate(context.changes, {
+          locator,
+          pageIndex: context.pageIndex,
+          rowIndex: row.rowIndex,
+          columnIndex,
+          columnName: column.name,
+          originalValue: row.values[columnIndex] ?? null,
+          newValue,
+        }),
+      );
+    },
+  };
+}

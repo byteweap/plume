@@ -1,4 +1,7 @@
-import type { QueryValue } from "../query-execution/queryExecution";
+import type {
+  QueryColumn,
+  QueryValue,
+} from "../query-execution/queryExecution";
 
 export type PendingTableValue =
   | { kind: "value"; value: string }
@@ -70,6 +73,35 @@ export function getTableRowId(locator: TableRowLocator): string {
     locator.keyName,
     locator.columns.map(({ columnName, value }) => [columnName, value]),
   ]);
+}
+
+export function createTableRowLocator(
+  keyName: string,
+  keyColumns: readonly string[],
+  columns: readonly QueryColumn[],
+  values: readonly QueryValue[],
+): TableRowLocator | undefined {
+  const locatorColumns: TableRowLocator["columns"] = [];
+  for (const columnName of keyColumns) {
+    const columnIndex = columns.findIndex((column) => column.name === columnName);
+    const value = columnIndex < 0 ? undefined : values[columnIndex];
+    if (value === undefined || value === null) return undefined;
+    locatorColumns.push({ columnName, value });
+  }
+  return keyColumns.length > 0
+    ? { keyName, columns: locatorColumns }
+    : undefined;
+}
+
+export function findPendingTableCellUpdate(
+  changes: TableDataChangeSet,
+  locator: TableRowLocator,
+  columnIndex: number,
+): PendingTableCellUpdate | undefined {
+  const rowId = getTableRowId(locator);
+  return changes.updatedRows
+    .find((row) => row.rowId === rowId)
+    ?.cells.find((cell) => cell.columnIndex === columnIndex);
 }
 
 export function stageTableCellUpdate(

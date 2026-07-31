@@ -61,6 +61,7 @@ import {
   summarizeQueryResult,
   type ExecuteQueryRequest,
   type QueryExecutionState,
+  type QueryStatementResult,
 } from "../features/query-execution/queryExecution";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
 import { resolveQueryErrorRange } from "../features/query-execution/queryErrorPosition";
@@ -76,6 +77,8 @@ import {
 } from "../features/table-data/tableData";
 import { tableDataApi } from "../features/table-data/tableDataApi";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
+import type { TableDataChangeSet } from "../features/table-data/tableDataChanges";
+import { createTableDataGridEditing } from "../features/table-data/tableDataEditing";
 import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
@@ -1147,6 +1150,13 @@ export function App() {
                     filters,
                   })
                 }
+                onChangesChange={(changes) =>
+                  dispatchWorkspaceTabs({
+                    type: "stage-table-data-changes",
+                    tabId: activeTab.id,
+                    changes,
+                  })
+                }
                 onCancel={() => {
                   if (activeConnection) {
                     void cancelQuery(activeTab, activeConnection.sessionId);
@@ -1303,6 +1313,7 @@ function TableDataWorkspace({
   onPageChange,
   onSortsChange,
   onFiltersChange,
+  onChangesChange,
   onCancel,
 }: {
   tab: TableDataTab;
@@ -1313,6 +1324,7 @@ function TableDataWorkspace({
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onSortsChange: (sorts: TableDataTab["sorts"]) => void;
   onFiltersChange: (filters: TableDataTab["filters"]) => void;
+  onChangesChange: (changes: TableDataChangeSet) => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
@@ -1325,6 +1337,24 @@ function TableDataWorkspace({
     "{page}",
     (tab.pageIndex + 1).toLocaleString(),
   );
+  const rowStatement =
+    execution.status === "succeeded"
+      ? execution.result.results.find(
+          (statement): statement is QueryStatementResult => statement.kind === "rows",
+        )
+      : undefined;
+  const editing =
+    rowStatement && tab.editability.status === "editable"
+      ? createTableDataGridEditing(
+          {
+            pageIndex: tab.pageIndex,
+            key: tab.editability.key,
+            changes: tab.changes,
+          },
+          rowStatement,
+          onChangesChange,
+        )
+      : undefined;
 
   if (!connection) {
     return <UnavailableWorkspace state={state} onReconnect={onReconnect} />;
@@ -1439,15 +1469,13 @@ function TableDataWorkspace({
             <QueryResultPanel
               result={execution.result}
               sorts={tab.sorts}
+              editing={editing}
               onSortsChange={(sorts) => {
-                const statement = execution.result.results.find(
-                  (item) => item.kind === "rows",
-                );
                 onSortsChange(
                   sorts.map((sort) => ({
                     ...sort,
                     columnName:
-                      statement?.columns[sort.columnIndex]?.name ??
+                      rowStatement?.columns[sort.columnIndex]?.name ??
                       String(sort.columnIndex + 1),
                   })),
                 );

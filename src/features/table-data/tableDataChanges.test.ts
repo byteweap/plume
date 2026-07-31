@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   createEmptyTableDataChangeSet,
+  createTableRowLocator,
   discardTableRowInsert,
+  findPendingTableCellUpdate,
   getTableRowId,
   hasPendingTableDataChanges,
   restoreTableRowDelete,
@@ -179,5 +181,31 @@ describe("table data pending changes", () => {
       deletedRows: 0,
       totalRows: 2,
     });
+    expect(findPendingTableCellUpdate(changes, locator, 1)?.newValue).toEqual({
+      kind: "value",
+      value: "true",
+    });
+  });
+
+  it("builds non-null locators from the original result row", () => {
+    const columns = [
+      { name: "id", ordinal: 0, dataType: { kind: "simple" as const } },
+      { name: "tenant", ordinal: 1, dataType: { kind: "simple" as const } },
+    ];
+    expect(
+      createTableRowLocator("items_key", ["tenant", "id"], columns, ["7", "acme"]),
+    ).toEqual({
+      keyName: "items_key",
+      columns: [
+        { columnName: "tenant", value: "acme" },
+        { columnName: "id", value: "7" },
+      ],
+    });
+    expect(
+      createTableRowLocator("items_key", ["id"], columns, [null, "acme"]),
+    ).toBeUndefined();
+    expect(
+      createTableRowLocator("items_key", ["missing"], columns, ["7", "acme"]),
+    ).toBeUndefined();
   });
 });

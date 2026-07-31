@@ -162,6 +162,64 @@ describe("QueryResultPanel", () => {
     expect(screen.getByText("Rows affected 4")).toBeVisible();
   });
 
+  it("opens the cell editor only when table editing is enabled", () => {
+    const onCellValueChange = vi.fn();
+    window.localStorage.setItem("plume.locale", "en-US");
+    const { unmount } = render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={result}
+          editing={{
+            getPendingValue: () => undefined,
+            onCellValueChange,
+          }}
+        />
+      </I18nProvider>,
+    );
+    const cell = screen.getByText("one").closest("[role='gridcell']");
+    expect(cell).not.toBeNull();
+    fireEvent.doubleClick(cell!);
+    const input = screen.getByRole("textbox", { name: "Edit name" });
+    fireEvent.change(input, { target: { value: "updated" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onCellValueChange).toHaveBeenCalledWith(
+      { rowIndex: 0, values: ["one", null] },
+      0,
+      { kind: "value", value: "updated" },
+    );
+
+    unmount();
+    renderPanel();
+    fireEvent.doubleClick(screen.getByText("one").closest("[role='gridcell']")!);
+    expect(screen.queryByRole("textbox", { name: "Edit name" })).toBeNull();
+  });
+
+  it("shows staged values with their original value and pending state", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={result}
+          editing={{
+            getPendingValue: (row, columnIndex) =>
+              row.rowIndex === 0 && columnIndex === 0
+                ? { kind: "default" }
+                : undefined,
+            onCellValueChange: vi.fn(),
+          }}
+        />
+      </I18nProvider>,
+    );
+    const staged = screen.getByText("DEFAULT");
+    expect(staged).toHaveAttribute(
+      "title",
+      "Original: one\nStaged: DEFAULT",
+    );
+    expect(staged.closest("[role='gridcell']")).toHaveClass(
+      "query-result-cell-pending",
+    );
+  });
+
   it("supports keyboard navigation between statement tabs", () => {
     renderPanel();
 

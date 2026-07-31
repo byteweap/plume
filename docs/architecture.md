@@ -475,6 +475,8 @@ for the isolated database suite. CI additionally reviews dependency changes on p
 
 The manual [macOS release workflow](./macos-release.md) builds a universal macOS 13+ app and DMG, signs them with an injected Developer ID certificate, submits them for Apple notarization, staples the tickets, and rejects artifacts that fail signature, architecture, Gatekeeper, or notarization verification. Signing credentials remain encrypted repository secrets and are never part of the application configuration.
 
+The manual [Windows release workflow](./windows-release.md) imports an encrypted PFX into the ephemeral runner certificate store, builds signed MSI and NSIS packages, requires SHA-256 Authenticode signatures with trusted timestamps, and performs silent install/uninstall cycles. The stable MSI UpgradeCode and non-elevated NSIS install policy are checked by the repository gate; the certificate thumbprint is injected only for the release build.
+
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.

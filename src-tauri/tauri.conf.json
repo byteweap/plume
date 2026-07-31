@@ -29,6 +29,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Plume contributors",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -52,6 +53,27 @@
           "x": 480,
           "y": 170
         }
+      }
+    },
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "http://timestamp.digicert.com",
+      "tsp": true,
+      "allowDowngrades": false,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "wix": {
+        "upgradeCode": "1c64b784-fd98-59b4-92b3-68887bd545e9",
+        "language": "en-US"
+      },
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "uninstallerIcon": "icons/icon.ico",
+        "installMode": "currentUser",
+        "languages": ["English", "SimpChinese"],
+        "displayLanguageSelector": false
       }
     }
   }

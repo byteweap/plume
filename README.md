@@ -151,7 +151,7 @@ Build a desktop bundle with:
 npm run tauri build
 ```
 
-The [macOS release guide](docs/macos-release.md) documents the universal signed build, required repository secrets, notarization, and artifact verification.
+The [macOS](docs/macos-release.md) and [Windows](docs/windows-release.md) release guides document signed builds, required repository secrets, and artifact verification.
 
 ## Repository Layout
 

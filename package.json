@@ -14,8 +14,9 @@
     "benchmark:editor": "node --expose-gc scripts/benchmark-sql-editor.mjs",
     "benchmark:regression": "npm run benchmark:core && npm run benchmark:editor && npm run benchmark:grid && npm run benchmark:bundle",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:unit-baseline && npm run test:acceptance",
-    "check:all": "npm run check:security && npm run check:release:macos && npm run check && npm run build && npm run check:rust",
+    "check:all": "npm run check:security && npm run check:release:macos && npm run check:release:windows && npm run check && npm run build && npm run check:rust",
     "check:release:macos": "node scripts/check-macos-release.mjs --config-only",
+    "check:release:windows": "node scripts/check-windows-release.mjs --config-only",
     "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "check:security": "node scripts/check-security.mjs",
     "hooks:install": "node scripts/install-git-hooks.mjs",
@@ -32,7 +33,8 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "tauri": "tauri",
-    "verify:release:macos": "node scripts/check-macos-release.mjs"
+    "verify:release:macos": "node scripts/check-macos-release.mjs",
+    "verify:release:windows": "node scripts/check-windows-release.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

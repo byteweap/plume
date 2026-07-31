@@ -345,6 +345,8 @@ cargo test
 
 手动触发的 [macOS 发布流程](./macos-release.md)会构建 macOS 13+ universal 应用与 DMG，通过注入的 Developer ID 证书完成签名和 Apple 公证并附加票据；签名、架构、Gatekeeper 或公证验证不通过的产物不会上传。签名凭据只保存在加密仓库 Secret 中，不进入应用配置。
 
+手动触发的 [Windows 发布流程](./windows-release.md)会把加密 PFX 导入临时运行器证书库，构建已签名的 MSI 与 NSIS 安装包，强制检查 SHA-256 Authenticode 与可信时间戳，并执行静默安装/卸载循环。仓库门禁固定 MSI UpgradeCode 与免提权 NSIS 安装策略；证书指纹只在发布构建时注入。
+
 ## 当前限制
 
 - PostgreSQL 会话只保存在内存中，重连始终由用户明确触发。

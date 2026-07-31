@@ -146,7 +146,7 @@ Compose 环境默认监听本机 `55432` 端口，并创建 `plume` 和 `plume_s
 npm run tauri build
 ```
 
-[macOS 发布指南](docs/macos-release.md)记录了 universal 签名构建、所需仓库 Secret、公证与产物验证流程。
+[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret 与产物验证流程。
 
 ## 仓库结构
 

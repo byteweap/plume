@@ -1,0 +1,131 @@
+name: Windows Signed Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+
+concurrency:
+  group: windows-signed-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Sign and verify Windows installers
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run release gates
+        run: npm run check:all
+
+      - name: Require Windows signing secrets
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE)) {
+            throw "Missing required repository secret: WINDOWS_CERTIFICATE"
+          }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw "Missing required repository secret: WINDOWS_CERTIFICATE_PASSWORD"
+          }
+
+      - name: Import code-signing certificate
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "plume-code-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificatePath,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+          )
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $importedCertificates = @(Import-PfxCertificate `
+            -FilePath $certificatePath `
+            -CertStoreLocation Cert:\CurrentUser\My `
+            -Password $password)
+          Remove-Item -LiteralPath $certificatePath -Force
+          $importedThumbprints = @(
+            $importedCertificates | ForEach-Object { $_.Thumbprint } | Select-Object -Unique
+          )
+          "WINDOWS_IMPORTED_CERTIFICATE_THUMBPRINTS=$($importedThumbprints -join ',')" >> $env:GITHUB_ENV
+          $certificate = $importedCertificates | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+          if ($null -eq $certificate) {
+            throw "The imported Windows certificate does not contain a private key."
+          }
+          "WINDOWS_CERTIFICATE_THUMBPRINT=$($certificate.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build and sign MSI and NSIS installers
+        shell: pwsh
+        run: |
+          $releaseConfig = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT
+              }
+            }
+          } | ConvertTo-Json -Compress -Depth 4
+          $env:TAURI_CONFIG = $releaseConfig
+          npm run tauri build -- --bundles msi,nsis --ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Verify Authenticode signatures and timestamps
+        run: >-
+          npm run verify:release:windows --
+          --bundle-root src-tauri/target/release/bundle
+          --executable src-tauri/target/release/plume.exe
+
+      - name: Test silent install and uninstall
+        shell: pwsh
+        run: ./scripts/test-windows-installers.ps1 -BundleRoot src-tauri/target/release/bundle
+
+      - name: Upload signed installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: plume-windows-x64-signed
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove imported code-signing certificate
+        if: always()
+        shell: pwsh
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "plume-code-signing.pfx"
+          if (Test-Path $certificatePath) {
+            Remove-Item -LiteralPath $certificatePath -Force
+          }
+          if (![string]::IsNullOrWhiteSpace($env:WINDOWS_IMPORTED_CERTIFICATE_THUMBPRINTS)) {
+            foreach ($thumbprint in $env:WINDOWS_IMPORTED_CERTIFICATE_THUMBPRINTS.Split(',')) {
+              Remove-Item -LiteralPath "Cert:\CurrentUser\My\$thumbprint" -Force
+            }
+          }

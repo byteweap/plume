@@ -14,7 +14,8 @@
     "benchmark:editor": "node --expose-gc scripts/benchmark-sql-editor.mjs",
     "benchmark:regression": "npm run benchmark:core && npm run benchmark:editor && npm run benchmark:grid && npm run benchmark:bundle",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:unit-baseline && npm run test:acceptance",
-    "check:all": "npm run check:security && npm run check && npm run build && npm run check:rust",
+    "check:all": "npm run check:security && npm run check:release:macos && npm run check && npm run build && npm run check:rust",
+    "check:release:macos": "node scripts/check-macos-release.mjs --config-only",
     "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",
     "check:security": "node scripts/check-security.mjs",
     "hooks:install": "node scripts/install-git-hooks.mjs",
@@ -30,7 +31,8 @@
     "test:unit-baseline": "vitest run src/features/connections/connectionUrl.test.ts src/features/table-data/tableData.test.ts src/features/sql-editor/sqlExecutionTarget.test.ts src/features/sql-safety/sqlRiskAnalysis.test.ts src/features/query-results/queryResultValue.test.ts src/features/table-data/tableDataChanges.test.ts",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "verify:release:macos": "node scripts/check-macos-release.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

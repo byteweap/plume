@@ -473,6 +473,8 @@ The repository-level `npm run check:all` command runs the complete local gate, i
 Use `npm run postgres:up`, `npm run test:postgres`, and `npm run postgres:down`
 for the isolated database suite. CI additionally reviews dependency changes on pull requests, runs the performance regression, builds unsigned macOS and Windows bundles, and runs the suite against PostgreSQL 14, 16, and 18.
 
+The manual [macOS release workflow](./macos-release.md) builds a universal macOS 13+ app and DMG, signs them with an injected Developer ID certificate, submits them for Apple notarization, staples the tickets, and rejects artifacts that fail signature, architecture, Gatekeeper, or notarization verification. Signing credentials remain encrypted repository secrets and are never part of the application configuration.
+
 ## Current Limitations
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.

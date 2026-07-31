@@ -343,6 +343,8 @@ cargo test
 
 仓库级 `npm run check:all` 会运行包含 `npm run check:security` 的完整本地门禁。隔离数据库测试依次使用 `npm run postgres:up`、`npm run test:postgres` 和 `npm run postgres:down`；CI 还会在拉取请求中审查依赖变更、执行性能回归、构建未签名的 macOS/Windows 安装包，并在 PostgreSQL 14、16 和 18 上运行测试矩阵。
 
+手动触发的 [macOS 发布流程](./macos-release.md)会构建 macOS 13+ universal 应用与 DMG，通过注入的 Developer ID 证书完成签名和 Apple 公证并附加票据；签名、架构、Gatekeeper 或公证验证不通过的产物不会上传。签名凭据只保存在加密仓库 Secret 中，不进入应用配置。
+
 ## 当前限制
 
 - PostgreSQL 会话只保存在内存中，重连始终由用户明确触发。

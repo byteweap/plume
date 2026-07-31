@@ -233,9 +233,9 @@ export function ResultExportDialog({
                       setEncoding(event.currentTarget.value as CsvEncoding)
                     }
                   >
-                    <option value="utf-8">UTF-8</option>
-                    <option value="utf-8-bom">UTF-8 BOM</option>
-                    <option value="utf-16le">UTF-16 LE</option>
+                    <option value="utf-8">{t("query.export.encoding.utf8")}</option>
+                    <option value="utf-8-bom">{t("query.export.encoding.utf8Bom")}</option>
+                    <option value="utf-16le">{t("query.export.encoding.utf16Le")}</option>
                   </select>
                 </label>
               </div>

@@ -128,6 +128,20 @@ describe("App sidebar", () => {
     Reflect.deleteProperty(navigator, "clipboard");
   });
 
+  it("switches the complete shell between Chinese and English", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText("A lightweight PostgreSQL workspace")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "EN" }));
+    expect(screen.getByText("轻盈的 PostgreSQL 工作台")).toBeVisible();
+    expect(window.localStorage.getItem("plume.locale")).toBe("zh-CN");
+  });
+
   it("AC-07 renders every connection environment with a persistent semantic tone", () => {
     window.localStorage.setItem("plume.locale", "en-US");
     render(

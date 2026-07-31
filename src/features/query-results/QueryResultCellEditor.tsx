@@ -97,8 +97,8 @@ export function QueryResultCellEditor({
         onChange={(event) => setMode(event.currentTarget.value as EditorMode)}
       >
         <option value="value">{t("tableData.editor.value")}</option>
-        <option value="null">NULL</option>
-        <option value="default">DEFAULT</option>
+        <option value="null">{t("tableData.editor.null")}</option>
+        <option value="default">{t("tableData.editor.default")}</option>
       </select>
       <input
         ref={inputRef}

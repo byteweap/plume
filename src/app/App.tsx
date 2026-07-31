@@ -1324,7 +1324,7 @@ export function App() {
           <span className="brand-mark" aria-hidden="true">
             <img src={plumeMark} alt="" />
           </span>
-          <strong>Plume</strong>
+          <strong>{t("app.name")}</strong>
           <span className="brand-divider" />
           <span className="brand-tagline">{t("app.tagline")}</span>
         </div>
@@ -1670,7 +1670,7 @@ export function App() {
             : t("status.disconnected")}
         </span>
         <span className="status-spacer" />
-        <span>Plume 0.1.0</span>
+        <span>{t("app.version")}</span>
       </footer>
 
       {dialogProfile !== undefined && (

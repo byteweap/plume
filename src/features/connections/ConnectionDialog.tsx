@@ -320,7 +320,7 @@ export function ConnectionDialog({
               <h2 id={titleId}>
                 {t(profile ? "connection.editTitle" : "connection.newTitle")}
               </h2>
-              <p>PostgreSQL 14+</p>
+              <p>{t("connection.minimumVersion")}</p>
             </div>
           </div>
           <IconButton label={t("connection.close")} onClick={onClose}>
@@ -348,7 +348,7 @@ export function ConnectionDialog({
                         setConnectionUrl(event.target.value);
                         setConnectionUrlError(undefined);
                       }}
-                      placeholder="postgresql://user@host/database"
+                      placeholder={t("connection.urlPlaceholder")}
                       spellCheck={false}
                     />
                     <button
@@ -367,7 +367,7 @@ export function ConnectionDialog({
                     autoFocus
                     value={form.name}
                     onChange={(event) => updateField("name", event.target.value)}
-                    placeholder="Local development"
+                    placeholder={t("connection.namePlaceholder")}
                   />
                 </Field>
 
@@ -555,7 +555,7 @@ export function ConnectionDialog({
                     onChange={(event) =>
                       updateField("rootCertificatePath", event.target.value)
                     }
-                    placeholder="/path/to/root.crt"
+                    placeholder={t("connection.rootCertificatePlaceholder")}
                     spellCheck={false}
                   />
                 </Field>
@@ -574,7 +574,7 @@ export function ConnectionDialog({
                     onChange={(event) =>
                       updateField("clientCertificatePath", event.target.value)
                     }
-                    placeholder="/path/to/client.crt"
+                    placeholder={t("connection.clientCertificatePlaceholder")}
                     spellCheck={false}
                   />
                 </Field>
@@ -590,7 +590,7 @@ export function ConnectionDialog({
                     onChange={(event) =>
                       updateField("clientKeyPath", event.target.value)
                     }
-                    placeholder="/path/to/client.key"
+                    placeholder={t("connection.clientKeyPlaceholder")}
                     spellCheck={false}
                   />
                 </Field>
@@ -689,7 +689,7 @@ export function ConnectionDialog({
                             onChange={(event) =>
                               updateField("sshPrivateKeyPath", event.target.value)
                             }
-                            placeholder="~/.ssh/id_ed25519"
+                            placeholder={t("connection.sshPrivateKeyPlaceholder")}
                             spellCheck={false}
                           />
                         </Field>
@@ -717,7 +717,7 @@ export function ConnectionDialog({
                         onChange={(event) =>
                           updateField("sshKnownHostsPath", event.target.value)
                         }
-                        placeholder="~/.ssh/known_hosts"
+                        placeholder={t("connection.knownHostsPlaceholder")}
                         spellCheck={false}
                       />
                     </Field>
@@ -817,7 +817,7 @@ export function ConnectionDialog({
                                 onChange={(event) =>
                                   updateField("jumpPrivateKeyPath", event.target.value)
                                 }
-                                placeholder="~/.ssh/id_ed25519"
+                                placeholder={t("connection.sshPrivateKeyPlaceholder")}
                                 spellCheck={false}
                               />
                             </Field>
@@ -849,7 +849,7 @@ export function ConnectionDialog({
                             onChange={(event) =>
                               updateField("jumpKnownHostsPath", event.target.value)
                             }
-                            placeholder="~/.ssh/known_hosts"
+                            placeholder={t("connection.knownHostsPlaceholder")}
                             spellCheck={false}
                           />
                         </Field>

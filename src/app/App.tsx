@@ -57,6 +57,7 @@ import {
   formatQueryDuration,
   QUERY_ROW_LIMIT_OPTIONS,
   summarizeQueryResult,
+  type ExecuteQueryRequest,
   type QueryExecutionState,
 } from "../features/query-execution/queryExecution";
 import { queryExecutionApi } from "../features/query-execution/queryExecutionApi";
@@ -66,11 +67,12 @@ import type {
   SqlExecutionTarget,
 } from "../features/sql-editor/SqlEditor";
 import {
-  createTableDataTarget,
+  createTableDataQuery,
   normalizeTableDataPage,
   TABLE_DATA_PAGE_SIZE_OPTIONS,
   type TableDataReference,
 } from "../features/table-data/tableData";
+import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
 import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
@@ -248,6 +250,7 @@ export function App() {
       sessionId: string,
       target: SqlExecutionTarget,
       rowLimit: number,
+      options?: Pick<ExecuteQueryRequest, "parameters" | "resultColumns">,
     ) => {
       if (executingProfiles.current.has(tab.profileId)) return;
 
@@ -269,6 +272,12 @@ export function App() {
           database: tab.database,
           sql: target.sql,
           rowLimit,
+          ...(options?.parameters?.length
+            ? {
+                parameters: options.parameters,
+                resultColumns: options.resultColumns,
+              }
+            : {}),
         });
         const tablePage =
           tab.kind === "table-data"
@@ -356,11 +365,19 @@ export function App() {
       return;
     }
 
+    const query = createTableDataQuery(
+      activeTab,
+      activeTab,
+      activeTab.sorts,
+      activeTab.columns,
+      activeTab.filters,
+    );
     void executeQuery(
       activeTab,
       activeConnection.sessionId,
-      createTableDataTarget(activeTab, activeTab, activeTab.sorts),
+      query.target,
       activeTab.pageSize + 1,
+      query,
     );
   }, [activeConnection, activeSession?.state, activeTab, executeQuery]);
 
@@ -1050,11 +1067,19 @@ export function App() {
                   if (!activeConnection || activeSession?.state !== "connected") {
                     return;
                   }
+                  const query = createTableDataQuery(
+                    activeTab,
+                    activeTab,
+                    activeTab.sorts,
+                    activeTab.columns,
+                    activeTab.filters,
+                  );
                   void executeQuery(
                     activeTab,
                     activeConnection.sessionId,
-                    createTableDataTarget(activeTab, activeTab, activeTab.sorts),
+                    query.target,
                     activeTab.pageSize + 1,
+                    query,
                   );
                 }}
                 onPageChange={(pageIndex, pageSize) =>
@@ -1070,6 +1095,13 @@ export function App() {
                     type: "set-table-data-sort",
                     tabId: activeTab.id,
                     sorts,
+                  })
+                }
+                onFiltersChange={(filters) =>
+                  dispatchWorkspaceTabs({
+                    type: "set-table-data-filters",
+                    tabId: activeTab.id,
+                    filters,
                   })
                 }
                 onCancel={() => {
@@ -1227,6 +1259,7 @@ function TableDataWorkspace({
   onReload,
   onPageChange,
   onSortsChange,
+  onFiltersChange,
   onCancel,
 }: {
   tab: TableDataTab;
@@ -1236,6 +1269,7 @@ function TableDataWorkspace({
   onReload: () => void;
   onPageChange: (pageIndex: number, pageSize: number) => void;
   onSortsChange: (sorts: TableDataTab["sorts"]) => void;
+  onFiltersChange: (filters: TableDataTab["filters"]) => void;
   onCancel: () => void;
 }) {
   const { t } = useI18n();
@@ -1340,6 +1374,13 @@ function TableDataWorkspace({
           )}
         </div>
       </header>
+
+      <TableDataFilterBar
+        columns={tab.columns}
+        filters={tab.filters}
+        disabled={loading}
+        onApply={onFiltersChange}
+      />
 
       <div className="table-data-content">
         {execution.status === "succeeded" ? (

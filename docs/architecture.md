@@ -181,8 +181,19 @@ changes a secondary key through React Data Grid's native multi-sort behavior.
 Sorts are persisted in the table-data tab, shown with priority and direction,
 reset pagination to page one, and compile to PostgreSQL `ORDER BY` ordinals so
 duplicate or unusual column names remain unambiguous. With no sort, the toolbar
-warns that rows may move between page requests. Filtering and editability are
-layered onto this tab model by the subsequent P0-G tasks.
+warns that rows may move between page requests. Editability is layered onto
+this tab model by the subsequent P0-G tasks.
+
+The table-data filter band composes multiple AND conditions for equality,
+inequality, literal substring containment, greater/less comparisons (including
+inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and
+reset pagination. Filter values never enter the SQL string: the frontend emits
+text-typed placeholders plus the original PostgreSQL column metadata, and Rust
+uses the extended query protocol to bind each value. Comparison placeholders
+are cast from text to the server-reported column type, while selected values are
+projected as text for generic transport and restored to their original result
+metadata before rendering. Parameter counts, text casts, and result-column
+shape are validated by the local core.
 
 ## SQL Completion Boundary
 

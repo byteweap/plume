@@ -10,6 +10,8 @@ export interface ExecuteQueryRequest {
   database: string;
   sql: string;
   rowLimit: number;
+  parameters?: QueryValue[];
+  resultColumns?: QueryColumn[];
 }
 
 export interface CancelQueryRequest {

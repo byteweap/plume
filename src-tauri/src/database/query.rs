@@ -4,7 +4,11 @@ use futures_util::{TryStreamExt, pin_mut};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Mutex, Notify, RwLock};
-use tokio_postgres::{Client, SimpleQueryMessage, error::SqlState, types::Kind};
+use tokio_postgres::{
+    Client, SimpleQueryMessage,
+    error::SqlState,
+    types::{Kind, ToSql, Type},
+};
 use uuid::Uuid;
 
 use crate::{database::connection::QueryCanceller, error::DatabaseError};
@@ -26,6 +30,10 @@ pub struct ExecuteQueryRequest {
     pub sql: String,
     #[serde(default = "default_query_row_limit")]
     pub row_limit: usize,
+    #[serde(default)]
+    pub parameters: Vec<Option<String>>,
+    #[serde(default)]
+    pub result_columns: Vec<QueryColumn>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,6 +78,16 @@ impl ExecuteQueryRequest {
             return Err(QueryError::Invalid(format!(
                 "Row limit must be between 1 and {MAX_QUERY_ROW_LIMIT}."
             )));
+        }
+        if self.parameters.len() > 64 {
+            return Err(QueryError::Invalid(
+                "Parameterized queries cannot exceed 64 values.".to_owned(),
+            ));
+        }
+        if !self.parameters.is_empty() && self.result_columns.is_empty() {
+            return Err(QueryError::Invalid(
+                "Parameterized row queries require result column metadata.".to_owned(),
+            ));
         }
         Ok(())
     }
@@ -117,7 +135,7 @@ pub enum QueryStatementKind {
     Command,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryColumn {
     pub name: String,
@@ -125,7 +143,7 @@ pub struct QueryColumn {
     pub data_type: QueryDataType,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct QueryDataType {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -137,7 +155,7 @@ pub struct QueryDataType {
     pub kind: QueryDataTypeKind,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum QueryDataTypeKind {
     Simple,
@@ -403,13 +421,81 @@ pub fn is_postgres_cancellation(result: &Result<QueryExecutionResult, QueryError
     )
 }
 
-pub async fn execute(
+pub async fn execute_request(
+    client: &Client,
+    request: &ExecuteQueryRequest,
+) -> Result<QueryExecutionResult, QueryError> {
+    if request.parameters.is_empty() {
+        execute_with_limit(
+            client,
+            request.query_id.clone(),
+            &request.sql,
+            request.row_limit,
+        )
+        .await
+    } else {
+        execute_parameterized_with_limit(client, request).await
+    }
+}
+
+#[cfg(test)]
+async fn execute(
     client: &Client,
     query_id: String,
     sql: &str,
     row_limit: usize,
 ) -> Result<QueryExecutionResult, QueryError> {
     execute_with_limit(client, query_id, sql, row_limit).await
+}
+
+async fn execute_parameterized_with_limit(
+    client: &Client,
+    request: &ExecuteQueryRequest,
+) -> Result<QueryExecutionResult, QueryError> {
+    let statement = client.prepare(&request.sql).await?;
+    if statement.params().len() != request.parameters.len()
+        || statement
+            .params()
+            .iter()
+            .any(|data_type| *data_type != Type::TEXT)
+    {
+        return Err(QueryError::Invalid(
+            "Every bound value must be explicitly cast from text.".to_owned(),
+        ));
+    }
+    if statement.columns().len() != request.result_columns.len() {
+        return Err(QueryError::Invalid(
+            "Result column metadata does not match the parameterized query.".to_owned(),
+        ));
+    }
+
+    let parameters = request
+        .parameters
+        .iter()
+        .map(|value| value as &(dyn ToSql + Sync));
+    let stream = client.query_raw(&statement, parameters).await?;
+    pin_mut!(stream);
+    let mut result = row_result(request.result_columns.clone());
+    let mut remaining_rows = request.row_limit;
+
+    while let Some(row) = stream.try_next().await? {
+        result.row_count += 1;
+        if remaining_rows > 0 {
+            let values = (0..row.len())
+                .map(|index| row.try_get::<_, Option<String>>(index))
+                .collect::<Result<Vec<_>, _>>()?;
+            retain_row(&mut result, values);
+            remaining_rows -= 1;
+        } else {
+            result.truncated = true;
+        }
+    }
+
+    Ok(QueryExecutionResult {
+        query_id: request.query_id.clone(),
+        status: QueryExecutionStatus::Succeeded,
+        results: vec![result],
+    })
 }
 
 impl QueryDataType {
@@ -611,7 +697,7 @@ mod tests {
     use super::{
         CancelQueryRequest, CancelQueryStatus, DEFAULT_QUERY_ROW_LIMIT, ExecuteQueryRequest,
         MAX_QUERY_ROW_LIMIT, QUERY_ROW_BATCH_SIZE, QueryDataTypeKind, QueryError, QueryRegistry,
-        QueryStatementKind, QueryStatementStatus, execute, execute_with_limit,
+        QueryStatementKind, QueryStatementStatus, execute, execute_request, execute_with_limit,
         is_postgres_cancellation,
     };
     use crate::database::{
@@ -628,6 +714,8 @@ mod tests {
             database: "postgres".to_owned(),
             sql: "SELECT 1".to_owned(),
             row_limit: DEFAULT_QUERY_ROW_LIMIT,
+            parameters: Vec::new(),
+            result_columns: Vec::new(),
         }
     }
 
@@ -679,6 +767,10 @@ mod tests {
 
             request.row_limit = MAX_QUERY_ROW_LIMIT + 1;
             assert!(request.validate().is_err());
+
+            request.row_limit = DEFAULT_QUERY_ROW_LIMIT;
+            request.parameters = vec![Some("1".to_owned())];
+            assert!(request.validate().is_err());
         });
     }
 
@@ -710,13 +802,7 @@ mod tests {
                 connection.settings.clone(),
             ))
             .await;
-        let result = execute(
-            &connection.client,
-            request.query_id.clone(),
-            &request.sql,
-            request.row_limit,
-        )
-        .await;
+        let result = execute_request(&connection.client, request).await;
         let cancelled = registry
             .finish(&request.query_id, is_postgres_cancellation(&result))
             .await;
@@ -881,6 +967,45 @@ mod tests {
                     .all(|column| matches!(column.data_type.kind, QueryDataTypeKind::Unknown))
             );
             assert_eq!(result.results[1].affected_rows, Some(1));
+        });
+    }
+
+    #[test]
+    #[ignore = "requires the local PostgreSQL integration environment"]
+    fn executes_parameterized_text_casts_and_restores_column_metadata() {
+        tauri::async_runtime::block_on(async {
+            let settings = test_support::connection_request();
+            let connection = open(&settings).await.unwrap();
+            let registry = QueryRegistry::default();
+            let mut request = request();
+            request.database = settings.database;
+            request.sql =
+                "SELECT value::text AS value FROM generate_series(1, 3) value WHERE value >= $1::text::int4 ORDER BY value"
+                    .to_owned();
+            request.parameters = vec![Some("2".to_owned())];
+            request.result_columns = vec![super::QueryColumn {
+                name: "value".to_owned(),
+                ordinal: 0,
+                data_type: super::QueryDataType {
+                    oid: Some(23),
+                    name: Some("int4".to_owned()),
+                    schema: Some("pg_catalog".to_owned()),
+                    kind: QueryDataTypeKind::Simple,
+                },
+            }];
+
+            let result = run_registered(&registry, &connection, &request)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                result.results[0].columns[0].data_type.name.as_deref(),
+                Some("int4")
+            );
+            assert_eq!(
+                result.results[0].batches[0].rows,
+                vec![vec![Some("2".to_owned())], vec![Some("3".to_owned())]]
+            );
         });
     }
 

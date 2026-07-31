@@ -105,6 +105,27 @@ describe("workspaceTabsReducer", () => {
       pageSize: 50,
       sorts: [{ columnIndex: 1, columnName: "name", direction: "DESC" }],
     });
+
+    state = workspaceTabsReducer(state, {
+      type: "set-table-data-filters",
+      tabId: tableTabId,
+      filters: [
+        {
+          columnIndex: 1,
+          columnName: "name",
+          dataType: { kind: "simple" },
+          operator: "contains",
+          value: "Ada",
+        },
+      ],
+    });
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      kind: "table-data",
+      pageIndex: 0,
+      filters: [
+        { columnIndex: 1, operator: "contains", value: "Ada" },
+      ],
+    });
   });
 
   it("keeps SQL drafts isolated by query tab", () => {

@@ -692,6 +692,38 @@ describe("App sidebar", () => {
       rowLimit: 51,
     });
     expect(screen.getByLabelText("Current sort")).toHaveTextContent("1. value");
+
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add condition" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter value" }), {
+      target: { value: "10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(5));
+    expect(queryExecutionApi.execute).toHaveBeenLastCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql:
+        'SELECT "value"::text AS "value"\n' +
+        'FROM "public"."users"\n' +
+        'WHERE "value" = $1::text::"pg_catalog"."int4"\n' +
+        'ORDER BY 1 ASC\nLIMIT 51\nOFFSET 0;',
+      rowLimit: 51,
+      parameters: ["10"],
+      resultColumns: [
+        {
+          name: "value",
+          ordinal: 0,
+          dataType: {
+            oid: 23,
+            name: "int4",
+            schema: "pg_catalog",
+            kind: "simple",
+          },
+        },
+      ],
+    });
   });
 
   it("executes the cursor statement and all SQL with connection ownership", async () => {

@@ -33,16 +33,7 @@ pub async fn execute_query(
         }
     };
     registered.activate(query_client.canceller).await;
-    let result = async {
-        query::execute(
-            &query_client.client,
-            request.query_id.clone(),
-            &request.sql,
-            request.row_limit,
-        )
-        .await
-    }
-    .await;
+    let result = async { query::execute_request(&query_client.client, &request).await }.await;
     let cancelled = queries
         .finish(&request.query_id, query::is_postgres_cancellation(&result))
         .await;

@@ -1,11 +1,12 @@
 import type { CommandError } from "../../platform/tauri";
 import type {
   CancelQueryResult,
+  QueryColumn,
   QueryExecutionResult,
   QueryExecutionState,
 } from "../query-execution/queryExecution";
 import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
-import type { TableDataSort } from "../table-data/tableData";
+import type { TableDataFilter, TableDataSort } from "../table-data/tableData";
 
 export interface WorkspaceContext {
   profileId: string;
@@ -44,6 +45,8 @@ export interface TableDataTab extends WorkspaceContext {
   pageSize: number;
   hasNextPage: boolean;
   sorts: TableDataSort[];
+  filters: TableDataFilter[];
+  columns: QueryColumn[];
   execution?: QueryExecutionState;
 }
 
@@ -71,6 +74,11 @@ export type WorkspaceTabsAction =
       type: "set-table-data-sort";
       tabId: string;
       sorts: TableDataSort[];
+    }
+  | {
+      type: "set-table-data-filters";
+      tabId: string;
+      filters: TableDataFilter[];
     }
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
@@ -220,6 +228,8 @@ export function workspaceTabsReducer(
         pageSize: 200,
         hasNextPage: false,
         sorts: [],
+        filters: [],
+        columns: [],
       };
       return {
         ...state,
@@ -252,6 +262,21 @@ export function workspaceTabsReducer(
             ? {
                 ...tab,
                 sorts: action.sorts,
+                pageIndex: 0,
+                hasNextPage: false,
+                execution: undefined,
+              }
+            : tab,
+        ),
+      };
+    case "set-table-data-filters":
+      return {
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === action.tabId && tab.kind === "table-data"
+            ? {
+                ...tab,
+                filters: action.filters,
                 pageIndex: 0,
                 hasNextPage: false,
                 execution: undefined,
@@ -347,7 +372,6 @@ export function workspaceTabsReducer(
           },
         }),
       );
-      if (action.hasNextPage === undefined) return updated;
       return {
         ...updated,
         tabs: updated.tabs.map((tab) =>
@@ -355,7 +379,15 @@ export function workspaceTabsReducer(
           tab.kind === "table-data" &&
           tab.execution?.status === "succeeded" &&
           tab.execution.queryId === action.result.queryId
-            ? { ...tab, hasNextPage: action.hasNextPage! }
+            ? {
+                ...tab,
+                ...(action.hasNextPage === undefined
+                  ? {}
+                  : { hasNextPage: action.hasNextPage }),
+                columns:
+                  action.result.results.find((item) => item.kind === "rows")
+                    ?.columns ?? tab.columns,
+              }
             : tab,
         ),
       };

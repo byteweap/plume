@@ -1,5 +1,7 @@
 import type { SqlExecutionTarget } from "../sql-editor/SqlEditor";
 import type {
+  QueryColumn,
+  QueryDataType,
   QueryExecutionResult,
   QueryRowBatch,
 } from "../query-execution/queryExecution";
@@ -22,6 +24,31 @@ export interface TableDataSort {
   columnIndex: number;
   columnName: string;
   direction: "ASC" | "DESC";
+}
+
+export type TableDataFilterOperator =
+  | "equals"
+  | "notEquals"
+  | "contains"
+  | "greaterThan"
+  | "greaterThanOrEqual"
+  | "lessThan"
+  | "lessThanOrEqual"
+  | "isNull"
+  | "isNotNull";
+
+export interface TableDataFilter {
+  columnIndex: number;
+  columnName: string;
+  dataType: QueryDataType;
+  operator: TableDataFilterOperator;
+  value: string;
+}
+
+export interface TableDataQuery {
+  target: SqlExecutionTarget;
+  parameters: Array<string | null>;
+  resultColumns?: QueryColumn[];
 }
 
 export function quotePostgresIdentifier(identifier: string): string {
@@ -47,6 +74,76 @@ export function createTableDataTarget(
     to: sql.length,
     source: "document",
   };
+}
+
+export function createTableDataQuery(
+  reference: Pick<TableDataReference, "schema" | "table">,
+  page: TableDataPage,
+  sorts: TableDataSort[],
+  columns: QueryColumn[],
+  filters: TableDataFilter[],
+): TableDataQuery {
+  if (filters.length === 0) {
+    return {
+      target: createTableDataTarget(reference, page, sorts),
+      parameters: [],
+    };
+  }
+
+  const parameters: string[] = [];
+  const predicates = filters.map((filter) => {
+    const column = quotePostgresIdentifier(filter.columnName);
+    if (filter.operator === "isNull") return `${column} IS NULL`;
+    if (filter.operator === "isNotNull") return `${column} IS NOT NULL`;
+
+    parameters.push(filter.value);
+    const parameter = `$${parameters.length}::text`;
+    if (filter.operator === "contains") {
+      return `pg_catalog.strpos(${column}::text, ${parameter}) > 0`;
+    }
+    const typedColumn = getComparableColumn(column, filter.dataType);
+    const typedParameter = getTypedParameter(parameter, filter.dataType);
+    const operator = {
+      equals: "=",
+      notEquals: "<>",
+      greaterThan: ">",
+      greaterThanOrEqual: ">=",
+      lessThan: "<",
+      lessThanOrEqual: "<=",
+    }[filter.operator];
+    return `${typedColumn} ${operator} ${typedParameter}`;
+  });
+  const projection = columns
+    .map((column) => {
+      const identifier = quotePostgresIdentifier(column.name);
+      return `${identifier}::text AS ${identifier}`;
+    })
+    .join(", ");
+  const probeLimit = page.pageSize + 1;
+  const offset = page.pageIndex * page.pageSize;
+  const orderBy = sorts.length
+    ? `\nORDER BY ${sorts
+        .map((sort) => `${sort.columnIndex + 1} ${sort.direction}`)
+        .join(", ")}`
+    : "";
+  const sql = `SELECT ${projection}\nFROM ${quotePostgresIdentifier(reference.schema)}.${quotePostgresIdentifier(reference.table)}\nWHERE ${predicates.join("\n  AND ")}${orderBy}\nLIMIT ${probeLimit}\nOFFSET ${offset};`;
+  return {
+    target: { sql, from: 0, to: sql.length, source: "document" },
+    parameters,
+    resultColumns: columns,
+  };
+}
+
+function getComparableColumn(column: string, dataType: QueryDataType): string {
+  return dataType.name ? column : `${column}::text`;
+}
+
+function getTypedParameter(parameter: string, dataType: QueryDataType): string {
+  if (!dataType.name) return parameter;
+  const schema = dataType.schema
+    ? `${quotePostgresIdentifier(dataType.schema)}.`
+    : "";
+  return `${parameter}::${schema}${quotePostgresIdentifier(dataType.name)}`;
 }
 
 export function createInitialTableDataTarget(

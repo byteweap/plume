@@ -162,8 +162,10 @@ with BOM, or UTF-16LE CSV. JSON is streamed as an indented array of objects,
 preserves nulls, and deterministically disambiguates duplicate column names so
 values are not overwritten. Format-specific progress events are scoped by UUID,
 and a shared export registry lets a separate command request cancellation
-without blocking the UI. P0-F06 and P0-F07 write the selected target directly;
-temporary-file and atomic-finalization guarantees remain P0-F08 work.
+without blocking the UI. Both formats write to a uniquely named temporary file
+in the target directory. Completed output is flushed, synchronized, and
+atomically persisted over the selected path; cancellation or any write failure
+drops the temporary file and leaves an existing target untouched.
 
 ## SQL Completion Boundary
 

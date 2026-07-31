@@ -354,7 +354,7 @@ impl From<ExportError> for CommandError {
                 detail: Some(error.to_string()),
                 diagnostic: None,
             },
-            ExportError::Io(_) | ExportError::Json(_) => Self {
+            ExportError::Io(_) | ExportError::Json(_) | ExportError::Persist(_) => Self {
                 code: "export_write_failed",
                 message: "The export file could not be written.".to_owned(),
                 detail: Some(error.to_string()),

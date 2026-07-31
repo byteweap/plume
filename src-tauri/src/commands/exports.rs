@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufWriter};
+use std::io::BufWriter;
 
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
@@ -6,10 +6,10 @@ use tauri_plugin_dialog::DialogExt;
 use crate::{
     error::CommandError,
     exports::{
-        self, CSV_EXPORT_PROGRESS_EVENT, CancelExportRequest, CancelExportResult, CsvExportRequest,
-        CsvExportResult, CsvExportStatus, CsvWriteOutcome, ExportError, ExportRegistry,
-        JSON_EXPORT_PROGRESS_EVENT, JsonExportRequest, JsonExportResult, JsonExportStatus,
-        JsonWriteOutcome,
+        self, AtomicExportFile, CSV_EXPORT_PROGRESS_EVENT, CancelExportRequest, CancelExportResult,
+        CsvExportRequest, CsvExportResult, CsvExportStatus, CsvWriteOutcome, ExportError,
+        ExportRegistry, JSON_EXPORT_PROGRESS_EVENT, JsonExportRequest, JsonExportResult,
+        JsonExportStatus, JsonWriteOutcome,
     },
 };
 
@@ -42,15 +42,18 @@ pub async fn export_csv(
             let path = file_path
                 .into_path()
                 .map_err(|error| ExportError::DialogPath(error.to_string()))?;
-            let file = File::create(path)?;
-            let mut writer = BufWriter::new(file);
-            let outcome = exports::write_csv(&mut writer, &request, &cancelled, |progress| {
-                worker_app
-                    .emit(CSV_EXPORT_PROGRESS_EVENT, progress)
-                    .map_err(|error| ExportError::Progress(error.to_string()))
-            })?;
+            let mut output = AtomicExportFile::create(path)?;
+            let outcome = {
+                let mut writer = BufWriter::new(output.file_mut());
+                exports::write_csv(&mut writer, &request, &cancelled, |progress| {
+                    worker_app
+                        .emit(CSV_EXPORT_PROGRESS_EVENT, progress)
+                        .map_err(|error| ExportError::Progress(error.to_string()))
+                })?
+            };
             let (status, rows_written) = match outcome {
                 CsvWriteOutcome::Completed(rows_written) => {
+                    output.commit()?;
                     (CsvExportStatus::Completed, rows_written)
                 }
                 CsvWriteOutcome::Cancelled(rows_written) => {
@@ -100,15 +103,18 @@ pub async fn export_json(
             let path = file_path
                 .into_path()
                 .map_err(|error| ExportError::DialogPath(error.to_string()))?;
-            let file = File::create(path)?;
-            let mut writer = BufWriter::new(file);
-            let outcome = exports::write_json(&mut writer, &request, &cancelled, |progress| {
-                worker_app
-                    .emit(JSON_EXPORT_PROGRESS_EVENT, progress)
-                    .map_err(|error| ExportError::Progress(error.to_string()))
-            })?;
+            let mut output = AtomicExportFile::create(path)?;
+            let outcome = {
+                let mut writer = BufWriter::new(output.file_mut());
+                exports::write_json(&mut writer, &request, &cancelled, |progress| {
+                    worker_app
+                        .emit(JSON_EXPORT_PROGRESS_EVENT, progress)
+                        .map_err(|error| ExportError::Progress(error.to_string()))
+                })?
+            };
             let (status, rows_written) = match outcome {
                 JsonWriteOutcome::Completed(rows_written) => {
+                    output.commit()?;
                     (JsonExportStatus::Completed, rows_written)
                 }
                 JsonWriteOutcome::Cancelled(rows_written) => {

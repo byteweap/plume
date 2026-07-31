@@ -1,6 +1,8 @@
 use std::{
     collections::HashMap,
+    fs::File,
     io::{self, Write},
+    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -8,6 +10,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use tempfile::{Builder, NamedTempFile};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -16,6 +19,39 @@ pub const JSON_EXPORT_PROGRESS_EVENT: &str = "json-export-progress";
 const MAX_EXPORT_ROWS: usize = 10_000;
 const MAX_EXPORT_COLUMNS: usize = 2_048;
 const PROGRESS_ROW_INTERVAL: usize = 256;
+
+pub struct AtomicExportFile {
+    target_path: PathBuf,
+    temporary_file: NamedTempFile,
+}
+
+impl AtomicExportFile {
+    pub fn create(target_path: PathBuf) -> Result<Self, ExportError> {
+        let parent = target_path.parent().ok_or_else(|| {
+            ExportError::Invalid("The export target must have a parent directory.".to_owned())
+        })?;
+        let temporary_file = Builder::new()
+            .prefix(".plume-export-")
+            .suffix(".tmp")
+            .tempfile_in(parent)?;
+        Ok(Self {
+            target_path,
+            temporary_file,
+        })
+    }
+
+    pub fn file_mut(&mut self) -> &mut File {
+        self.temporary_file.as_file_mut()
+    }
+
+    pub fn commit(self) -> Result<(), ExportError> {
+        self.temporary_file.as_file().sync_all()?;
+        self.temporary_file
+            .persist(&self.target_path)
+            .map_err(|error| ExportError::Persist(error.error))?;
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -467,10 +503,12 @@ pub enum ExportError {
     Lock,
     #[error("The selected export path is invalid: {0}")]
     DialogPath(String),
-    #[error("The CSV export could not be written: {0}")]
+    #[error("The export file could not be written: {0}")]
     Io(#[from] io::Error),
     #[error("The JSON export could not be serialized: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("The completed export could not replace the selected target: {0}")]
+    Persist(io::Error),
     #[error("The export progress event could not be sent: {0}")]
     Progress(String),
     #[error("The export worker failed: {0}")]
@@ -479,12 +517,12 @@ pub enum ExportError {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::AtomicBool;
+    use std::{fs, io::Write, path::PathBuf, sync::atomic::AtomicBool};
 
     use super::{
-        CancelExportRequest, CancelExportStatus, CsvDelimiter, CsvEncoding, CsvExportRequest,
-        CsvWriteOutcome, ExportRegistry, JsonExportRequest, JsonWriteOutcome, write_csv,
-        write_json,
+        AtomicExportFile, CancelExportRequest, CancelExportStatus, CsvDelimiter, CsvEncoding,
+        CsvExportRequest, CsvWriteOutcome, ExportRegistry, JsonExportRequest, JsonWriteOutcome,
+        write_csv, write_json,
     };
 
     const TASK_ID: &str = "4f9e4878-4e75-4a0e-9f60-08e02f5bd706";
@@ -624,5 +662,52 @@ mod tests {
 
         assert_eq!(outcome, JsonWriteOutcome::Cancelled(0));
         assert!(bytes.is_empty());
+    }
+
+    #[test]
+    fn atomically_replaces_an_existing_export_after_commit() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("result.csv");
+        fs::write(&target, "previous export").unwrap();
+        let mut output = AtomicExportFile::create(target.clone()).unwrap();
+        output.file_mut().write_all(b"complete export").unwrap();
+
+        output.commit().unwrap();
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "complete export");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn dropping_an_uncommitted_export_preserves_the_target_and_removes_the_temporary_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("result.json");
+        fs::write(&target, "previous export").unwrap();
+        {
+            let mut output = AtomicExportFile::create(target.clone()).unwrap();
+            output.file_mut().write_all(b"partial export").unwrap();
+        }
+
+        assert_eq!(fs::read_to_string(&target).unwrap(), "previous export");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn a_failed_export_preserves_the_target_and_removes_the_temporary_file() {
+        fn fail_after_partial_write(target: PathBuf) -> Result<(), super::ExportError> {
+            let mut output = AtomicExportFile::create(target)?;
+            output.file_mut().write_all(b"partial export")?;
+            Err(super::ExportError::Progress(
+                "event channel closed".to_owned(),
+            ))
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("result.csv");
+        fs::write(&target, "previous export").unwrap();
+
+        assert!(fail_after_partial_write(target.clone()).is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "previous export");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
     }
 }

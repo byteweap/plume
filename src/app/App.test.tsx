@@ -14,6 +14,7 @@ import {
   sqlCompletionCatalogCache,
 } from "../features/sql-editor/sqlCompletionApi";
 import { tableDataApi } from "../features/table-data/tableDataApi";
+import { workspaceSnapshotApi } from "../features/workspace/workspaceSnapshotApi";
 import { App, EnvironmentBadge, TableEditabilityStatus } from "./App";
 
 const savedProfile: ConnectionProfile = {
@@ -62,6 +63,10 @@ describe("App sidebar", () => {
       updatedAt: 2,
     }));
     vi.spyOn(queryDraftApi, "delete").mockResolvedValue();
+    vi.spyOn(workspaceSnapshotApi, "load").mockResolvedValue(null);
+    vi.spyOn(workspaceSnapshotApi, "save").mockImplementation(
+      async (request) => ({ ...request, updatedAt: 1 }),
+    );
     vi.spyOn(queryHistoryApi, "record").mockImplementation(async (request) => ({
       ...request,
       executedAt: 1,
@@ -547,6 +552,46 @@ describe("App sidebar", () => {
     );
     expect(await screen.findByText("Saved")).toBeVisible();
     expect(screen.getByRole("button", { name: "Save query draft" })).toBeDisabled();
+  });
+
+  it("persists layout, tab context, and the latest unsaved SQL", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("select current_database();");
+
+    await waitFor(() => expect(workspaceSnapshotApi.save).toHaveBeenCalled(), {
+      timeout: 1_500,
+    });
+    expect(workspaceSnapshotApi.save).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activeTabId: "workspace-2",
+        layout: { sidebarWidth: 286, sidebarCollapsed: false },
+        tabs: expect.arrayContaining([
+          expect.objectContaining({
+            id: "workspace-2",
+            kind: "query",
+            profileId: "profile-1",
+            sql: "select current_database();",
+          }),
+        ]),
+      }),
+    );
   });
 
   it("does not restore a draft whose save finishes after its tab closes", async () => {

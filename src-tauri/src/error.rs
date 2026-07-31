@@ -10,6 +10,7 @@ use crate::{
     history::HistoryError,
     profiles::ProfileError,
     replay::ReplayProtectionError,
+    workspace::WorkspaceSnapshotError,
 };
 
 #[derive(Debug, Error)]
@@ -446,6 +447,27 @@ impl From<HistoryError> for CommandError {
             HistoryError::Storage(_) | HistoryError::Lock => Self {
                 code: "history_storage_error",
                 message: "Plume could not save the local query history.".to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+        }
+    }
+}
+
+impl From<WorkspaceSnapshotError> for CommandError {
+    fn from(error: WorkspaceSnapshotError) -> Self {
+        match error {
+            WorkspaceSnapshotError::Invalid(message) => Self {
+                code: "invalid_workspace_snapshot",
+                message,
+                detail: None,
+                diagnostic: None,
+            },
+            WorkspaceSnapshotError::Storage(_)
+            | WorkspaceSnapshotError::Layout(_)
+            | WorkspaceSnapshotError::Lock => Self {
+                code: "workspace_snapshot_storage_error",
+                message: "Plume could not save the local workspace snapshot.".to_owned(),
                 detail: Some(error.to_string()),
                 diagnostic: None,
             },

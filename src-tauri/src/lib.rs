@@ -8,6 +8,7 @@ mod exports;
 mod history;
 mod profiles;
 mod replay;
+mod workspace;
 
 use commands::{
     connections::{
@@ -29,6 +30,7 @@ use commands::{
     },
     queries::{cancel_query, execute_query},
     table_data::commit_table_data_changes,
+    workspace::{load_workspace_snapshot, save_workspace_snapshot},
 };
 use credentials::platform_credential_store;
 use database::query::QueryRegistry;
@@ -39,6 +41,7 @@ use history::QueryHistoryService;
 use profiles::ConnectionProfileService;
 use replay::OperationReplayGuard;
 use tauri::Manager;
+use workspace::WorkspaceSnapshotService;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -56,10 +59,12 @@ pub fn run() {
             let profiles =
                 ConnectionProfileService::open(database_path.clone(), platform_credential_store())?;
             let drafts = QueryDraftService::open(database_path.clone())?;
-            let history = QueryHistoryService::open(database_path)?;
+            let history = QueryHistoryService::open(database_path.clone())?;
+            let workspace = WorkspaceSnapshotService::open(database_path)?;
             app.manage(profiles);
             app.manage(drafts);
             app.manage(history);
+            app.manage(workspace);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -96,7 +101,9 @@ pub fn run() {
             cancel_export,
             record_query_history,
             list_query_history,
-            clear_query_history
+            clear_query_history,
+            save_workspace_snapshot,
+            load_workspace_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

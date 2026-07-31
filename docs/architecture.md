@@ -410,6 +410,12 @@ default policy removes rows older than 90 days and, independently, rows beyond
 the newest 10,000 entries; either bound is sufficient for deletion. The Rust
 service accepts an explicit validated policy so a later settings surface can
 change either limit without changing persistence semantics.
+The current workspace snapshot is replaced atomically after local workspace
+changes. Its explicit schema contains sidebar layout, ordered tab context, and
+query SQL (including unsaved edits). It deliberately excludes execution state,
+result rows, staged table edits, session identifiers, transactions, and
+credentials. Persistence starts only after profiles and drafts initialize, so
+an empty startup state cannot overwrite a recoverable snapshot.
 
 ## Security and Privacy Invariants
 

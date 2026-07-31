@@ -6,3 +6,4 @@ pub mod metadata;
 pub mod profiles;
 pub mod queries;
 pub mod table_data;
+pub mod workspace;

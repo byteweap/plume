@@ -112,6 +112,8 @@ import {
   type TableDataTab,
   type WorkspaceTab,
 } from "../features/tabs/workspaceTabs";
+import { createWorkspaceSnapshotRequest } from "../features/workspace/workspaceSnapshot";
+import { workspaceSnapshotApi } from "../features/workspace/workspaceSnapshotApi";
 import { useI18n } from "../i18n/I18nContext";
 import { isTauriRuntime, toCommandError } from "../platform/tauri";
 import {
@@ -217,6 +219,8 @@ export function App() {
   const [historySearch, setHistorySearch] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [workspacePersistenceReady, setWorkspacePersistenceReady] =
+    useState(false);
   const [queryRowLimit, setQueryRowLimit] = useState(DEFAULT_QUERY_ROW_LIMIT);
   const [sqlRiskRequest, setSqlRiskRequest] =
     useState<PendingSqlRiskExecution>();
@@ -662,6 +666,7 @@ export function App() {
               updatedAt: draft.updatedAt,
             })),
         });
+        setWorkspacePersistenceReady(true);
       } catch (error) {
         const commandError = toCommandError(error);
         if (cancelled) return;
@@ -673,6 +678,28 @@ export function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!workspacePersistenceReady) return;
+    const request = createWorkspaceSnapshotRequest(workspaceTabs, {
+      sidebarWidth,
+      sidebarCollapsed,
+    });
+    const timeout = window.setTimeout(() => {
+      void workspaceSnapshotApi.save(request).catch((error) => {
+        const commandError = toCommandError(error);
+        if (commandError.code !== "desktop_required") {
+          setDraftError(commandError.message);
+        }
+      });
+    }, 600);
+    return () => window.clearTimeout(timeout);
+  }, [
+    sidebarCollapsed,
+    sidebarWidth,
+    workspacePersistenceReady,
+    workspaceTabs,
+  ]);
 
   useEffect(() => {
     const timers = draftSaveTimers.current;

@@ -149,6 +149,14 @@ execution target only if the tab, SQL text, profile, session, and database still
 match the displayed context; otherwise the stale request is discarded. Internal
 table-data reads remain on their separate structured execution path.
 
+Each saved profile persists an `all`, `critical-only`, or `off` SQL-risk prompt
+policy. Development, test, and staging profiles may select any level; production
+profiles may select `all` or `critical-only` but can never disable every prompt.
+The React form and Rust profile-validation boundary both enforce that invariant,
+and execution fails safe by treating unexpected production `off` data as
+`critical-only`. Existing databases migrate to `all`, and a missing policy from
+an older caller also defaults to `all`.
+
 The response echoes the query ID, and the frontend accepts it only for the
 matching request that is still active in that tab. A successful cancel-packet
 send moves the UI only into a waiting state. Cancellation becomes final only

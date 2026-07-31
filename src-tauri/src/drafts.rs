@@ -302,6 +302,7 @@ mod tests {
             username: "postgres".to_owned(),
             password: Some("secret".to_owned()),
             environment: "development".to_owned(),
+            sql_risk_policy: "all".to_owned(),
             color: "#2f6d52".to_owned(),
             ssl_mode: SslMode::Disable,
             root_certificate_path: None,

@@ -75,6 +75,7 @@ import {
   type SqlRiskExecutionContext,
 } from "../features/sql-safety/SqlRiskConfirmationDialog";
 import type { SqlRisk } from "../features/sql-safety/sqlRiskAnalysis";
+import { filterSqlRisksForProfile } from "../features/sql-safety/sqlRiskPolicy";
 import {
   createTableDataQuery,
   normalizeTableDataPage,
@@ -420,7 +421,7 @@ export function App() {
     const { analyzeSqlRisks } = await import(
       "../features/sql-safety/sqlRiskAnalysis"
     );
-    const risks = analyzeSqlRisks(target.sql);
+    const risks = filterSqlRisksForProfile(analyzeSqlRisks(target.sql), connection);
     if (risks.length === 0) {
       void executeQuery(tab, connection.sessionId, target, rowLimit);
       return;

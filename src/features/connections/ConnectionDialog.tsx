@@ -10,6 +10,7 @@ import {
   defaultConnectionFormValue,
   environments,
   profileToFormValue,
+  sqlRiskPolicies,
   sshAuthentications,
   sslModes,
   toProfileWriteRequest,
@@ -49,6 +50,7 @@ const validationKeys = {
   clientCertificateSsl: "validation.clientCertificateSsl",
   sshPassword: "validation.sshPassword",
   sshPrivateKey: "validation.sshPrivateKey",
+  productionRiskPolicy: "validation.productionRiskPolicy",
 } as const satisfies Record<string, TranslationKey>;
 
 function getFieldErrors(
@@ -94,6 +96,23 @@ export function ConnectionDialog({
   ) {
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
+    if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function updateEnvironment(environment: ConnectionFormValue["environment"]) {
+    setForm((current) => ({
+      ...current,
+      environment,
+      sqlRiskPolicy:
+        environment === "production" && current.sqlRiskPolicy === "off"
+          ? "critical-only"
+          : current.sqlRiskPolicy,
+    }));
+    setFieldErrors((current) => ({
+      ...current,
+      environment: undefined,
+      sqlRiskPolicy: undefined,
+    }));
     if (requestState.status !== "idle") setRequestState({ status: "idle" });
   }
 
@@ -295,8 +314,7 @@ export function ConnectionDialog({
                   <select
                     value={form.environment}
                     onChange={(event) =>
-                      updateField(
-                        "environment",
+                      updateEnvironment(
                         event.target.value as ConnectionFormValue["environment"],
                       )
                     }
@@ -304,6 +322,41 @@ export function ConnectionDialog({
                     {environments.map((environment) => (
                       <option key={environment} value={environment}>
                         {t(`environment.${environment}`)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field
+                  className="form-field-wide"
+                  label={t("connection.sqlRiskPolicy")}
+                  hint={
+                    form.environment === "production"
+                      ? t("connection.sqlRiskPolicyProductionHint")
+                      : t("connection.sqlRiskPolicyHint")
+                  }
+                  error={
+                    fieldErrors.sqlRiskPolicy && t(fieldErrors.sqlRiskPolicy)
+                  }
+                >
+                  <select
+                    value={form.sqlRiskPolicy}
+                    onChange={(event) =>
+                      updateField(
+                        "sqlRiskPolicy",
+                        event.target.value as ConnectionFormValue["sqlRiskPolicy"],
+                      )
+                    }
+                  >
+                    {sqlRiskPolicies.map((policy) => (
+                      <option
+                        key={policy}
+                        value={policy}
+                        disabled={
+                          policy === "off" && form.environment === "production"
+                        }
+                      >
+                        {t(`connection.sqlRiskPolicy.${policy}`)}
                       </option>
                     ))}
                   </select>

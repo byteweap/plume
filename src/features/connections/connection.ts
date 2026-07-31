@@ -16,6 +16,7 @@ export const sslModes = [
 ] as const;
 
 export const sshAuthentications = ["password", "private-key"] as const;
+export const sqlRiskPolicies = ["all", "critical-only", "off"] as const;
 
 export const connectionColors = [
   "#2f6d52",
@@ -28,6 +29,7 @@ export const connectionColors = [
 export type Environment = (typeof environments)[number];
 export type SslMode = (typeof sslModes)[number];
 export type SshAuthentication = (typeof sshAuthentications)[number];
+export type SqlRiskPolicy = (typeof sqlRiskPolicies)[number];
 
 export const connectionFormSchema = z
   .object({
@@ -38,6 +40,7 @@ export const connectionFormSchema = z
     username: z.string().trim().min(1, "required"),
     password: z.string(),
     environment: z.enum(environments),
+    sqlRiskPolicy: z.enum(sqlRiskPolicies),
     color: z.string().regex(/^#[0-9a-f]{6}$/i),
     sslMode: z.enum(sslModes),
     rootCertificatePath: z.string().trim(),
@@ -65,6 +68,13 @@ export const connectionFormSchema = z
     jumpKnownHostsPath: z.string().trim(),
   })
   .superRefine((value, context) => {
+    if (value.environment === "production" && value.sqlRiskPolicy === "off") {
+      context.addIssue({
+        code: "custom",
+        message: "productionRiskPolicy",
+        path: ["sqlRiskPolicy"],
+      });
+    }
     const requiresCertificate =
       value.sslMode === "verify-ca" || value.sslMode === "verify-full";
     if (requiresCertificate && !value.rootCertificatePath) {
@@ -187,6 +197,7 @@ export interface ConnectionProfile
   extends Omit<
     ConnectionFormValue,
     | "password"
+    | "sqlRiskPolicy"
     | "rootCertificatePath"
     | "clientCertificatePath"
     | "clientKeyPath"
@@ -212,6 +223,7 @@ export interface ConnectionProfile
     | "jumpKnownHostsPath"
   > {
   id: string;
+  sqlRiskPolicy?: SqlRiskPolicy;
   rootCertificatePath?: string;
   clientCertificatePath?: string;
   clientKeyPath?: string;
@@ -290,6 +302,7 @@ export const defaultConnectionFormValue: ConnectionFormValue = {
   username: "postgres",
   password: "",
   environment: "development",
+  sqlRiskPolicy: "all",
   color: connectionColors[0],
   sslMode: "prefer",
   rootCertificatePath: "",
@@ -370,6 +383,7 @@ export function toProfileWriteRequest(
     username: value.username,
     password: value.password || undefined,
     environment: value.environment,
+    sqlRiskPolicy: value.sqlRiskPolicy,
     color: value.color,
     sslMode: value.sslMode,
     rootCertificatePath: value.rootCertificatePath || undefined,
@@ -405,6 +419,7 @@ export function profileToFormValue(
     username: profile.username,
     password: "",
     environment: profile.environment,
+    sqlRiskPolicy: profile.sqlRiskPolicy ?? "all",
     color: profile.color,
     sslMode: profile.sslMode,
     rootCertificatePath: profile.rootCertificatePath ?? "",

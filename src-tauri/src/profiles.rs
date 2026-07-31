@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-const CURRENT_SCHEMA_VERSION: i64 = 3;
+const CURRENT_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Debug, Error)]
 pub enum ProfileError {
@@ -50,6 +50,7 @@ pub struct ConnectionProfile {
     pub database: String,
     pub username: String,
     pub environment: String,
+    pub sql_risk_policy: String,
     pub color: String,
     pub ssl_mode: SslMode,
     pub root_certificate_path: Option<String>,
@@ -74,6 +75,8 @@ pub struct ProfileWriteRequest {
     pub username: String,
     pub password: Option<String>,
     pub environment: String,
+    #[serde(default = "default_sql_risk_policy")]
+    pub sql_risk_policy: String,
     pub color: String,
     pub ssl_mode: SslMode,
     pub root_certificate_path: Option<String>,
@@ -206,6 +209,19 @@ impl ProfileRepository {
             )?;
             transaction.commit()?;
         }
+
+        let version: i64 = self
+            .connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))?;
+        if version == 3 {
+            let transaction = self.connection.transaction()?;
+            transaction.execute_batch(
+                "ALTER TABLE connection_profiles
+                    ADD COLUMN sql_risk_policy TEXT NOT NULL DEFAULT 'all';
+                 PRAGMA user_version = 4;",
+            )?;
+            transaction.commit()?;
+        }
         Ok(())
     }
 
@@ -213,7 +229,8 @@ impl ProfileRepository {
         let mut statement = self.connection.prepare(
             "SELECT id, name, host, port, database_name, username, environment, color,
                     ssl_mode, root_certificate_path, client_certificate_path, client_key_path,
-                    ssh_config_json, credential_ref, is_favorite, created_at, updated_at
+                    ssh_config_json, credential_ref, is_favorite, created_at, updated_at,
+                    sql_risk_policy
              FROM connection_profiles
              ORDER BY is_favorite DESC, lower(name), created_at",
         )?;
@@ -228,7 +245,8 @@ impl ProfileRepository {
             .query_row(
                 "SELECT id, name, host, port, database_name, username, environment, color,
                         ssl_mode, root_certificate_path, client_certificate_path, client_key_path,
-                        ssh_config_json, credential_ref, is_favorite, created_at, updated_at
+                        ssh_config_json, credential_ref, is_favorite, created_at, updated_at,
+                        sql_risk_policy
                  FROM connection_profiles WHERE id = ?1",
                 [id],
                 Self::read_profile,
@@ -251,8 +269,8 @@ impl ProfileRepository {
             "INSERT INTO connection_profiles (
                 id, name, host, port, database_name, username, environment, color, ssl_mode,
                 root_certificate_path, client_certificate_path, client_key_path, ssh_config_json,
-                credential_ref, is_favorite, created_at, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16)",
+                credential_ref, is_favorite, created_at, updated_at, sql_risk_policy
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16, ?17)",
             params![
                 id,
                 request.name.trim(),
@@ -270,6 +288,7 @@ impl ProfileRepository {
                 credential_ref,
                 request.favorite,
                 now,
+                request.sql_risk_policy,
             ],
         )?;
         transaction.commit()?;
@@ -289,7 +308,7 @@ impl ProfileRepository {
                 name = ?2, host = ?3, port = ?4, database_name = ?5, username = ?6,
                 environment = ?7, color = ?8, ssl_mode = ?9, root_certificate_path = ?10,
                 client_certificate_path = ?11, client_key_path = ?12, ssh_config_json = ?13,
-                is_favorite = ?14, updated_at = ?15
+                is_favorite = ?14, updated_at = ?15, sql_risk_policy = ?16
              WHERE id = ?1",
             params![
                 id,
@@ -307,6 +326,7 @@ impl ProfileRepository {
                 ssh_json,
                 request.favorite,
                 unix_timestamp(),
+                request.sql_risk_policy,
             ],
         )?;
         if changed == 0 {
@@ -391,6 +411,7 @@ impl ProfileRepository {
             favorite: row.get(14)?,
             created_at: row.get(15)?,
             updated_at: row.get(16)?,
+            sql_risk_policy: row.get(17)?,
         })
     }
 }
@@ -492,6 +513,7 @@ impl ConnectionProfileService {
             username: existing.username,
             password: Some(password),
             environment: existing.environment,
+            sql_risk_policy: existing.sql_risk_policy,
             color: existing.color,
             ssl_mode: existing.ssl_mode,
             root_certificate_path: existing.root_certificate_path,
@@ -877,6 +899,19 @@ fn validate_request(request: &ProfileWriteRequest) -> Result<(), ProfileError> {
             "Port must be between 1 and 65535.".to_owned(),
         ));
     }
+    if !matches!(
+        request.sql_risk_policy.as_str(),
+        "all" | "critical-only" | "off"
+    ) {
+        return Err(ProfileError::Invalid(
+            "SQL risk policy must be all, critical-only, or off.".to_owned(),
+        ));
+    }
+    if request.environment == "production" && request.sql_risk_policy == "off" {
+        return Err(ProfileError::Invalid(
+            "Production connections cannot disable all SQL risk prompts.".to_owned(),
+        ));
+    }
     if matches!(request.ssl_mode, SslMode::VerifyCa | SslMode::VerifyFull)
         && clean_optional(&request.root_certificate_path).is_none()
     {
@@ -903,6 +938,10 @@ fn validate_request(request: &ProfileWriteRequest) -> Result<(), ProfileError> {
         }
     }
     Ok(())
+}
+
+fn default_sql_risk_policy() -> String {
+    "all".to_owned()
 }
 
 fn validate_new_ssh_credentials(request: &ProfileWriteRequest) -> Result<(), ProfileError> {
@@ -1013,6 +1052,7 @@ mod tests {
             username: "postgres".to_owned(),
             password: Some(password.to_owned()),
             environment: "development".to_owned(),
+            sql_risk_policy: "all".to_owned(),
             color: "#2f6d52".to_owned(),
             ssl_mode: SslMode::Prefer,
             root_certificate_path: None,
@@ -1074,6 +1114,20 @@ mod tests {
 
         value.client_key_path = Some("/tmp/client.key".to_owned());
         validate_request(&value).expect("a complete TLS profile should be valid");
+    }
+
+    #[test]
+    fn production_profile_validation_never_allows_prompts_to_be_disabled() {
+        let mut value = request("");
+        value.sql_risk_policy = "off".to_owned();
+        validate_request(&value).expect("non-production prompts may be disabled");
+
+        value.environment = "production".to_owned();
+        let error = validate_request(&value).unwrap_err().to_string();
+        assert!(error.contains("Production connections cannot disable"));
+
+        value.sql_risk_policy = "critical-only".to_owned();
+        validate_request(&value).expect("production retains critical prompts");
     }
 
     #[test]
@@ -1330,6 +1384,16 @@ mod tests {
                 ); PRAGMA user_version = 1;",
             )
             .unwrap();
+        connection
+            .execute(
+                "INSERT INTO connection_profiles (
+                    id, name, host, port, database_name, username, environment, ssl_mode,
+                    credential_ref, is_favorite, created_at, updated_at
+                 ) VALUES ('profile-1', 'Legacy', 'localhost', 5432, 'postgres', 'postgres',
+                           'development', 'prefer', 'profile-1', 0, 1, 1)",
+                [],
+            )
+            .unwrap();
         drop(connection);
 
         let repository = ProfileRepository::open(&path).unwrap();
@@ -1347,6 +1411,8 @@ mod tests {
             )
             .unwrap();
         assert!(draft_table_exists);
+        let migrated = repository.get("profile-1").unwrap();
+        assert_eq!(migrated.sql_risk_policy, "all");
         drop(repository);
         remove_test_files(&path);
     }

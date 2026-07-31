@@ -1003,6 +1003,43 @@ describe("App sidebar", () => {
     });
   });
 
+  it("applies the saved connection risk policy before prompting", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([
+      { ...savedProfile, sqlRiskPolicy: "critical-only" },
+    ]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    const run = screen.getByRole("button", {
+      name: "Run selection or current statement",
+    });
+
+    await replaceEditorText("DELETE FROM public.sessions;");
+    fireEvent.click(run);
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    await replaceEditorText("DROP TABLE public.logs;");
+    fireEvent.click(run);
+    expect(
+      await screen.findByRole("alertdialog", { name: "Confirm dangerous SQL" }),
+    ).toBeVisible();
+    expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
+  });
+
   it("reports query errors without marking a healthy session disconnected", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({

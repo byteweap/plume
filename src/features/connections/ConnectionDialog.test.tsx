@@ -58,6 +58,28 @@ describe("ConnectionDialog", () => {
     expect(screen.getByRole("textbox", { name: "Jump host" })).toBeVisible();
   });
 
+  it("keeps production SQL protection enabled while other environments are adjustable", () => {
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    const environment = screen.getByRole("combobox", { name: "Environment" });
+    const policy = screen.getByRole("combobox", { name: /SQL risk prompts/ });
+    fireEvent.change(policy, { target: { value: "off" } });
+    expect(policy).toHaveValue("off");
+
+    fireEvent.change(environment, { target: { value: "production" } });
+    expect(policy).toHaveValue("critical-only");
+    expect(screen.getByRole("option", { name: "Disable prompts" })).toBeDisabled();
+    expect(screen.getByText(/Production connections must retain/)).toBeVisible();
+  });
+
   it("sends SSH and jump-host secrets outside the persisted config", async () => {
     const testProfile = vi.spyOn(connectionApi, "testProfile").mockResolvedValue({
       database: "postgres",

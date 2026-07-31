@@ -77,6 +77,27 @@ describe("connectionFormSchema", () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it("allows configurable prompts outside production and rejects production off", () => {
+    expect(
+      connectionFormSchema.safeParse({
+        ...defaultConnectionFormValue,
+        name: "Development",
+        sqlRiskPolicy: "off",
+      }).success,
+    ).toBe(true);
+    const result = connectionFormSchema.safeParse({
+      ...defaultConnectionFormValue,
+      name: "Production",
+      environment: "production",
+      sqlRiskPolicy: "off",
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]).toMatchObject({
+      message: "productionRiskPolicy",
+      path: ["sqlRiskPolicy"],
+    });
+  });
 });
 
 describe("saved profile conversion", () => {
@@ -95,6 +116,7 @@ describe("saved profile conversion", () => {
     };
     const form = profileToFormValue(profile);
     expect(form.password).toBe("");
+    expect(form.sqlRiskPolicy).toBe("all");
     expect(toProfileWriteRequest(form, profile).password).toBeUndefined();
   });
 

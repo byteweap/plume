@@ -3348,6 +3348,7 @@ dependencies = [
  "keyring",
  "native-tls",
  "postgres-native-tls",
+ "regex",
  "rusqlite",
  "russh",
  "serde",

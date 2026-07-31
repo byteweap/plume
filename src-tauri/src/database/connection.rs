@@ -8,6 +8,7 @@ use tokio_postgres::{CancelToken, Client, Config, config::SslMode as PostgresSsl
 
 use crate::{
     database::ssh::{ResolvedSshConfig, SshTunnel},
+    diagnostics,
     error::DatabaseError,
 };
 
@@ -139,7 +140,7 @@ pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, Dat
                 .map_err(|error| prefer_tunnel_error(&tunnel, DatabaseError::Postgres(error)))?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = connection.await {
-                    eprintln!("PostgreSQL connection closed: {error}");
+                    diagnostics::report_error("PostgreSQL connection closed", &error);
                 }
             });
             (client, Transport::Plain)
@@ -151,7 +152,7 @@ pub async fn open(request: &ConnectionTestRequest) -> Result<OpenConnection, Dat
             })?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = connection.await {
-                    eprintln!("PostgreSQL TLS connection closed: {error}");
+                    diagnostics::report_error("PostgreSQL TLS connection closed", &error);
                 }
             });
             let transport = detect_transport(&client).await?;

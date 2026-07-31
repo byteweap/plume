@@ -389,6 +389,11 @@ file paths, never those secrets or private-key contents.
 
 - The UI never opens raw PostgreSQL sockets.
 - Passwords, private-key contents, and credential-bearing URLs must not appear in logs.
+- Rust diagnostics pass driver and library errors through one redaction boundary
+  before writing them to stderr. The same boundary sanitizes command error messages,
+  details, and hints before IPC serialization. It removes URI userinfo, secret-like
+  key/value fields, authorization credentials, and PEM private-key blocks. Panic
+  reporting includes source location only and suppresses the panic payload.
 - The frontend receives an opaque session ID instead of retained credentials.
 - Metadata queries are parameterized where user-provided identifiers are involved.
 - Browser-only development must fail privileged operations explicitly; it must not fake successful database behavior.

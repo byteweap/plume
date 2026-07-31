@@ -1,9 +1,10 @@
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use thiserror::Error;
 use tokio_postgres::error::ErrorPosition;
 
 use crate::{
     database::{query::QueryError, table_data::TableDataCommitError},
+    diagnostics,
     drafts::DraftError,
     exports::ExportError,
     profiles::ProfileError,
@@ -55,8 +56,12 @@ pub enum DatabaseError {
 #[derive(Debug, Serialize)]
 pub struct CommandError {
     code: &'static str,
+    #[serde(serialize_with = "serialize_redacted")]
     message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_redacted_option"
+    )]
     detail: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     diagnostic: Option<Box<QueryDiagnostic>>,
@@ -67,10 +72,30 @@ pub struct CommandError {
 struct QueryDiagnostic {
     sql_state: String,
     severity: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_redacted_option"
+    )]
     hint: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     position: Option<u32>,
+}
+
+fn serialize_redacted<S>(value: &str, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&diagnostics::redact(value))
+}
+
+fn serialize_redacted_option<S>(value: &Option<String>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match value {
+        Some(value) => serializer.serialize_some(&diagnostics::redact(value)),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl From<DatabaseError> for CommandError {
@@ -425,6 +450,28 @@ mod tests {
         assert_eq!(json["code"], "invalid_configuration");
         assert_eq!(json["message"], "Host is required.");
         assert!(json.get("detail").is_none());
+    }
+
+    #[test]
+    fn command_error_serialization_redacts_every_diagnostic_text_field() {
+        let secret = "sentinel-command-secret";
+        let error = CommandError {
+            code: "query_failed",
+            message: format!("failed with password={secret}"),
+            detail: Some(format!("postgresql://alice:{secret}@db.internal/plume")),
+            diagnostic: Some(Box::new(super::QueryDiagnostic {
+                sql_state: "XX000".to_owned(),
+                severity: "ERROR".to_owned(),
+                hint: Some(format!("Authorization: Bearer {secret}")),
+                position: None,
+            })),
+        };
+
+        let json = serde_json::to_string(&error).expect("command error should serialize");
+
+        assert!(!json.contains(secret));
+        assert!(json.contains("db.internal/plume"));
+        assert!(json.contains("[REDACTED]"));
     }
 
     #[test]

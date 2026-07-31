@@ -74,7 +74,7 @@ export interface WorkspaceTabsState {
 
 export type WorkspaceTabsAction =
   | ({ type: "open-connection" } & WorkspaceContext)
-  | ({ type: "open-query"; titlePrefix: string } & WorkspaceContext)
+  | ({ type: "open-query"; titlePrefix: string; sql?: string } & WorkspaceContext)
   | ({ type: "open-table-data"; table: string } & WorkspaceContext)
   | {
       type: "set-table-data-page";
@@ -227,7 +227,7 @@ export function workspaceTabsReducer(
         database: action.database,
         schema: action.schema,
         title: `${action.titlePrefix} ${state.nextQueryNumber}`,
-        sql: "",
+        sql: action.sql ?? "",
         draftState: "unsaved",
       };
       return {

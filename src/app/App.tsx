@@ -56,6 +56,8 @@ import { ConnectionTreeItem } from "../features/database-tree/ConnectionTreeItem
 import { queryDraftApi } from "../features/drafts/queryDraftApi";
 import { queryHistoryApi } from "../features/history/queryHistoryApi";
 import type { QueryHistoryStatus } from "../features/history/queryHistory";
+import type { QueryHistory } from "../features/history/queryHistory";
+import { QueryHistoryPanel } from "../features/history/QueryHistoryPanel";
 import {
   createQueryId,
   DEFAULT_QUERY_ROW_LIMIT,
@@ -211,6 +213,8 @@ export function App() {
   const [profileError, setProfileError] = useState<string>();
   const [draftError, setDraftError] = useState<string>();
   const [filter, setFilter] = useState("");
+  const [historyEntries, setHistoryEntries] = useState<QueryHistory[]>([]);
+  const [historySearch, setHistorySearch] = useState("");
   const [sidebarWidth, setSidebarWidth] = useState(defaultSidebarWidth);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [queryRowLimit, setQueryRowLimit] = useState(DEFAULT_QUERY_ROW_LIMIT);
@@ -269,6 +273,33 @@ export function App() {
       ),
     );
   }, [profiles, filter]);
+
+  const loadQueryHistory = useCallback(async (search: string) => {
+    try {
+      return await queryHistoryApi.list(search);
+    } catch (error) {
+      if (toCommandError(error).code !== "desktop_required") {
+        setProfileError(toCommandError(error).message);
+      }
+      return undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const entries = await loadQueryHistory(historySearch);
+      if (!cancelled && entries) setHistoryEntries(entries);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [historySearch, loadQueryHistory]);
+
+  async function refreshQueryHistory() {
+    const entries = await loadQueryHistory(historySearch);
+    if (entries) setHistoryEntries(entries);
+  }
 
   useEffect(() => {
     const pendingTabIds = workspaceTabs.tabs
@@ -770,6 +801,36 @@ export function App() {
     });
   }
 
+  function openHistoryEntry(entry: QueryHistory) {
+    if (!entry.profileId) return;
+    setSelectedProfileId(entry.profileId);
+    dispatchWorkspaceTabs({
+      type: "open-query",
+      profileId: entry.profileId,
+      database: entry.database,
+      schema: entry.schema,
+      titlePrefix: t("workspace.query"),
+      sql: entry.sql,
+    });
+  }
+
+  function copyHistoryEntry(entry: QueryHistory) {
+    void navigator.clipboard?.writeText(entry.sql);
+  }
+
+  async function clearQueryHistory() {
+    if (!window.confirm(t("history.clearConfirm"))) return;
+    try {
+      await queryHistoryApi.clear();
+      setHistoryEntries([]);
+    } catch (error) {
+      const commandError = toCommandError(error);
+      if (commandError.code !== "desktop_required") {
+        setProfileError(commandError.message);
+      }
+    }
+  }
+
   function openTableData(
     profile: ConnectionProfile,
     reference: TableDataReference,
@@ -1252,6 +1313,15 @@ export function App() {
               </div>
             )}
           </div>
+          <QueryHistoryPanel
+            entries={historyEntries}
+            search={historySearch}
+            onSearchChange={setHistorySearch}
+            onRefresh={() => void refreshQueryHistory()}
+            onClear={() => void clearQueryHistory()}
+            onOpen={openHistoryEntry}
+            onCopy={copyHistoryEntry}
+          />
         </aside>
 
         {!sidebarCollapsed && (

@@ -25,4 +25,16 @@ describe("queryHistoryApi", () => {
       request,
     });
   });
+
+  it("searches and clears history through dedicated commands", async () => {
+    mocks.invokeCommand.mockResolvedValueOnce([]).mockResolvedValueOnce(undefined);
+
+    await expect(queryHistoryApi.list("users")).resolves.toEqual([]);
+    await queryHistoryApi.clear();
+
+    expect(mocks.invokeCommand).toHaveBeenNthCalledWith(1, "list_query_history", {
+      request: { search: "users", limit: 100 },
+    });
+    expect(mocks.invokeCommand).toHaveBeenNthCalledWith(2, "clear_query_history");
+  });
 });

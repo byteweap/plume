@@ -16,7 +16,7 @@ use commands::{
     },
     drafts::{delete_query_draft, list_query_drafts, save_query_draft},
     exports::{cancel_export, export_csv, export_json},
-    history::record_query_history,
+    history::{clear_query_history, list_query_history, record_query_history},
     metadata::{
         get_catalog_collection_items, get_catalog_tree, get_database_collection_items,
         get_database_tree, get_schema_objects, get_server_tree, get_sql_completions,
@@ -94,7 +94,9 @@ pub fn run() {
             export_csv,
             export_json,
             cancel_export,
-            record_query_history
+            record_query_history,
+            list_query_history,
+            clear_query_history
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Plume");

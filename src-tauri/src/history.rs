@@ -42,6 +42,13 @@ pub struct QueryHistory {
     pub executed_at: i64,
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListQueryHistoryRequest {
+    pub search: Option<String>,
+    pub limit: Option<u32>,
+}
+
 struct HistoryRepository {
     connection: Connection,
 }
@@ -91,6 +98,45 @@ impl HistoryRepository {
             executed_at,
         })
     }
+
+    fn list(&self, request: &ListQueryHistoryRequest) -> Result<Vec<QueryHistory>, HistoryError> {
+        let search = request.search.as_deref().unwrap_or("").trim();
+        let pattern = format!("%{}%", escape_like(search));
+        let limit = i64::from(request.limit.unwrap_or(100).clamp(1, 1_000));
+        let mut statement = self.connection.prepare(
+            "SELECT id, profile_id, database_name, schema_name, sql, duration_ms,
+                    result_status, executed_at
+             FROM query_history
+             WHERE ?1 = ''
+                OR sql LIKE ?2 ESCAPE '\\'
+                OR database_name LIKE ?2 ESCAPE '\\'
+                OR COALESCE(schema_name, '') LIKE ?2 ESCAPE '\\'
+                OR COALESCE(profile_id, '') LIKE ?2 ESCAPE '\\'
+             ORDER BY executed_at DESC, id DESC
+             LIMIT ?3",
+        )?;
+        let rows = statement
+            .query_map((&search, &pattern, limit), |row| {
+                let duration_ms = row.get::<_, i64>(5)?.max(0) as u64;
+                Ok(QueryHistory {
+                    id: row.get(0)?,
+                    profile_id: row.get(1)?,
+                    database: row.get(2)?,
+                    schema: row.get(3)?,
+                    sql: row.get(4)?,
+                    duration_ms,
+                    result_status: row.get(6)?,
+                    executed_at: row.get(7)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    fn clear(&mut self) -> Result<(), HistoryError> {
+        self.connection.execute("DELETE FROM query_history", [])?;
+        Ok(())
+    }
 }
 
 pub struct QueryHistoryService {
@@ -106,6 +152,17 @@ impl QueryHistoryService {
 
     pub fn record(&self, request: RecordQueryHistoryRequest) -> Result<QueryHistory, HistoryError> {
         self.repository()?.record(&request)
+    }
+
+    pub fn list(
+        &self,
+        request: ListQueryHistoryRequest,
+    ) -> Result<Vec<QueryHistory>, HistoryError> {
+        self.repository()?.list(&request)
+    }
+
+    pub fn clear(&self) -> Result<(), HistoryError> {
+        self.repository()?.clear()
     }
 
     fn repository(&self) -> Result<std::sync::MutexGuard<'_, HistoryRepository>, HistoryError> {
@@ -150,6 +207,13 @@ fn clean_optional(value: &Option<String>) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
+fn escape_like(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_")
+}
+
 fn unix_timestamp() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -166,7 +230,7 @@ mod tests {
 
     use uuid::Uuid;
 
-    use super::{QueryHistoryService, RecordQueryHistoryRequest};
+    use super::{ListQueryHistoryRequest, QueryHistoryService, RecordQueryHistoryRequest};
     use crate::{
         credentials::MemoryCredentialStore,
         database::connection::SslMode,
@@ -198,6 +262,30 @@ mod tests {
         assert_eq!(record.database, "postgres");
         assert_eq!(record.duration_ms, 42);
         assert_eq!(record.result_status, "succeeded");
+        assert_eq!(
+            history
+                .list(ListQueryHistoryRequest::default())
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            history
+                .list(ListQueryHistoryRequest {
+                    search: Some("select".to_owned()),
+                    limit: Some(10),
+                })
+                .unwrap()
+                .len(),
+            1
+        );
+        history.clear().unwrap();
+        assert!(
+            history
+                .list(ListQueryHistoryRequest::default())
+                .unwrap()
+                .is_empty()
+        );
         drop(history);
         drop(profiles);
         remove_test_files(&path);

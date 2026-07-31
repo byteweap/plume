@@ -213,6 +213,107 @@
   padding: 0 6px 10px;
 }
 
+.history-panel {
+  min-height: 150px;
+  max-height: 42%;
+  overflow: hidden;
+  border-top: 1px solid #d8ded9;
+  background: #edf2ee;
+}
+
+.history-heading {
+  display: flex;
+  height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 9px 0 13px;
+  color: #465149;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.history-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.history-search {
+  margin-bottom: 6px;
+}
+
+.history-list {
+  max-height: 190px;
+  overflow: auto;
+  padding: 0 6px 8px;
+}
+
+.history-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px;
+  border-bottom: 1px solid #e0e6e1;
+}
+
+.history-item-open {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  padding: 7px 4px;
+  color: #26332b;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-item-open:hover {
+  background: #e3ebe5;
+}
+
+.history-status {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  background: #87928a;
+}
+
+.history-status-succeeded { background: #2f8c61; }
+.history-status-failed { background: #c5524d; }
+.history-status-cancelled { background: #b18a3b; }
+
+.history-item-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.history-item-copy strong,
+.history-item-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item-copy strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.history-item-copy small {
+  color: #778178;
+  font-size: 10px;
+}
+
+.history-empty {
+  padding: 10px 8px 14px;
+  color: #7a847d;
+  font-size: 11px;
+}
+
 .connection-item-line {
   display: grid;
   position: relative;

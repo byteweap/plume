@@ -19,10 +19,12 @@ import {
   FileText,
   Globe2,
   ListStart,
+  LoaderCircle,
   PanelLeftClose,
   PanelLeftOpen,
   Play,
   Plus,
+  RefreshCw,
   Search,
   Save,
   Square,
@@ -59,11 +61,18 @@ import type {
   SqlExecutionTarget,
 } from "../features/sql-editor/SqlEditor";
 import {
+  createInitialTableDataTarget,
+  INITIAL_TABLE_DATA_LIMIT,
+  type TableDataReference,
+} from "../features/table-data/tableData";
+import {
   createInitialWorkspaceTabsState,
   getActiveWorkspaceTab,
   getQueryExecution,
   workspaceTabsReducer,
+  type ExecutableTab,
   type QueryTab,
+  type TableDataTab,
   type WorkspaceTab,
 } from "../features/tabs/workspaceTabs";
 import { useI18n } from "../i18n/I18nContext";
@@ -227,73 +236,76 @@ export function App() {
     }
   }, []);
 
-  async function executeQuery(
-    tab: QueryTab,
-    sessionId: string,
-    target: SqlExecutionTarget,
-    rowLimit: number,
-  ) {
-    if (executingProfiles.current.has(tab.profileId)) return;
+  const executeQuery = useCallback(
+    async (
+      tab: ExecutableTab,
+      sessionId: string,
+      target: SqlExecutionTarget,
+      rowLimit: number,
+    ) => {
+      if (executingProfiles.current.has(tab.profileId)) return;
 
-    const queryId = createQueryId();
-    executingProfiles.current.add(tab.profileId);
-    dispatchWorkspaceTabs({
-      type: "query-started",
-      tabId: tab.id,
-      queryId,
-      target,
-      startedAt: Date.now(),
-    });
-    dispatchSession({ type: "begin-work", profileId: tab.profileId });
-
-    try {
-      const result = await queryExecutionApi.execute({
-        queryId,
-        sessionId,
-        database: tab.database,
-        sql: target.sql,
-        rowLimit,
-      });
+      const queryId = createQueryId();
+      executingProfiles.current.add(tab.profileId);
       dispatchWorkspaceTabs({
-        type: "query-succeeded",
+        type: "query-started",
         tabId: tab.id,
-        result,
-        finishedAt: Date.now(),
+        queryId,
+        target,
+        startedAt: Date.now(),
       });
-      dispatchSession({ type: "ready", profileId: tab.profileId });
-    } catch (error) {
-      const commandError = toCommandError(error);
-      if (commandError.code === "query_cancelled") {
-        dispatchWorkspaceTabs({
-          type: "query-cancelled",
-          tabId: tab.id,
-          queryId,
-          finishedAt: Date.now(),
-        });
-      } else {
-        dispatchWorkspaceTabs({
-          type: "query-failed",
-          tabId: tab.id,
-          queryId,
-          error: commandError,
-          finishedAt: Date.now(),
-        });
-      }
-      if (isConnectionQueryError(commandError.code)) {
-        dispatchSession({
-          type: "failed",
-          profileId: tab.profileId,
-          error: commandError.message,
-        });
-      } else {
-        dispatchSession({ type: "ready", profileId: tab.profileId });
-      }
-    } finally {
-      executingProfiles.current.delete(tab.profileId);
-    }
-  }
+      dispatchSession({ type: "begin-work", profileId: tab.profileId });
 
-  async function cancelQuery(tab: QueryTab, sessionId: string) {
+      try {
+        const result = await queryExecutionApi.execute({
+          queryId,
+          sessionId,
+          database: tab.database,
+          sql: target.sql,
+          rowLimit,
+        });
+        dispatchWorkspaceTabs({
+          type: "query-succeeded",
+          tabId: tab.id,
+          result,
+          finishedAt: Date.now(),
+        });
+        dispatchSession({ type: "ready", profileId: tab.profileId });
+      } catch (error) {
+        const commandError = toCommandError(error);
+        if (commandError.code === "query_cancelled") {
+          dispatchWorkspaceTabs({
+            type: "query-cancelled",
+            tabId: tab.id,
+            queryId,
+            finishedAt: Date.now(),
+          });
+        } else {
+          dispatchWorkspaceTabs({
+            type: "query-failed",
+            tabId: tab.id,
+            queryId,
+            error: commandError,
+            finishedAt: Date.now(),
+          });
+        }
+        if (isConnectionQueryError(commandError.code)) {
+          dispatchSession({
+            type: "failed",
+            profileId: tab.profileId,
+            error: commandError.message,
+          });
+        } else {
+          dispatchSession({ type: "ready", profileId: tab.profileId });
+        }
+      } finally {
+        executingProfiles.current.delete(tab.profileId);
+      }
+    },
+    [],
+  );
+
+  async function cancelQuery(tab: ExecutableTab, sessionId: string) {
     const execution = getQueryExecution(tab);
     if (execution.status !== "running") return;
 
@@ -322,6 +334,24 @@ export function App() {
       });
     }
   }
+
+  useEffect(() => {
+    if (
+      activeTab.kind !== "table-data" ||
+      activeSession?.state !== "connected" ||
+      !activeConnection ||
+      getQueryExecution(activeTab).status !== "idle"
+    ) {
+      return;
+    }
+
+    void executeQuery(
+      activeTab,
+      activeConnection.sessionId,
+      createInitialTableDataTarget(activeTab),
+      INITIAL_TABLE_DATA_LIMIT,
+    );
+  }, [activeConnection, activeSession?.state, activeTab, executeQuery]);
 
   useEffect(() => {
     let cancelled = false;
@@ -495,6 +525,21 @@ export function App() {
       database: tab.database,
       schema: tab.schema,
       titlePrefix: t("workspace.query"),
+    });
+  }
+
+  function openTableData(
+    profile: ConnectionProfile,
+    reference: TableDataReference,
+  ) {
+    const session = getConnectionSession(sessions, profile.id);
+    if (session.state !== "connected" && session.state !== "busy") return;
+    dispatchWorkspaceTabs({
+      type: "open-table-data",
+      profileId: profile.id,
+      database: reference.database,
+      schema: reference.schema,
+      table: reference.table,
     });
   }
 
@@ -827,6 +872,7 @@ export function App() {
                 onRename={() => void renameProfile(connection)}
                 onDelete={() => void deleteProfile(connection)}
                 onToggleFavorite={() => void toggleFavorite(connection)}
+                onOpenTable={(reference) => openTableData(connection, reference)}
               />
             ))}
 
@@ -983,6 +1029,29 @@ export function App() {
                   })
                 }
               />
+            ) : activeTab.kind === "table-data" ? (
+              <TableDataWorkspace
+                tab={activeTab}
+                connection={activeConnection}
+                state={activeSession?.state ?? "disconnected"}
+                onReconnect={() => void connectProfile(activeProfile, false)}
+                onReload={() => {
+                  if (!activeConnection || activeSession?.state !== "connected") {
+                    return;
+                  }
+                  void executeQuery(
+                    activeTab,
+                    activeConnection.sessionId,
+                    createInitialTableDataTarget(activeTab),
+                    INITIAL_TABLE_DATA_LIMIT,
+                  );
+                }}
+                onCancel={() => {
+                  if (activeConnection) {
+                    void cancelQuery(activeTab, activeConnection.sessionId);
+                  }
+                }}
+              />
             ) : activeSession?.state === "error" ? (
               <ConnectionErrorWorkspace
                 message={activeSession.error ?? t("connection.state.error")}
@@ -1121,6 +1190,125 @@ function ConnectedWorkspace({
         <span>{t("workspace.selectObject")}</span>
       </div>
     </div>
+  );
+}
+
+function TableDataWorkspace({
+  tab,
+  connection,
+  state,
+  onReconnect,
+  onReload,
+  onCancel,
+}: {
+  tab: TableDataTab;
+  connection?: ActiveConnection;
+  state: ConnectionLifecycleState;
+  onReconnect: () => void;
+  onReload: () => void;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const execution = getQueryExecution(tab);
+  const loading =
+    execution.status === "idle" ||
+    execution.status === "running" ||
+    execution.status === "cancelling";
+  const limitLabel = t("tableData.initialLimit").replace(
+    "{count}",
+    INITIAL_TABLE_DATA_LIMIT.toLocaleString(),
+  );
+
+  if (!connection) {
+    return <UnavailableWorkspace state={state} onReconnect={onReconnect} />;
+  }
+
+  return (
+    <section
+      className="table-data-workspace"
+      aria-label={t("tableData.workspace")}
+    >
+      <header className="table-data-header">
+        <div>
+          <span className="table-data-context">
+            {tab.database} / {tab.schema}
+          </span>
+          <h1>{tab.table}</h1>
+          <small>{limitLabel}</small>
+        </div>
+        {execution.status === "running" ? (
+          <button
+            className="button button-quiet button-compact"
+            type="button"
+            onClick={onCancel}
+          >
+            <Square size={12} fill="currentColor" />
+            {t("query.cancel")}
+          </button>
+        ) : (
+          <IconButton
+            label={t("tableData.reload")}
+            disabled={loading}
+            onClick={onReload}
+          >
+            {execution.status === "cancelling" ? (
+              <LoaderCircle className="spin" size={14} />
+            ) : (
+              <RefreshCw size={14} />
+            )}
+          </IconButton>
+        )}
+      </header>
+
+      <div className="table-data-content">
+        {execution.status === "succeeded" ? (
+          <Suspense
+            fallback={
+              <div className="query-result-loading" role="status">
+                <LoaderCircle className="spin" size={15} />
+                {t("query.results.loading")}
+              </div>
+            }
+          >
+            <QueryResultPanel result={execution.result} />
+          </Suspense>
+        ) : execution.status === "failed" ? (
+          <div className="table-data-error" role="alert">
+            <strong>{t("tableData.failed")}</strong>
+            <span>{execution.error.message}</span>
+            <button
+              className="button button-quiet button-compact"
+              type="button"
+              onClick={onReload}
+            >
+              <RefreshCw size={13} />
+              {t("tableData.retry")}
+            </button>
+          </div>
+        ) : execution.status === "cancelled" ? (
+          <div className="table-data-error" role="status">
+            <strong>{t("query.cancelled")}</strong>
+            <button
+              className="button button-quiet button-compact"
+              type="button"
+              onClick={onReload}
+            >
+              <RefreshCw size={13} />
+              {t("tableData.retry")}
+            </button>
+          </div>
+        ) : (
+          <div className="table-data-loading" role="status">
+            <LoaderCircle className="spin" size={16} />
+            <span>
+              {execution.status === "cancelling"
+                ? t("query.cancelling.requesting")
+                : t("tableData.loading")}
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1627,6 +1815,7 @@ function UnavailableWorkspace({
 function WorkspaceTabIcon({ tab }: { tab: WorkspaceTab }) {
   if (tab.kind === "connection") return <Database size={14} />;
   if (tab.kind === "query") return <Braces size={14} />;
+  if (tab.kind === "table-data") return <Table2 size={14} />;
   return <FileText size={14} />;
 }
 

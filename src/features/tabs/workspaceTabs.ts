@@ -33,7 +33,17 @@ export interface QueryTab extends WorkspaceContext {
   execution?: QueryExecutionState;
 }
 
-export type WorkspaceTab = WelcomeTab | ConnectionTab | QueryTab;
+export interface TableDataTab extends WorkspaceContext {
+  id: string;
+  kind: "table-data";
+  title: string;
+  schema: string;
+  table: string;
+  execution?: QueryExecutionState;
+}
+
+export type ExecutableTab = QueryTab | TableDataTab;
+export type WorkspaceTab = WelcomeTab | ConnectionTab | ExecutableTab;
 
 export interface WorkspaceTabsState {
   tabs: WorkspaceTab[];
@@ -45,6 +55,7 @@ export interface WorkspaceTabsState {
 export type WorkspaceTabsAction =
   | ({ type: "open-connection" } & WorkspaceContext)
   | ({ type: "open-query"; titlePrefix: string } & WorkspaceContext)
+  | ({ type: "open-table-data"; table: string } & WorkspaceContext)
   | { type: "restore-queries"; tabs: QueryTab[] }
   | { type: "activate"; tabId: string }
   | { type: "rename"; tabId: string; title: string }
@@ -168,6 +179,34 @@ export function workspaceTabsReducer(
         nextQueryNumber: state.nextQueryNumber + 1,
       };
     }
+    case "open-table-data": {
+      if (!action.schema) return state;
+      const existing = state.tabs.find(
+        (tab) =>
+          tab.kind === "table-data" &&
+          tab.profileId === action.profileId &&
+          tab.database === action.database &&
+          tab.schema === action.schema &&
+          tab.table === action.table,
+      );
+      if (existing) return { ...state, activeTabId: existing.id };
+
+      const tab: TableDataTab = {
+        id: `workspace-${state.nextTabId}`,
+        kind: "table-data",
+        profileId: action.profileId,
+        database: action.database,
+        schema: action.schema,
+        table: action.table,
+        title: action.table,
+      };
+      return {
+        ...state,
+        tabs: [...state.tabs, tab],
+        activeTabId: tab.id,
+        nextTabId: state.nextTabId + 1,
+      };
+    }
     case "restore-queries": {
       const existingIds = new Set(state.tabs.map((tab) => tab.id));
       const restored = action.tabs.filter((tab) => !existingIds.has(tab.id));
@@ -233,7 +272,7 @@ export function workspaceTabsReducer(
             : "unsaved",
       }));
     case "query-started":
-      return updateQueryTab(state, action.tabId, () => ({
+      return updateExecutableTab(state, action.tabId, () => ({
         execution: {
           status: "running",
           queryId: action.queryId,
@@ -340,7 +379,7 @@ export function workspaceTabsReducer(
 
 const idleQueryExecution: QueryExecutionState = { status: "idle" };
 
-export function getQueryExecution(tab: QueryTab): QueryExecutionState {
+export function getQueryExecution(tab: ExecutableTab): QueryExecutionState {
   return tab.execution ?? idleQueryExecution;
 }
 
@@ -353,9 +392,9 @@ function updateActiveQuery(
       QueryExecutionState,
       { status: "running" | "cancelling" }
     >,
-  ) => Partial<QueryTab>,
+  ) => Partial<ExecutableTab>,
 ): WorkspaceTabsState {
-  return updateQueryTab(state, tabId, (tab) => {
+  return updateExecutableTab(state, tabId, (tab) => {
     const execution = getQueryExecution(tab);
     return (execution.status === "running" || execution.status === "cancelling") &&
       execution.queryId === queryId
@@ -370,9 +409,9 @@ function updateCancellingQuery(
   queryId: string,
   update: (
     execution: Extract<QueryExecutionState, { status: "cancelling" }>,
-  ) => Partial<QueryTab>,
+  ) => Partial<ExecutableTab>,
 ): WorkspaceTabsState {
-  return updateQueryTab(state, tabId, (tab) => {
+  return updateExecutableTab(state, tabId, (tab) => {
     const execution = getQueryExecution(tab);
     return execution.status === "cancelling" && execution.queryId === queryId
       ? update(execution)
@@ -393,16 +432,16 @@ function finishQueryTiming(
   };
 }
 
-function updateQueryTab(
+function updateExecutableTab(
   state: WorkspaceTabsState,
   tabId: string,
-  update: (tab: QueryTab) => Partial<QueryTab>,
+  update: (tab: ExecutableTab) => Partial<ExecutableTab>,
 ): WorkspaceTabsState {
   return {
     ...state,
     tabs: state.tabs.map((tab) =>
-      tab.id === tabId && tab.kind === "query"
-        ? { ...tab, ...update(tab) }
+      tab.id === tabId && (tab.kind === "query" || tab.kind === "table-data")
+        ? ({ ...tab, ...update(tab) } as WorkspaceTab)
         : tab,
     ),
   };

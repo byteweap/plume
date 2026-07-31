@@ -167,6 +167,15 @@ in the target directory. Completed output is flushed, synchronized, and
 atomically persisted over the selected path; cancellation or any write failure
 drops the temporary file and leaves an existing target untouched.
 
+Opening a regular table from the object tree creates or activates a dedicated
+table-data tab scoped by profile, database, Schema, and table. The initial load
+uses the existing cancellable query protocol and virtualized result grid, but
+generates a read-only `SELECT *` with quoted PostgreSQL identifiers and an
+explicit `LIMIT 200`; the request row budget is also fixed at 200. This ensures
+the first view never issues an unbounded table scan or drains a full result set.
+Pagination, sorting, filtering, and editability are layered onto this tab model
+by the subsequent P0-G tasks.
+
 ## SQL Completion Boundary
 
 CodeMirror combines local PostgreSQL keyword and common-function completions
@@ -271,7 +280,7 @@ Windows bundles and runs the suite against PostgreSQL 14, 16, and 18.
 
 - PostgreSQL sessions are memory-only and reconnection is always explicit.
 - Incrementally consumable result streaming and transaction ownership are not implemented.
-- Data browsing, editing, and object actions are not implemented.
+- Data editing and object actions are not implemented.
 - Linux packaging is not part of the first release target.
 
 These limitations are product backlog items, not reasons to bypass the boundaries described above.

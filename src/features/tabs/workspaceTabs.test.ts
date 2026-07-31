@@ -57,6 +57,31 @@ describe("workspaceTabsReducer", () => {
     ]);
   });
 
+  it("reuses a table-data tab for the same qualified table", () => {
+    let state = createInitialWorkspaceTabsState();
+    state = workspaceTabsReducer(state, {
+      type: "open-table-data",
+      table: "users",
+      ...context,
+    });
+    const tableTabId = state.activeTabId;
+    state = workspaceTabsReducer(state, { type: "activate", tabId: "welcome" });
+    state = workspaceTabsReducer(state, {
+      type: "open-table-data",
+      table: "users",
+      ...context,
+    });
+
+    expect(state.tabs).toHaveLength(2);
+    expect(state.activeTabId).toBe(tableTabId);
+    expect(getActiveWorkspaceTab(state)).toMatchObject({
+      kind: "table-data",
+      title: "users",
+      table: "users",
+      ...context,
+    });
+  });
+
   it("keeps SQL drafts isolated by query tab", () => {
     let state = createInitialWorkspaceTabsState();
     state = workspaceTabsReducer(state, {

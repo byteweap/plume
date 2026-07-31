@@ -60,6 +60,7 @@ import {
   type ServerOverview,
 } from "./databaseTree";
 import { databaseTreeApi } from "./databaseTreeApi";
+import type { TableDataReference } from "../table-data/tableData";
 import "./ConnectionTreeItem.css";
 
 interface ConnectionTreeItemProps {
@@ -79,6 +80,7 @@ interface ConnectionTreeItemProps {
   onRename?: () => void;
   onDelete?: () => void;
   onToggleFavorite?: () => void;
+  onOpenTable?: (reference: TableDataReference) => void;
 }
 
 type TreeIcon = ComponentType<LucideProps>;
@@ -165,6 +167,7 @@ export function ConnectionTreeItem({
   onRename,
   onDelete,
   onToggleFavorite,
+  onOpenTable,
 }: ConnectionTreeItemProps) {
   const { t } = useI18n();
   const candidateSessionId =
@@ -331,6 +334,7 @@ export function ConnectionTreeItem({
                       database={database}
                       sessionId={activeSessionId}
                       onSessionError={onSessionError}
+                      onOpenTable={onOpenTable}
                     />
                   ))}
                 </StaticCollectionNode>
@@ -395,10 +399,12 @@ function DatabaseTreeItem({
   database,
   sessionId,
   onSessionError,
+  onOpenTable,
 }: {
   database: DatabaseSummary;
   sessionId: string;
   onSessionError?: (message: string) => void;
+  onOpenTable?: (reference: TableDataReference) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -451,6 +457,7 @@ function DatabaseTreeItem({
                     database={database.name}
                     sessionId={sessionId}
                     onSessionError={onSessionError}
+                    onOpenTable={onOpenTable}
                   />
                 ))}
               </>
@@ -467,11 +474,13 @@ function DatabaseCollectionNode({
   database,
   sessionId,
   onSessionError,
+  onOpenTable,
 }: {
   collection: DatabaseCollectionSummary;
   database: string;
   sessionId: string;
   onSessionError?: (message: string) => void;
+  onOpenTable?: (reference: TableDataReference) => void;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -537,6 +546,7 @@ function DatabaseCollectionNode({
                       schema={schema}
                       sessionId={sessionId}
                       onSessionError={onSessionError}
+                      onOpenTable={onOpenTable}
                     />
                   ))}
                 </>
@@ -695,11 +705,13 @@ function SchemaTreeItem({
   schema,
   sessionId,
   onSessionError,
+  onOpenTable,
 }: {
   database: string;
   schema: NamedObject;
   sessionId: string;
   onSessionError?: (message: string) => void;
+  onOpenTable?: (reference: TableDataReference) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const objectsLoader = useTreeLoader<DatabaseObject[]>(
@@ -735,7 +747,12 @@ function SchemaTreeItem({
               loadedObjects.length === 0 ? (
                 <TreeEmpty />
               ) : (
-                <ObjectGroups objects={loadedObjects} />
+                <ObjectGroups
+                  objects={loadedObjects}
+                  database={database}
+                  schema={schema.name}
+                  onOpenTable={onOpenTable}
+                />
               )
             }
           </AsyncTreeContent>
@@ -745,7 +762,17 @@ function SchemaTreeItem({
   );
 }
 
-function ObjectGroups({ objects }: { objects: DatabaseObject[] }) {
+function ObjectGroups({
+  objects,
+  database,
+  schema,
+  onOpenTable,
+}: {
+  objects: DatabaseObject[];
+  database: string;
+  schema: string;
+  onOpenTable?: (reference: TableDataReference) => void;
+}) {
   const { t } = useI18n();
   const groups = groupDatabaseObjects(objects);
 
@@ -762,7 +789,20 @@ function ObjectGroups({ objects }: { objects: DatabaseObject[] }) {
         count={group.length}
       >
         {group.map((object) => (
-          <LeafRow key={`${kind}:${object.name}`} label={object.name} />
+          <LeafRow
+            key={`${kind}:${object.name}`}
+            label={object.name}
+            onOpen={
+              kind === "table" && onOpenTable
+                ? () =>
+                    onOpenTable({
+                      database,
+                      schema,
+                      table: object.name,
+                    })
+                : undefined
+            }
+          />
         ))}
       </StaticCollectionNode>
     );
@@ -871,11 +911,29 @@ function LeafRow({
   icon: Icon,
   label,
   title,
+  onOpen,
 }: {
   icon?: TreeIcon;
   label: string;
   title?: string;
+  onOpen?: () => void;
 }) {
+  if (onOpen) {
+    return (
+      <button
+        className="tree-row tree-leaf-row"
+        type="button"
+        title={title ?? label}
+        onDoubleClick={onOpen}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") onOpen();
+        }}
+      >
+        {Icon ? <Icon size={13} /> : <span className="tree-leaf-bullet" />}
+        <span className="tree-row-label">{label}</span>
+      </button>
+    );
+  }
   return (
     <div className="tree-row tree-leaf-row" title={title ?? label}>
       {Icon ? <Icon size={13} /> : <span className="tree-leaf-bullet" />}

@@ -566,6 +566,67 @@ describe("App sidebar", () => {
     expect(screen.getByText("Local saved / postgres")).toBeVisible();
   });
 
+  it("loads at most 200 rows when a table is opened from the tree", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+    vi.spyOn(databaseTreeApi, "getServerTree").mockResolvedValue({
+      databases: [
+        { name: "postgres", owner: "postgres", allowConnections: true },
+      ],
+      roles: [],
+      tablespaces: [],
+    });
+    vi.spyOn(databaseTreeApi, "getDatabaseTree").mockResolvedValue([
+      { kind: "schemas", count: 1 },
+    ]);
+    vi.spyOn(databaseTreeApi, "getDatabaseCollectionItems").mockResolvedValue([
+      { name: "public" },
+    ]);
+    vi.spyOn(databaseTreeApi, "getSchemaObjects").mockResolvedValue([
+      { name: "users", kind: "table" },
+    ]);
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+
+    const connection = await screen.findByRole("button", {
+      name: /^Local saved/,
+    });
+    fireEvent.click(connection);
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getByRole("button", { name: /^Local saved/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Databases/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "postgres" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Schemas (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "public" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tables (1)" }));
+    fireEvent.doubleClick(await screen.findByRole("button", { name: "users" }));
+
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    expect(queryExecutionApi.execute).toHaveBeenCalledWith({
+      queryId: expect.any(String),
+      sessionId: "session-1",
+      database: "postgres",
+      sql: 'SELECT *\nFROM "public"."users"\nLIMIT 200;',
+      rowLimit: 200,
+    });
+    expect(screen.getByRole("tab", { name: "users" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(await screen.findByText("Initial view up to 200 rows")).toBeVisible();
+    expect(await screen.findByRole("grid", { name: "Result 1" })).toBeVisible();
+  });
+
   it("executes the cursor statement and all SQL with connection ownership", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({

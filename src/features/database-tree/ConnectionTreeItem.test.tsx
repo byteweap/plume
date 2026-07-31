@@ -26,6 +26,7 @@ describe("ConnectionTreeItem", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("loads schemas and schema objects lazily", async () => {
+    const onOpenTable = vi.fn();
     const getServerTree = vi
       .spyOn(databaseTreeApi, "getServerTree")
       .mockResolvedValue({
@@ -56,6 +57,7 @@ describe("ConnectionTreeItem", () => {
           environmentClassName="environment-development"
           selected
           onSelect={() => undefined}
+          onOpenTable={onOpenTable}
         />
       </I18nProvider>,
     );
@@ -100,7 +102,13 @@ describe("ConnectionTreeItem", () => {
       "public",
     );
     fireEvent.click(tablesButton);
-    expect(await screen.findByText("users")).toBeVisible();
+    const users = await screen.findByRole("button", { name: "users" });
+    fireEvent.doubleClick(users);
+    expect(onOpenTable).toHaveBeenCalledWith({
+      database: "postgres",
+      schema: "public",
+      table: "users",
+    });
   });
 
   it("hides zero collection counts and renders an empty collection locally", async () => {

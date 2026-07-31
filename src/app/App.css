@@ -298,6 +298,64 @@
   background: #c44a48;
 }
 
+.workspace-environment {
+  --environment-color: #557260;
+  --environment-background: #edf3ef;
+
+  display: inline-flex;
+  height: 20px;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--environment-color) 38%, #d5ddd7);
+  border-radius: 4px;
+  padding: 0 7px 0 8px;
+  color: var(--environment-color);
+  background: var(--environment-background);
+  box-shadow: inset 3px 0 var(--connection-accent, var(--environment-color));
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workspace-environment > span {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: var(--environment-color);
+}
+
+.workspace-environment-development {
+  --environment-color: #2f7652;
+  --environment-background: #eaf5ee;
+}
+
+.workspace-environment-test {
+  --environment-color: #2d6f9f;
+  --environment-background: #eaf3f9;
+}
+
+.workspace-environment-staging {
+  --environment-color: #8a641d;
+  --environment-background: #fbf3df;
+}
+
+.workspace-environment-production {
+  --environment-color: #a33f3d;
+  --environment-background: #faeceb;
+}
+
+.workspace-environment-compact {
+  height: 17px;
+  padding-right: 5px;
+  padding-left: 7px;
+  font-size: 8px;
+}
+
 .sidebar-empty {
   display: flex;
   align-items: center;
@@ -488,6 +546,15 @@
   color: #6e7971;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
+}
+
+.connection-overview-meta,
+.table-data-title-meta,
+.query-context-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
 }
 
 .connection-overview h1 {
@@ -872,6 +939,10 @@
   gap: 10px;
 }
 
+.query-context-heading {
+  flex: 0 1 auto;
+}
+
 .query-contextbar strong,
 .query-contextbar span {
   overflow: hidden;
@@ -1211,6 +1282,17 @@
 
   .query-contextbar {
     border-color: #363d38;
+  }
+
+  .workspace-environment {
+    --environment-background: color-mix(
+      in srgb,
+      var(--environment-color) 17%,
+      #1d211e
+    );
+
+    border-color: color-mix(in srgb, var(--environment-color) 50%, #3e4640);
+    color: color-mix(in srgb, var(--environment-color) 72%, #ffffff);
   }
 
   .query-row-limit-control {

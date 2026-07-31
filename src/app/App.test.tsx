@@ -13,7 +13,7 @@ import {
   sqlCompletionCatalogCache,
 } from "../features/sql-editor/sqlCompletionApi";
 import { tableDataApi } from "../features/table-data/tableDataApi";
-import { App, TableEditabilityStatus } from "./App";
+import { App, EnvironmentBadge, TableEditabilityStatus } from "./App";
 
 const savedProfile: ConnectionProfile = {
   id: "profile-1",
@@ -114,6 +114,35 @@ describe("App sidebar", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(navigator, "clipboard");
+  });
+
+  it("renders every connection environment with a persistent semantic tone", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <div>
+          {(["development", "test", "staging", "production"] as const).map(
+            (environment) => (
+              <EnvironmentBadge
+                key={environment}
+                profile={{ environment, color: "#6b4ba1" }}
+              />
+            ),
+          )}
+        </div>
+      </I18nProvider>,
+    );
+
+    for (const [environment, label] of [
+      ["development", "Development"],
+      ["test", "Test"],
+      ["staging", "Staging"],
+      ["production", "Production"],
+    ] as const) {
+      const badge = screen.getByLabelText(`Current environment: ${label}`);
+      expect(badge).toHaveClass(`workspace-environment-${environment}`);
+      expect(badge).toHaveStyle("--connection-accent: #6b4ba1");
+    }
   });
 
   it("shows the reliable row key or a concrete read-only reason", () => {

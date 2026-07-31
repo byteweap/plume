@@ -11,7 +11,6 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   AlertTriangle,
   ArrowDown,
@@ -105,6 +104,10 @@ import {
 } from "../features/tabs/workspaceTabs";
 import { useI18n } from "../i18n/I18nContext";
 import { isTauriRuntime, toCommandError } from "../platform/tauri";
+import {
+  destroyCurrentWindow,
+  onWindowCloseRequested,
+} from "../platform/window";
 import { IconButton } from "../shared/IconButton";
 import "./App.css";
 
@@ -244,14 +247,12 @@ export function App() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     if (isTauriRuntime()) {
-      void getCurrentWindow()
-        .onCloseRequested((event) => {
+      void onWindowCloseRequested((event) => {
           if (pendingTabIds.length === 0) return;
           event.preventDefault();
           setLeaveStatus({ status: "idle" });
           setLeaveRequest({ kind: "exit", tabIds: pendingTabIds });
-        })
-        .then((removeListener) => {
+        }).then((removeListener) => {
           if (disposed) removeListener();
           else unlisten = removeListener;
         });
@@ -888,7 +889,7 @@ export function App() {
       return;
     }
     if (isTauriRuntime()) {
-      await getCurrentWindow().destroy();
+      await destroyCurrentWindow();
     } else {
       window.close();
     }
@@ -1376,6 +1377,7 @@ export function App() {
         <span
           className={`status-dot ${activeSession?.state === "connected" ? "status-dot-online" : ""} ${activeSession?.state === "error" ? "status-dot-error" : ""}`}
         />
+        {activeProfile && <EnvironmentBadge profile={activeProfile} compact />}
         <span>
           {profileError || draftError
             ? profileError ?? draftError
@@ -1501,7 +1503,10 @@ function ConnectedWorkspace({
     <div className="connected-workspace">
       <header className="connection-overview">
         <div>
-          <span className="connection-eyebrow">{connection.host}:{connection.port}</span>
+          <div className="connection-overview-meta">
+            <EnvironmentBadge profile={connection} />
+            <span className="connection-eyebrow">{connection.host}:{connection.port}</span>
+          </div>
           <h1>{connection.database}</h1>
           <p>PostgreSQL {connection.serverVersion}</p>
         </div>
@@ -1642,9 +1647,12 @@ function TableDataWorkspace({
     >
       <header className="table-data-header">
         <div className="table-data-title">
-          <span className="table-data-context">
-            {tab.database} / {tab.schema}
-          </span>
+          <div className="table-data-title-meta">
+            {connection && <EnvironmentBadge profile={connection} />}
+            <span className="table-data-context">
+              {tab.database} / {tab.schema}
+            </span>
+          </div>
           <h1>{tab.table}</h1>
           <TableEditabilityStatus editability={tab.editability} />
         </div>
@@ -1911,6 +1919,29 @@ export function TableEditabilityStatus({
   );
 }
 
+export function EnvironmentBadge({
+  profile,
+  compact = false,
+}: {
+  profile: Pick<ConnectionProfile, "environment" | "color">;
+  compact?: boolean;
+}) {
+  const { t } = useI18n();
+  const label = t(`environment.${profile.environment}`);
+  const description = t("environment.current").replace("{environment}", label);
+  return (
+    <span
+      className={`workspace-environment workspace-environment-${profile.environment} ${compact ? "workspace-environment-compact" : ""}`}
+      style={{ "--connection-accent": profile.color } as CSSProperties}
+      aria-label={description}
+      title={description}
+    >
+      <span aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 function QueryWorkspace({
   tab,
   profile,
@@ -2058,7 +2089,10 @@ function QueryWorkspace({
     >
       <header className="query-contextbar">
         <div className="query-context-title">
-          <strong>{tab.title}</strong>
+          <div className="query-context-heading">
+            <strong>{tab.title}</strong>
+            <EnvironmentBadge profile={profile} compact />
+          </div>
           <span>
             {profile.name} / {tab.database}
             {tab.schema ? ` / ${tab.schema}` : ""}

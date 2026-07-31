@@ -101,6 +101,14 @@ The command boundary converts internal failures into stable codes such as `authe
 7. Safe reconnect opens and registers the replacement before removing the old
    session. It never replays the operation that detected the failure.
 
+Every saved profile classifies its target as development, test, staging, or
+production and carries a user-selected connection accent. The object tree uses
+the compact semantic environment dot. Once a profile owns the active workspace,
+an environment badge remains visible in the workspace header and status bar,
+including offline and error states. The badge combines a fixed semantic tone
+for the environment with the profile accent, so safety context is not inferred
+from a connection name or transient session state.
+
 Profiles survive application restarts; PostgreSQL sessions do not. The frontend
 creates an opaque query ID before execution, and the Rust active-query registry
 binds it to a session, database, PostgreSQL cancel token, and resolved transport

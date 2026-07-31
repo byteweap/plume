@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEmptyTableDataChangeSet,
   createTableRowLocator,
+  discardAllTableDataChanges,
   discardTableRowInsert,
   findPendingTableCellUpdate,
   getTableRowId,
@@ -98,6 +99,25 @@ describe("table data pending changes", () => {
       },
     ]);
     expect(discardTableRowInsert(withEmptyString, "local-1")).toEqual(empty);
+  });
+
+  it("discards the complete staged change set without mutating its snapshots", () => {
+    const original = createEmptyTableDataChangeSet();
+    const unchanged = discardAllTableDataChanges(original);
+    expect(unchanged).toBe(original);
+
+    const changed = stageTableRowDelete(
+      stageTableRowInsert(original, "local-1", 2),
+      {
+        locator,
+        pageIndex: 1,
+        rowIndex: 3,
+        originalValues: ["acme", "42"],
+      },
+    );
+    expect(discardAllTableDataChanges(changed)).toEqual(original);
+    expect(changed.insertedRows).toHaveLength(1);
+    expect(changed.deletedRows).toHaveLength(1);
   });
 
   it("captures deletion snapshots and removes staged updates for that row", () => {

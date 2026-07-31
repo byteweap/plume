@@ -66,6 +66,14 @@ export function createEmptyTableDataChangeSet(): TableDataChangeSet {
   return { updatedRows: [], insertedRows: [], deletedRows: [] };
 }
 
+export function discardAllTableDataChanges(
+  changes: TableDataChangeSet,
+): TableDataChangeSet {
+  return hasPendingTableDataChanges(changes)
+    ? createEmptyTableDataChangeSet()
+    : changes;
+}
+
 export function getTableRowId(locator: TableRowLocator): string {
   if (locator.columns.length === 0) {
     throw new Error("A table row locator requires at least one key column");

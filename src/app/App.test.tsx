@@ -715,6 +715,17 @@ describe("App sidebar", () => {
     expect(addRow).toBeEnabled();
     fireEvent.click(addRow);
     expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
+    const discardAll = screen.getByRole("button", {
+      name: "Discard all changes",
+    });
+    expect(discardAll).toBeEnabled();
+    fireEvent.click(discardAll);
+    expect(screen.queryByText("Review changes")).toBeNull();
+    expect(discardAll).toBeDisabled();
+    expect(tableDataApi.commit).not.toHaveBeenCalled();
+    expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
+
+    fireEvent.click(addRow);
     const nextPage = screen.getByRole("button", { name: "Next page" });
     expect(nextPage).toBeEnabled();
     fireEvent.click(nextPage);

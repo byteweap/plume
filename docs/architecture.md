@@ -249,6 +249,11 @@ every operation must affect exactly one row. Any validation, conversion,
 constraint, or row-location failure explicitly rolls the transaction back and
 keeps the complete frontend change set available for correction and retry.
 Success commits once, clears the change set, and reloads the current page.
+The adjacent discard-all action atomically replaces the staged model with an
+empty change set. Because the grid derives pending values, inserted virtual
+rows, and delete treatments exclusively from that model, the current page
+immediately returns to its pre-edit query snapshot without issuing a query or
+database command; any previous commit error is cleared at the same time.
 
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including

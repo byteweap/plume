@@ -36,6 +36,7 @@ import {
   Save,
   Square,
   Table2,
+  Undo2,
   X,
 } from "lucide-react";
 import plumeMark from "../assets/plume-mark.svg";
@@ -86,6 +87,7 @@ import {
 } from "../features/table-data/tableDataCommit";
 import {
   createEmptyTableDataChangeSet,
+  discardAllTableDataChanges,
   hasPendingTableDataChanges,
   stageTableRowInsert,
   type TableDataChangeSet,
@@ -1500,6 +1502,18 @@ function TableDataWorkspace({
             ) : (
               <Save size={14} />
             )}
+          </IconButton>
+          <IconButton
+            label={t("tableData.discardAll")}
+            disabled={
+              commitState.status === "committing" ||
+              !hasPendingTableDataChanges(tab.changes)
+            }
+            onClick={() =>
+              handleChangesChange(discardAllTableDataChanges(tab.changes))
+            }
+          >
+            <Undo2 size={14} />
           </IconButton>
           <label className="table-data-page-size">
             <span>{t("tableData.pageSize")}</span>

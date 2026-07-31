@@ -2,7 +2,7 @@ export const catalogs = {
   "zh-CN": {
     "app.tagline": "轻盈的 PostgreSQL 工作台",
     "app.name": "Plume",
-    "app.version": "Plume 0.1.0",
+    "app.version": "Plume 1.0.0-rc.1",
     "app.newQuery": "新建查询",
     "app.settings": "设置",
     "app.commandPalette": "命令面板",
@@ -378,7 +378,7 @@ export const catalogs = {
   "en-US": {
     "app.tagline": "A lightweight PostgreSQL workspace",
     "app.name": "Plume",
-    "app.version": "Plume 0.1.0",
+    "app.version": "Plume 1.0.0-rc.1",
     "app.newQuery": "New query",
     "app.settings": "Settings",
     "app.commandPalette": "Command palette",

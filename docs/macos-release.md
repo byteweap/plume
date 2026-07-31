@@ -39,7 +39,7 @@ Verification rejects a release unless all of these conditions hold:
 - Apple notarization tickets are stapled to both the app and DMG.
 - The DMG passes `hdiutil verify` and code-signature verification.
 
-The workflow uploads the verified `.app` and `.dmg` as a 14-day artifact. Creating a GitHub release remains a separate P0-J10 action.
+The workflow uploads the verified `.app` and `.dmg` as a 14-day artifact. For a 1.0 candidate tag, the coordinated workflow waits for this artifact and the verified Windows installers before creating a GitHub pre-release.
 
 ## Local Unsigned Build
 
@@ -53,4 +53,4 @@ The `CI` environment flag skips Finder-based DMG decoration, which makes this co
 
 ## External Gate
 
-Repository-side release configuration is complete when the local configuration and unsigned packaging checks pass. P0-J06 is fully verified only after a maintainer supplies valid Apple credentials, runs `macOS Signed Release`, and obtains a passing signed/notarized artifact. Certificate issuance, Apple service availability, and account agreements are external prerequisites.
+Repository-side release configuration is complete when the local configuration and unsigned packaging checks pass. P0-J06 is fully verified only after a maintainer supplies valid Apple credentials, runs `macOS Signed Release`, and obtains a passing signed/notarized artifact. P0-J10 additionally requires the [release candidate runbook](release-candidate.md). Certificate issuance, Apple service availability, and account agreements are external prerequisites.

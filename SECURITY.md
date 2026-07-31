@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-Plume has not published a stable 1.0 release yet. Security fixes currently target the latest commit on the default branch and the newest published pre-release, if one exists. After 1.0, this table will identify supported release lines explicitly.
+Plume has not published a stable 1.0 release yet. Security fixes currently target the latest commit on the default branch and the newest 1.0 release candidate. After 1.0, this table will identify supported stable release lines explicitly.
 
 | Version | Supported |
 |---|---|
-| Default branch / latest pre-release | Yes |
+| Default branch | Yes |
+| Latest 1.0.0-rc.x pre-release | Yes |
 | Older development snapshots | No |
 
 ## Reporting A Vulnerability

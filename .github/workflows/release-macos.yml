@@ -1,6 +1,7 @@
 name: macOS Signed Release
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 permissions:

@@ -6,7 +6,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-![项目状态](https://img.shields.io/badge/status-预发布-D97706)
+![项目状态](https://img.shields.io/badge/status-1.0%20RC-D97706)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB)
 ![许可证](https://img.shields.io/badge/license-MIT-2F6D52)
@@ -16,7 +16,7 @@
 Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大型通用数据库客户端复杂性的开发者。桌面应用直接连接 PostgreSQL；你与数据库之间没有 Plume 账号、云端中转或远程应用服务。
 
 > [!IMPORTANT]
-> Plume 仍是预发布软件。1.0 功能范围已经实现并进入发布验证，但尚未发布已签名的稳定安装包。
+> Plume 1.0.0-rc.1 已准备为源码候选版。只有外部 macOS 与 Windows 门禁通过后才会发布签名预发布安装包，目前尚未发布稳定安装包。详见[候选版说明](RELEASE_NOTES.md)与[发布验收手册](docs/release-candidate.md)。
 
 ## 为什么选择 Plume
 
@@ -66,7 +66,7 @@ Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大�
 
 | 能力 | 状态 |
 |---|---|
-| 1.0 核心数据库工作流 | 已实现，正在发布验证 |
+| 1.0 发布候选版 | 源码候选版 1.0.0-rc.1 已准备，等待签名验证 |
 | macOS 与 Windows 签名安装包 | 已配置，需要外部签名凭据 |
 | `EXPLAIN` 可视化 | 1.0 后候选 |
 | 云 IAM、自动更新与 Linux 发布 | 后续候选 |
@@ -141,7 +141,7 @@ Compose 环境默认监听本机 `55432` 端口，并创建 `plume` 和 `plume_s
 npm run tauri build
 ```
 
-完整源码构建与测试说明见[构建指南](BUILDING.md)；[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret 与产物验证流程。
+完整源码构建与测试说明见[构建指南](BUILDING.md)；[候选版验收手册](docs/release-candidate.md)、[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret、产物验证与提升标准。
 
 ## 仓库结构
 

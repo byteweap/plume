@@ -108,7 +108,7 @@ check(provider.includes("navigator.language"), "I18nProvider must provide a brow
 check(app.includes("setLocale(locale === \"zh-CN\" ? \"en-US\" : \"zh-CN\")"), "App must expose a locale toggle.");
 
 const forbiddenHardcodedStrings = [
-  ["src/app/App.tsx", "Plume 0.1.0"],
+  ["src/app/App.tsx", "Plume 1.0.0-rc.1"],
   ["src/features/connections/ConnectionDialog.tsx", "postgresql://user@host/database"],
   ["src/features/connections/ConnectionDialog.tsx", "Local development"],
   ["src/features/connections/ConnectionDialog.tsx", "/path/to/root.crt"],

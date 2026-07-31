@@ -74,6 +74,12 @@ jobs:
       - name: Check open-source documentation
         run: npm run check:docs
 
+      - name: Check bilingual resources
+        run: npm run check:i18n
+
+      - name: Check release candidate metadata
+        run: npm run check:release:candidate
+
       - name: Check frontend
         run: npm run check
 

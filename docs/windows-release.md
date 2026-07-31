@@ -42,8 +42,8 @@ On Windows, repository configuration and installer generation can be tested with
 npm run tauri build -- --bundles msi,nsis --ci --no-sign
 ```
 
-An unsigned installer cannot satisfy the release gate. Creating a GitHub release remains a separate P0-J10 action.
+An unsigned installer cannot satisfy the release gate. For a 1.0 candidate tag, the coordinated workflow waits for the verified MSI and NSIS artifacts and the notarized macOS artifact before creating a GitHub pre-release.
 
 ## External Gate
 
-Repository-side release configuration is complete when configuration checks and the existing unsigned Windows CI build pass. P0-J07 is fully verified only after a maintainer supplies a trusted code-signing certificate, runs `Windows Signed Release`, and receives passing Authenticode and install/uninstall checks. Certificate issuance, reputation, and timestamp-service availability are external prerequisites.
+Repository-side release configuration is complete when configuration checks and the existing unsigned Windows CI build pass. P0-J07 is fully verified only after a maintainer supplies a trusted code-signing certificate, runs `Windows Signed Release`, and receives passing Authenticode and install/uninstall checks. P0-J10 additionally requires the [release candidate runbook](release-candidate.md). Certificate issuance, reputation, and timestamp-service availability are external prerequisites.

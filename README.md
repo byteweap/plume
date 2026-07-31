@@ -6,7 +6,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-![Project status](https://img.shields.io/badge/status-pre--release-D97706)
+![Project status](https://img.shields.io/badge/status-1.0%20RC-D97706)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB)
 ![License](https://img.shields.io/badge/license-MIT-2F6D52)
@@ -16,7 +16,7 @@
 Plume is a local-first PostgreSQL management tool built for developers who want a focused alternative to large, general-purpose database clients. The desktop application connects directly to PostgreSQL. There is no Plume account, cloud relay, or remote application server between you and your database.
 
 > [!IMPORTANT]
-> Plume is pre-release software. The 1.0 feature set is implemented and under release validation, but signed stable installers are not published yet.
+> Plume 1.0.0-rc.1 is prepared as a source release candidate. Signed pre-release installers are published only after the external macOS and Windows gates pass; stable installers are not published yet. See the [candidate notes](RELEASE_NOTES.md) and [release runbook](docs/release-candidate.md).
 
 ## Why Plume
 
@@ -66,7 +66,7 @@ Server
 
 | Area | Status |
 |---|---|
-| 1.0 core database workflow | Implemented; release validation in progress |
+| 1.0 release candidate | Source candidate 1.0.0-rc.1 prepared; signed validation pending |
 | macOS and Windows signed installers | Configured; external signing credentials required |
 | `EXPLAIN` visualization | Post-1.0 candidate |
 | Cloud IAM authentication, automatic updates, and Linux releases | Later candidates |
@@ -146,7 +146,7 @@ Build a desktop bundle with:
 npm run tauri build
 ```
 
-See [Building Plume](BUILDING.md) for complete source-build and test instructions. The [macOS](docs/macos-release.md) and [Windows](docs/windows-release.md) release guides cover signed builds, required repository secrets, and artifact verification.
+See [Building Plume](BUILDING.md) for complete source-build and test instructions. The [release candidate runbook](docs/release-candidate.md), [macOS](docs/macos-release.md), and [Windows](docs/windows-release.md) guides cover signed builds, required repository secrets, artifact verification, and promotion criteria.
 
 ## Repository Layout
 

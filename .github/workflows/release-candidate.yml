@@ -1,0 +1,91 @@
+name: Plume 1.0 Release Candidate
+
+on:
+  push:
+    tags:
+      - "v1.0.0-rc.*"
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+
+concurrency:
+  group: release-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate candidate tag and metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate release candidate
+        run: npm run check:release:candidate -- --tag "$GITHUB_REF_NAME"
+
+  macos:
+    name: macOS signed and notarized candidate
+    needs: validate
+    uses: ./.github/workflows/release-macos.yml
+    secrets: inherit
+
+  windows:
+    name: Windows signed installer candidate
+    needs: validate
+    uses: ./.github/workflows/release-windows.yml
+    secrets: inherit
+
+  publish:
+    name: Publish verified pre-release
+    needs: [macos, windows]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download verified installers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plume-*-signed*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Collect installers and generate checksums
+        shell: bash
+        run: |
+          mkdir release-assets
+          while IFS= read -r -d '' artifact; do
+            cp "$artifact" release-assets/
+          done < <(find release-artifacts -type f \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \) -print0)
+          artifact_count="$(find release-assets -type f | wc -l | tr -d ' ')"
+          if [ "$artifact_count" -ne 3 ]; then
+            echo "::error::Expected one DMG, one MSI, and one NSIS installer; found $artifact_count files."
+            exit 1
+          fi
+          (cd release-assets && shasum -a 256 * > SHA256SUMS)
+
+      - name: Publish GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" release-assets/*
+          --verify-tag
+          --prerelease
+          --title "Plume ${GITHUB_REF_NAME#v}"
+          --notes-file RELEASE_NOTES.md

@@ -50,6 +50,12 @@ Run the complete local gate:
 npm run check:all
 ```
 
+For a 1.0 release candidate, verify version, release notes, tag policy, and the coordinated platform workflow with:
+
+```bash
+npm run check:release:candidate
+```
+
 This checks repository documentation and release configuration, security boundaries, TypeScript, ESLint, frontend tests, acceptance flows, the production frontend build, rustfmt, Clippy with warnings denied, and Rust tests.
 
 Run the disposable PostgreSQL 14/16/18-compatible integration environment:
@@ -83,6 +89,8 @@ npm run tauri build -- --bundles msi,nsis --ci --no-sign
 ```
 
 Build products are written below `src-tauri/target/release/bundle/` and are ignored by Git. Unsigned packages are development artifacts; they do not satisfy release acceptance.
+
+The [release candidate runbook](docs/release-candidate.md) defines the signed tag workflow, required target-device checks, and promotion or rollback rules.
 
 ## Troubleshooting
 

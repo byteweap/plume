@@ -1,7 +1,7 @@
 {
   "name": "plume",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "description": "A clean, lightweight PostgreSQL desktop workspace",
   "license": "MIT",
   "repository": {
@@ -23,9 +23,10 @@
     "benchmark:editor": "node --expose-gc scripts/benchmark-sql-editor.mjs",
     "benchmark:regression": "npm run benchmark:core && npm run benchmark:editor && npm run benchmark:grid && npm run benchmark:bundle",
     "check": "npm run typecheck && npm run lint && npm run test && npm run test:unit-baseline && npm run test:acceptance",
-    "check:all": "npm run check:security && npm run check:docs && npm run check:i18n && npm run check:release:macos && npm run check:release:windows && npm run check && npm run build && npm run check:rust",
+    "check:all": "npm run check:security && npm run check:docs && npm run check:i18n && npm run check:release:candidate && npm run check:release:macos && npm run check:release:windows && npm run check && npm run build && npm run check:rust",
     "check:docs": "node scripts/check-open-source.mjs",
     "check:i18n": "node scripts/check-i18n.mjs",
+    "check:release:candidate": "node scripts/check-release-candidate.mjs",
     "check:release:macos": "node scripts/check-macos-release.mjs --config-only",
     "check:release:windows": "node scripts/check-windows-release.mjs --config-only",
     "check:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --check && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml",

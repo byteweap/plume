@@ -37,4 +37,36 @@ describe("tableDataApi", () => {
       },
     );
   });
+
+  it("commits a structured table-data transaction", async () => {
+    const request = {
+      requestId: "1138bb0e-cf61-4dbd-a723-6aa3ddd173ab",
+      sessionId: "session-1",
+      database: "plume",
+      schema: "public",
+      table: "items",
+      columns: [],
+      keyColumns: ["id"],
+      updatedRows: [],
+      insertedRows: [{ values: [] }],
+      deletedRows: [],
+    };
+    mocks.invokeCommand.mockResolvedValue({
+      requestId: request.requestId,
+      insertedRows: 1,
+      updatedRows: 0,
+      deletedRows: 0,
+    });
+
+    await expect(tableDataApi.commit(request)).resolves.toEqual({
+      requestId: request.requestId,
+      insertedRows: 1,
+      updatedRows: 0,
+      deletedRows: 0,
+    });
+    expect(mocks.invokeCommand).toHaveBeenCalledWith(
+      "commit_table_data_changes",
+      { request },
+    );
+  });
 });

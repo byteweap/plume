@@ -21,10 +21,14 @@ export function TableDataChangePreview({
   changes,
   columns,
   onNavigate,
+  commitStatus = "idle",
+  commitError,
 }: {
   changes: TableDataChangeSet;
   columns: readonly QueryColumn[];
   onNavigate: (target: TableDataChangeTarget) => void;
+  commitStatus?: "idle" | "committing" | "failed";
+  commitError?: string;
 }) {
   const { t } = useI18n();
   if (!hasPendingTableDataChanges(changes)) return null;
@@ -48,8 +52,19 @@ export function TableDataChangePreview({
         <span className="table-data-change-count table-data-change-count-delete">
           -{summary.deletedRows.toLocaleString()}
         </span>
+        {commitStatus === "committing" && (
+          <span className="table-data-change-commit-status" role="status">
+            {t("tableData.commit.running")}
+          </span>
+        )}
       </summary>
       <div className="table-data-change-groups">
+        {commitStatus === "failed" && commitError && (
+          <div className="table-data-change-commit-error" role="alert">
+            <strong>{t("tableData.commit.failed")}</strong>
+            <span>{commitError}</span>
+          </div>
+        )}
         {changes.insertedRows.length > 0 && (
           <ChangeGroup
             icon={<Plus size={12} />}

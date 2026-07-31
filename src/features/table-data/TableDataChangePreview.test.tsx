@@ -119,4 +119,27 @@ describe("TableDataChangePreview", () => {
       columnIndex: 0,
     });
   });
+
+  it("keeps the preview visible with a rollback error after commit failure", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <TableDataChangePreview
+          changes={changes}
+          columns={columns}
+          onNavigate={vi.fn()}
+          commitStatus="failed"
+          commitError="duplicate key value violates unique constraint"
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Commit failed; all changes were rolled back",
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "duplicate key value violates unique constraint",
+    );
+    expect(screen.getByText("note: before -> after")).toBeVisible();
+  });
 });

@@ -3,7 +3,10 @@ use thiserror::Error;
 use tokio_postgres::error::ErrorPosition;
 
 use crate::{
-    database::query::QueryError, drafts::DraftError, exports::ExportError, profiles::ProfileError,
+    database::{query::QueryError, table_data::TableDataCommitError},
+    drafts::DraftError,
+    exports::ExportError,
+    profiles::ProfileError,
 };
 
 #[derive(Debug, Error)]
@@ -327,6 +330,28 @@ impl From<QueryError> for CommandError {
     }
 }
 
+impl From<TableDataCommitError> for CommandError {
+    fn from(error: TableDataCommitError) -> Self {
+        match error {
+            TableDataCommitError::Invalid(message) => Self {
+                code: "invalid_table_data_commit",
+                message,
+                detail: None,
+                diagnostic: None,
+            },
+            TableDataCommitError::UnexpectedAffectedRows { .. } => Self {
+                code: "table_data_row_changed",
+                message: "A changed row could no longer be located. No changes were committed."
+                    .to_owned(),
+                detail: Some(error.to_string()),
+                diagnostic: None,
+            },
+            TableDataCommitError::Database(error) => Self::from(error),
+            TableDataCommitError::Postgres(error) => Self::from(QueryError::Postgres(error)),
+        }
+    }
+}
+
 impl From<ExportError> for CommandError {
     fn from(error: ExportError) -> Self {
         match error {
@@ -385,7 +410,10 @@ mod tests {
     use std::io;
 
     use super::{CommandError, DatabaseError};
-    use crate::{database::query::QueryError, exports::ExportError};
+    use crate::{
+        database::{query::QueryError, table_data::TableDataCommitError},
+        exports::ExportError,
+    };
 
     #[test]
     fn configuration_errors_are_stable_and_safe() {
@@ -415,6 +443,31 @@ mod tests {
         .unwrap();
         assert_eq!(write["code"], "export_write_failed");
         assert_eq!(write["message"], "The export file could not be written.");
+    }
+
+    #[test]
+    fn table_data_commit_errors_are_stable_and_safe() {
+        let invalid = serde_json::to_value(CommandError::from(TableDataCommitError::Invalid(
+            "Missing reliable key.".to_owned(),
+        )))
+        .unwrap();
+        assert_eq!(invalid["code"], "invalid_table_data_commit");
+        assert_eq!(invalid["message"], "Missing reliable key.");
+
+        let missing_row = serde_json::to_value(CommandError::from(
+            TableDataCommitError::UnexpectedAffectedRows {
+                operation: "update",
+                affected_rows: 0,
+            },
+        ))
+        .unwrap();
+        assert_eq!(missing_row["code"], "table_data_row_changed");
+        assert!(
+            missing_row["message"]
+                .as_str()
+                .unwrap()
+                .contains("No changes")
+        );
     }
 
     #[test]

@@ -50,6 +50,11 @@
   color: #9a4939;
 }
 
+.table-data-change-commit-status {
+  margin-left: auto;
+  color: #486a55;
+}
+
 .table-data-change-groups {
   display: flex;
   max-height: 170px;
@@ -59,6 +64,21 @@
   padding: 7px 14px 9px;
   overflow: auto;
   scrollbar-width: thin;
+}
+
+.table-data-change-commit-error {
+  display: flex;
+  min-width: min(360px, 85vw);
+  flex: 1 0 360px;
+  flex-direction: column;
+  gap: 3px;
+  border-left: 2px solid #b75b49;
+  padding: 4px 9px;
+  color: #824535;
+}
+
+.table-data-change-commit-error span {
+  color: #725b53;
 }
 
 .table-data-change-group {
@@ -168,6 +188,18 @@
   .table-data-change-target:focus-visible {
     border-color: #6b967c;
     background: #26322a;
+  }
+
+  .table-data-change-commit-status {
+    color: #a5cdb3;
+  }
+
+  .table-data-change-commit-error {
+    color: #e5a291;
+  }
+
+  .table-data-change-commit-error span {
+    color: #c5aaa1;
   }
 }
 

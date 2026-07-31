@@ -24,6 +24,7 @@ use commands::{
         update_connection_profile,
     },
     queries::{cancel_query, execute_query},
+    table_data::commit_table_data_changes,
 };
 use credentials::platform_credential_store;
 use database::query::QueryRegistry;
@@ -78,6 +79,7 @@ pub fn run() {
             get_catalog_collection_items,
             execute_query,
             cancel_query,
+            commit_table_data_changes,
             export_csv,
             export_json,
             cancel_export

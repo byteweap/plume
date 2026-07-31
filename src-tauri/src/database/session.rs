@@ -99,6 +99,16 @@ impl ConnectionRegistry {
         Ok(QueryClient { client, canceller })
     }
 
+    pub async fn dedicated_client(
+        &self,
+        session_id: &str,
+        database: &str,
+    ) -> Result<Client, DatabaseError> {
+        let session = self.session(session_id).await?;
+        let request = session.settings.for_database(database);
+        Ok(open(&request).await?.client)
+    }
+
     pub async fn health(&self, session_id: &str) -> Result<SessionHealth, DatabaseError> {
         let session = self.session(session_id).await?;
         if let Some(tunnel) = session.tunnel.as_ref() {

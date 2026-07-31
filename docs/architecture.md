@@ -236,6 +236,20 @@ activating it changes pages when needed, waits for that page to load, then uses
 the grid handle to scroll to and select the target cell. No write statement is
 issued by these interactions.
 
+Committing the preview converts only the write-relevant fields into a structured
+request; local row IDs, page positions, and original display snapshots do not
+cross the command boundary. Rust validates the reliable key shape, column set,
+and explicit value modes, then opens a dedicated client from the active session's
+database settings so concurrent reads on the shared client cannot enter the
+write transaction. Schema, table, column, and type names are quoted as PostgreSQL
+identifiers. Text values are bound parameters and explicitly cast from `text` to
+the catalog-reported type; `NULL` and `DEFAULT` remain SQL states rather than
+sentinel strings. Deletes, updates, and inserts execute in one transaction, and
+every operation must affect exactly one row. Any validation, conversion,
+constraint, or row-location failure explicitly rolls the transaction back and
+keeps the complete frontend change set available for correction and retry.
+Success commits once, clears the change set, and reloads the current page.
+
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including
 inclusive variants), NULL, and NOT NULL. Applied filters persist in the tab and

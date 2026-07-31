@@ -3,6 +3,10 @@ import type {
   TableDataReference,
   TableEditabilityResponse,
 } from "./tableData";
+import type {
+  CommitTableDataRequest,
+  CommitTableDataResult,
+} from "./tableDataCommit";
 
 export const tableDataApi = {
   getEditability(
@@ -14,6 +18,11 @@ export const tableDataApi = {
       database: reference.database,
       schema: reference.schema,
       table: reference.table,
+    });
+  },
+  commit(request: CommitTableDataRequest): Promise<CommitTableDataResult> {
+    return invokeCommand<CommitTableDataResult>("commit_table_data_changes", {
+      request,
     });
   },
 };

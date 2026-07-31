@@ -82,6 +82,10 @@ import {
 } from "../features/table-data/TableDataChangePreview";
 import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
 import {
+  createCommitTableDataRequest,
+} from "../features/table-data/tableDataCommit";
+import {
+  createEmptyTableDataChangeSet,
   hasPendingTableDataChanges,
   stageTableRowInsert,
   type TableDataChangeSet,
@@ -1340,6 +1344,11 @@ function TableDataWorkspace({
     (TableDataChangeTarget & { requestId: number }) | undefined
   >();
   const nextChangeTargetId = useRef(0);
+  const [commitState, setCommitState] = useState<
+    | { status: "idle" }
+    | { status: "committing" }
+    | { status: "failed"; message: string }
+  >({ status: "idle" });
   const execution = getQueryExecution(tab);
   const loading =
     execution.status === "idle" ||
@@ -1356,7 +1365,9 @@ function TableDataWorkspace({
         )
       : undefined;
   const editing =
-    rowStatement && tab.editability.status === "editable"
+    rowStatement &&
+    tab.editability.status === "editable" &&
+    commitState.status !== "committing"
       ? createTableDataGridEditing(
           {
             pageIndex: tab.pageIndex,
@@ -1364,9 +1375,43 @@ function TableDataWorkspace({
             changes: tab.changes,
           },
           rowStatement,
-          onChangesChange,
+          handleChangesChange,
         )
       : undefined;
+
+  function handleChangesChange(changes: TableDataChangeSet) {
+    setCommitState({ status: "idle" });
+    onChangesChange(changes);
+  }
+
+  async function commitChanges() {
+    if (
+      !connection ||
+      loading ||
+      commitState.status === "committing" ||
+      tab.editability.status !== "editable" ||
+      !hasPendingTableDataChanges(tab.changes)
+    ) {
+      return;
+    }
+
+    const request = createCommitTableDataRequest(
+      connection.sessionId,
+      tab,
+      tab.columns,
+      tab.editability.key,
+      tab.changes,
+    );
+    setCommitState({ status: "committing" });
+    try {
+      await tableDataApi.commit(request);
+      onChangesChange(createEmptyTableDataChangeSet());
+      setCommitState({ status: "idle" });
+      onReload();
+    } catch (error) {
+      setCommitState({ status: "failed", message: toCommandError(error).message });
+    }
+  }
 
   function navigateToChange(target: TableDataChangeTarget) {
     nextChangeTargetId.current += 1;
@@ -1428,7 +1473,7 @@ function TableDataWorkspace({
               tab.columns.length === 0
             }
             onClick={() =>
-              onChangesChange(
+              handleChangesChange(
                 stageTableRowInsert(
                   tab.changes,
                   crypto.randomUUID(),
@@ -1439,6 +1484,22 @@ function TableDataWorkspace({
             }
           >
             <Plus size={14} />
+          </IconButton>
+          <IconButton
+            label={t("tableData.commit")}
+            disabled={
+              loading ||
+              commitState.status === "committing" ||
+              tab.editability.status !== "editable" ||
+              !hasPendingTableDataChanges(tab.changes)
+            }
+            onClick={() => void commitChanges()}
+          >
+            {commitState.status === "committing" ? (
+              <LoaderCircle className="spin" size={14} />
+            ) : (
+              <Save size={14} />
+            )}
           </IconButton>
           <label className="table-data-page-size">
             <span>{t("tableData.pageSize")}</span>
@@ -1504,6 +1565,10 @@ function TableDataWorkspace({
         changes={tab.changes}
         columns={tab.columns}
         onNavigate={navigateToChange}
+        commitStatus={commitState.status}
+        commitError={
+          commitState.status === "failed" ? commitState.message : undefined
+        }
       />
 
       <div className="table-data-content">

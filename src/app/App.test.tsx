@@ -102,6 +102,12 @@ describe("App sidebar", () => {
         columns: ["id"],
       },
     });
+    vi.spyOn(tableDataApi, "commit").mockImplementation(async (request) => ({
+      requestId: request.requestId,
+      insertedRows: request.insertedRows.length,
+      updatedRows: request.updatedRows.length,
+      deletedRows: request.deletedRows.length,
+    }));
     vi.spyOn(sqlCompletionApi, "getCatalog").mockResolvedValue({ schemas: [] });
   });
 
@@ -781,6 +787,39 @@ describe("App sidebar", () => {
         },
       ],
     });
+
+    const commitChanges = screen.getByRole("button", {
+      name: "Commit all changes",
+    });
+    expect(commitChanges).toBeEnabled();
+    vi.mocked(tableDataApi.commit).mockRejectedValueOnce({
+      code: "query_failed",
+      message: "duplicate key value violates unique constraint",
+    });
+    fireEvent.click(commitChanges);
+    await waitFor(() => expect(tableDataApi.commit).toHaveBeenCalledOnce());
+    expect(tableDataApi.commit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: "session-1",
+        database: "postgres",
+        schema: "public",
+        table: "users",
+        keyColumns: ["id"],
+        insertedRows: [{ values: [{ kind: "default" }] }],
+      }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "duplicate key value violates unique constraint",
+    );
+    expect(screen.getByText("Review changes")).toBeVisible();
+    expect(commitChanges).toBeEnabled();
+    expect(queryExecutionApi.execute).toHaveBeenCalledTimes(5);
+
+    fireEvent.click(commitChanges);
+    await waitFor(() => expect(tableDataApi.commit).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledTimes(6));
+    expect(screen.queryByText("Review changes")).toBeNull();
+    expect(commitChanges).toBeDisabled();
   });
 
   it("executes the cursor statement and all SQL with connection ownership", async () => {

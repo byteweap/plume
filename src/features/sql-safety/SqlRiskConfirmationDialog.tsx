@@ -1,5 +1,5 @@
 import { AlertTriangle, Play, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ConnectionProfile } from "../connections/connection";
 import { useI18n } from "../../i18n/I18nContext";
 import { IconButton } from "../../shared/IconButton";
@@ -25,6 +25,14 @@ export function SqlRiskConfirmationDialog({
 }) {
   const { t } = useI18n();
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const [databaseConfirmation, setDatabaseConfirmation] = useState("");
+  const requiredDatabase =
+    context.profile.environment === "production" &&
+    risks.some((risk) => risk.severity === "critical")
+      ? context.database
+      : undefined;
+  const canConfirm =
+    requiredDatabase === undefined || databaseConfirmation === requiredDatabase;
 
   useEffect(() => {
     cancelRef.current?.focus();
@@ -111,6 +119,27 @@ export function SqlRiskConfirmationDialog({
               ))}
             </ol>
           </section>
+
+          {requiredDatabase && (
+            <div className="sql-risk-production-confirmation">
+              <div>
+                <strong>{t("safety.confirm.productionTitle")}</strong>
+                <span>{t("safety.confirm.productionBody")}</span>
+              </div>
+              <code>{requiredDatabase}</code>
+              <label>
+                <span>{t("safety.confirm.databaseInput")}</span>
+                <input
+                  value={databaseConfirmation}
+                  autoComplete="off"
+                  spellCheck={false}
+                  onChange={(event) =>
+                    setDatabaseConfirmation(event.currentTarget.value)
+                  }
+                />
+              </label>
+            </div>
+          )}
         </div>
 
         <footer>
@@ -125,6 +154,7 @@ export function SqlRiskConfirmationDialog({
           <button
             className="button button-compact sql-risk-confirm"
             type="button"
+            disabled={!canConfirm}
             onClick={onConfirm}
           >
             <Play size={13} fill="currentColor" />

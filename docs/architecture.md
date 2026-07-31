@@ -157,6 +157,12 @@ and execution fails safe by treating unexpected production `off` data as
 `critical-only`. Existing databases migrate to `all`, and a missing policy from
 an older caller also defaults to `all`.
 
+Production profiles add a second confirmation factor for critical risks such as
+`DROP` and `TRUNCATE`: the execute action stays disabled until the operator types
+the current database name exactly. The requirement is based on the frozen
+execution context shown in the modal, is case-sensitive, and does not add typed
+verification to non-critical `DELETE` or `UPDATE` warnings.
+
 The response echoes the query ID, and the frontend accepts it only for the
 matching request that is still active in that tab. A successful cancel-packet
 send moves the UI only into a waiting state. Cancellation becomes final only

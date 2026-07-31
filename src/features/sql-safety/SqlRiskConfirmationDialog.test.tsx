@@ -50,8 +50,34 @@ describe("SqlRiskConfirmationDialog", () => {
     expect(dialog).toHaveTextContent("public.logs");
     expect(dialog).toHaveTextContent("public.sessions");
 
-    fireEvent.click(within(dialog).getByRole("button", { name: "Execute anyway" }));
+    const execute = within(dialog).getByRole("button", { name: "Execute anyway" });
+    expect(execute).toBeDisabled();
+    const databaseInput = within(dialog).getByRole("textbox", {
+      name: "Enter Database name",
+    });
+    fireEvent.change(databaseInput, { target: { value: "APP" } });
+    expect(execute).toBeDisabled();
+    fireEvent.change(databaseInput, { target: { value: "app" } });
+    expect(execute).toBeEnabled();
+    fireEvent.click(execute);
     expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
+  it("does not require typed verification for production data risks", () => {
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <SqlRiskConfirmationDialog
+          context={{ profile, database: "app", schema: "public" }}
+          risks={analyzeSqlRisks("DELETE FROM public.sessions")}
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByRole("textbox", { name: "Enter Database name" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Execute anyway" })).toBeEnabled();
   });
 
   it("defaults focus to cancel and supports both cancellation paths", () => {

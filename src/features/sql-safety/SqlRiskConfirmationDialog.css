@@ -210,6 +210,78 @@
   overflow-wrap: anywhere;
 }
 
+.sql-risk-production-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.8fr);
+  align-items: end;
+  gap: 9px 14px;
+  border-top: 1px solid #e6d1cb;
+  margin-top: 4px;
+  padding-top: 13px;
+}
+
+.sql-risk-production-confirmation > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sql-risk-production-confirmation strong {
+  color: #943e2e;
+  font-size: 11px;
+}
+
+.sql-risk-production-confirmation > div span {
+  color: #75645f;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.sql-risk-production-confirmation > code {
+  grid-column: 1;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid #e1cbc5;
+  border-radius: 4px;
+  padding: 4px 7px;
+  color: #643e35;
+  background: #fff8f5;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sql-risk-production-confirmation label {
+  display: flex;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: #5f5551;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.sql-risk-production-confirmation input {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #cdbab4;
+  border-radius: 5px;
+  padding: 0 8px;
+  color: #342f2d;
+  background: #ffffff;
+  font-size: 11px;
+}
+
+.sql-risk-production-confirmation input:focus {
+  border-color: #a45c4b;
+  outline: 2px solid rgb(164 92 75 / 18%);
+  outline-offset: 1px;
+}
+
 .sql-risk-dialog > footer {
   display: flex;
   justify-content: flex-end;
@@ -285,6 +357,31 @@
     color: #e9c18d;
     background: #4d3c25;
   }
+
+  .sql-risk-production-confirmation {
+    border-color: #5b4038;
+  }
+
+  .sql-risk-production-confirmation strong {
+    color: #efa08e;
+  }
+
+  .sql-risk-production-confirmation > div span,
+  .sql-risk-production-confirmation label {
+    color: #bbaaa4;
+  }
+
+  .sql-risk-production-confirmation > code {
+    border-color: #65483f;
+    color: #ebc0b5;
+    background: #302421;
+  }
+
+  .sql-risk-production-confirmation input {
+    border-color: #65514b;
+    color: #e5deda;
+    background: #282422;
+  }
 }
 
 @media (max-width: 560px) {
@@ -299,6 +396,15 @@
 
   .sql-risk-context {
     grid-template-columns: 1fr;
+  }
+
+  .sql-risk-production-confirmation {
+    grid-template-columns: 1fr;
+  }
+
+  .sql-risk-production-confirmation label {
+    grid-column: 1;
+    grid-row: auto;
   }
 
   .sql-risk-dialog > footer {

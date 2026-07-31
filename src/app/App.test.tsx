@@ -1040,6 +1040,54 @@ describe("App sidebar", () => {
     expect(queryExecutionApi.execute).toHaveBeenCalledOnce();
   });
 
+  it("requires the exact database name for critical production SQL", async () => {
+    vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([
+      {
+        ...savedProfile,
+        environment: "production",
+        sqlRiskPolicy: "all",
+      },
+    ]);
+    vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({
+      sessionId: "session-1",
+      database: "postgres",
+      latencyMs: 12,
+      serverVersion: "18.0",
+      transport: "plain",
+    });
+
+    render(
+      <I18nProvider>
+        <App />
+      </I18nProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /Local saved/ }));
+    await screen.findByText("PostgreSQL 18.0");
+    fireEvent.click(screen.getAllByRole("button", { name: "New query" })[0]!);
+    await replaceEditorText("TRUNCATE TABLE public.events;");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Run selection or current statement",
+      }),
+    );
+
+    const execute = await screen.findByRole("button", { name: "Execute anyway" });
+    const confirmation = screen.getByRole("textbox", {
+      name: "Enter Database name",
+    });
+    expect(execute).toBeDisabled();
+    expect(queryExecutionApi.execute).not.toHaveBeenCalled();
+    fireEvent.change(confirmation, { target: { value: "Postgres" } });
+    expect(execute).toBeDisabled();
+    fireEvent.change(confirmation, { target: { value: "postgres" } });
+    fireEvent.click(execute);
+
+    await waitFor(() => expect(queryExecutionApi.execute).toHaveBeenCalledOnce());
+    expect(queryExecutionApi.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ sql: "TRUNCATE TABLE public.events;" }),
+    );
+  });
+
   it("reports query errors without marking a healthy session disconnected", async () => {
     vi.spyOn(connectionApi, "listProfiles").mockResolvedValue([savedProfile]);
     vi.spyOn(connectionApi, "connectSaved").mockResolvedValue({

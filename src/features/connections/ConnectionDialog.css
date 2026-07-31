@@ -164,6 +164,16 @@
   position: relative;
 }
 
+.connection-url-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.connection-url-input .button {
+  min-width: 86px;
+}
+
 .password-input input {
   padding-right: 36px;
 }

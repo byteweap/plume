@@ -324,6 +324,7 @@ SQL。结果集、密码、私钥和活动 PostgreSQL 会话永不写入该数�
 
 - **类型与静态检查：** TypeScript 严格模式、ESLint、rustfmt，以及拒绝警告的 Clippy。
 - **现有自动化测试：** 前端校验、转换、分组与对象树交互测试，以及 Rust 错误、连接、元数据和会话单元测试。
+- **单元测试基线：** `npm run test:unit-baseline` 固定覆盖 PostgreSQL URL 解析、标识符引用、SQL 执行边界、风险识别、类型化结果展示和表数据暂存变更；该基线已纳入 `npm run check`。
 - **PostgreSQL 集成测试：** 使用一次性的 `plume` 与 `plume_secondary` 数据库验证真实连接、跨数据库会话和系统目录查询；第二套启用 TLS 的服务验证明文回退、加密协商、CA 与主机名校验及客户端证书认证；两套 OpenSSH 服务验证密码、加密私钥、单级跳板机、严格主机密钥、隧道健康与生命周期，以及 SSH + `verify-full`。Schema 测试数据会自行清理。
 - **计划中的端到端测试：** 覆盖产品需求中的十个验收场景。
 

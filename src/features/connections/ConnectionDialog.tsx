@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type ReactNode } from "react";
-import { Eye, EyeOff, LoaderCircle, Server, X } from "lucide-react";
+import { Eye, EyeOff, Link2, LoaderCircle, Server, X } from "lucide-react";
 import { useI18n } from "../../i18n/I18nContext";
 import type { TranslationKey } from "../../i18n/catalog";
 import { toCommandError } from "../../platform/tauri";
@@ -20,6 +20,11 @@ import {
   type ConnectionTestResult,
 } from "./connection";
 import { connectionApi } from "./connectionApi";
+import {
+  ConnectionUrlParseError,
+  parsePostgresConnectionUrl,
+  type ConnectionUrlErrorCode,
+} from "./connectionUrl";
 import "./ConnectionDialog.css";
 
 interface ConnectionDialogProps {
@@ -53,6 +58,14 @@ const validationKeys = {
   productionRiskPolicy: "validation.productionRiskPolicy",
 } as const satisfies Record<string, TranslationKey>;
 
+const connectionUrlErrorKeys = {
+  invalid: "connection.url.error.invalid",
+  scheme: "connection.url.error.scheme",
+  host: "connection.url.error.host",
+  database: "connection.url.error.database",
+  sslMode: "connection.url.error.sslMode",
+} as const satisfies Record<ConnectionUrlErrorCode, TranslationKey>;
+
 function getFieldErrors(
   issues: { path: PropertyKey[]; message: string }[],
 ): FieldErrors {
@@ -84,6 +97,8 @@ export function ConnectionDialog({
   const [requestState, setRequestState] = useState<RequestState>({
     status: "idle",
   });
+  const [connectionUrl, setConnectionUrl] = useState("");
+  const [connectionUrlError, setConnectionUrlError] = useState<TranslationKey>();
   const [showPassword, setShowPassword] = useState(false);
   const [showSshPassword, setShowSshPassword] = useState(false);
   const [showSshPassphrase, setShowSshPassphrase] = useState(false);
@@ -97,6 +112,26 @@ export function ConnectionDialog({
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => ({ ...current, [field]: undefined }));
     if (requestState.status !== "idle") setRequestState({ status: "idle" });
+  }
+
+  function importConnectionUrl() {
+    try {
+      const imported = parsePostgresConnectionUrl(connectionUrl);
+      setForm((current) => ({
+        ...current,
+        ...imported,
+        name: current.name || `${imported.database} @ ${imported.host}`,
+      }));
+      setConnectionUrlError(undefined);
+      setFieldErrors({});
+      setRequestState({ status: "idle" });
+    } catch (error) {
+      setConnectionUrlError(
+        connectionUrlErrorKeys[
+          error instanceof ConnectionUrlParseError ? error.code : "invalid"
+        ],
+      );
+    }
   }
 
   function updateEnvironment(environment: ConnectionFormValue["environment"]) {
@@ -298,6 +333,35 @@ export function ConnectionDialog({
             <fieldset>
               <legend>{t("connection.section.basic")}</legend>
               <div className="form-grid">
+                <Field
+                  className="form-field-wide"
+                  label={t("connection.url")}
+                  hint={t("connection.urlHint")}
+                  error={connectionUrlError && t(connectionUrlError)}
+                >
+                  <div className="connection-url-input">
+                    <input
+                      aria-label={t("connection.url")}
+                      type="url"
+                      value={connectionUrl}
+                      onChange={(event) => {
+                        setConnectionUrl(event.target.value);
+                        setConnectionUrlError(undefined);
+                      }}
+                      placeholder="postgresql://user@host/database"
+                      spellCheck={false}
+                    />
+                    <button
+                      className="button button-secondary button-compact"
+                      type="button"
+                      onClick={importConnectionUrl}
+                    >
+                      <Link2 size={14} />
+                      {t("connection.urlImport")}
+                    </button>
+                  </div>
+                </Field>
+
                 <Field label={t("connection.name")} error={fieldErrors.name && t(fieldErrors.name)}>
                   <input
                     autoFocus

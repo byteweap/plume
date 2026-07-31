@@ -452,6 +452,7 @@ scopes never modify connection profiles or system credentials.
 
 - **Type and lint checks:** TypeScript strict mode, ESLint, rustfmt, and Clippy with warnings denied.
 - **Current automated tests:** frontend validation, transformations, grouping, and tree interactions, plus Rust error, connection, metadata, and session unit tests.
+- **Unit baseline:** `npm run test:unit-baseline` pins representative tests for PostgreSQL URL parsing, quoted identifiers, SQL execution boundaries, risk recognition, typed result-value presentation, and staged table-data changes. The baseline is included in `npm run check`.
 - **PostgreSQL integration tests:** real connection, cross-database session, and catalog queries against disposable `plume` and `plume_secondary` databases. A second TLS-enabled service verifies plain fallback, encrypted negotiation, CA and hostname validation, and client-certificate authentication. Two OpenSSH services verify password and encrypted-key authentication, one-hop jump hosts, strict host keys, tunnel health/lifecycle, and SSH plus `verify-full`. Schema fixtures clean themselves up.
 - **Planned end-to-end tests:** the ten acceptance scenarios in the product requirements.
 

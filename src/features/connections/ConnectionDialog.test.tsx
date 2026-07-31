@@ -80,6 +80,77 @@ describe("ConnectionDialog", () => {
     expect(screen.getByText(/Production connections must retain/)).toBeVisible();
   });
 
+  it("imports a PostgreSQL URL into the form without starting a connection", () => {
+    const testProfile = vi.spyOn(connectionApi, "testProfile");
+    const createProfile = vi.spyOn(connectionApi, "createProfile");
+    const connectSaved = vi.spyOn(connectionApi, "connectSaved");
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "PostgreSQL URL" }), {
+      target: {
+        value:
+          "postgresql://first%2Elast:p%40ss@db.internal:6543/sales%20data" +
+          "?sslmode=verify-full&sslrootcert=%2Fcerts%2Froot.pem",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(screen.getByRole("textbox", { name: "Connection name" })).toHaveValue(
+      "sales data @ db.internal",
+    );
+    expect(screen.getByRole("textbox", { name: "Host" })).toHaveValue(
+      "db.internal",
+    );
+    expect(screen.getByRole("textbox", { name: "Port" })).toHaveValue("6543");
+    expect(screen.getByRole("textbox", { name: "Database" })).toHaveValue(
+      "sales data",
+    );
+    expect(screen.getByRole("textbox", { name: "Username" })).toHaveValue(
+      "first.last",
+    );
+    expect(screen.getByLabelText("Password")).toHaveValue("p@ss");
+    expect(screen.getByRole("combobox", { name: "SSL mode" })).toHaveValue(
+      "verify-full",
+    );
+    expect(
+      screen.getByRole("textbox", { name: /^Root certificate path/ }),
+    ).toHaveValue("/certs/root.pem");
+    expect(testProfile).not.toHaveBeenCalled();
+    expect(createProfile).not.toHaveBeenCalled();
+    expect(connectSaved).not.toHaveBeenCalled();
+  });
+
+  it("reports URL parsing errors without echoing credential-bearing input", () => {
+    render(
+      <I18nProvider>
+        <ConnectionDialog
+          onClose={() => undefined}
+          onSaved={() => undefined}
+          onConnected={() => undefined}
+        />
+      </I18nProvider>,
+    );
+    const unsafeUrl = "mysql://alice:secret@db.internal/plume";
+
+    fireEvent.change(screen.getByRole("textbox", { name: "PostgreSQL URL" }), {
+      target: { value: unsafeUrl },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(
+      screen.getByText("The URL must use postgres:// or postgresql://."),
+    ).toBeVisible();
+    expect(screen.queryByText(unsafeUrl)).toBeNull();
+  });
+
   it("sends SSH and jump-host secrets outside the persisted config", async () => {
     const testProfile = vi.spyOn(connectionApi, "testProfile").mockResolvedValue({
       database: "postgres",

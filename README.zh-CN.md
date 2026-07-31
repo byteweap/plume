@@ -6,7 +6,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-![项目状态](https://img.shields.io/badge/status-早期开发-D97706)
+![项目状态](https://img.shields.io/badge/status-预发布-D97706)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB)
 ![许可证](https://img.shields.io/badge/license-MIT-2F6D52)
@@ -16,7 +16,7 @@
 Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大型通用数据库客户端复杂性的开发者。桌面应用直接连接 PostgreSQL；你与数据库之间没有 Plume 账号、云端中转或远程应用服务。
 
 > [!IMPORTANT]
-> Plume 仍处于早期开发阶段。连接管理和 PostgreSQL 对象导航目前已经可用；SQL 编辑器、数据浏览与数据编辑流程仍在开发中。
+> Plume 仍是预发布软件。1.0 功能范围已经实现并进入发布验证，但尚未发布已签名的稳定安装包。
 
 ## 为什么选择 Plume
 
@@ -29,11 +29,9 @@ Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大�
 
 ## 当前可用能力
 
-- 带有字段校验和分类错误提示的 PostgreSQL 连接表单。
-- 支持 PostgreSQL 14 及以上版本；开发期间已使用 PostgreSQL 18 验证。
-- SSL 模式：`disable`、`prefer`、`require`、`verify-ca`、`verify-full`。
-- 内存服务器会话，同一服务器中的每个数据库都可按需建立独立客户端。
-- pgAdmin 风格的服务器导航：
+- 可保存的 PostgreSQL 连接配置；密码进入 Keychain/Credential Manager，并支持 SSL、SSH Tunnel、跳板机与分类连接错误。
+- PostgreSQL 14、16、18 集成测试覆盖连接、元数据、查询、取消、TLS、SSH 与事务编辑。
+- 内存服务器会话，同一服务器中的每个数据库都按需建立独立客户端，并提供 pgAdmin 风格的服务器导航：
 
 ```text
 服务器
@@ -58,23 +56,20 @@ Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大�
 └── Tablespaces
 ```
 
-- 对象树具备加载中、空状态、错误、重试与对象数量状态。
-- 英文与简体中文 UI 词条。
-- 浅色、深色外观基础。
+- SQL 编辑器支持语句定位、异步补全、草稿、执行反馈、取消、诊断、历史与危险操作确认。
+- 虚拟化类型化结果支持返回限制、复制、可取消 CSV/JSON 导出与原子文件写入。
+- 表数据支持稳定分页、排序、参数化筛选，以及暂存新增/修改/删除、变更预览、事务提交、回滚与离开保护。
+- 本地设置、历史、草稿和会话快照均版本化，支持保留策略、安全恢复和选择性清理。
+- 英文与简体中文 UI、键盘工作流，以及浅色/深色主题。
 
 ## 路线图
 
 | 能力 | 状态 |
 |---|---|
-| 数据库直连与 SSL | 已可用 |
-| 多数据库对象导航 | 已可用 |
-| 系统安全凭据存储 | 已可用 |
-| SSH Tunnel | 已可用 |
-| SQL 编辑、执行与取消 | MVP 计划 |
-| 查询结果与导出 | MVP 计划 |
-| 表数据浏览与安全编辑 | MVP 计划 |
-| `EXPLAIN` 可视化 | 核心流程完成后开发 |
-| 云 IAM 认证与 Linux 发布 | 后续候选 |
+| 1.0 核心数据库工作流 | 已实现，正在发布验证 |
+| macOS 与 Windows 签名安装包 | 已配置，需要外部签名凭据 |
+| `EXPLAIN` 可视化 | 1.0 后候选 |
+| 云 IAM、自动更新与 Linux 发布 | 后续候选 |
 
 详细产品范围记录在[产品需求文档](docs/产品需求文档.md)和[开发任务分解](docs/开发任务分解.md)中。
 
@@ -89,7 +84,7 @@ React UI
   → PostgreSQL
 ```
 
-React 不直接连接 PostgreSQL。Rust 负责数据库会话、TLS、元数据查询，以及未来的查询取消、凭据访问和文件系统能力。两侧通过稳定且可序列化的命令错误进行通信。
+React 不直接连接 PostgreSQL。Rust 负责数据库会话、TLS/SSH、元数据与数据查询、查询取消、事务写入、凭据访问、本地存储和导出文件能力。两侧通过稳定且可序列化的命令错误进行通信。
 
 模块边界、会话生命周期、SSL 语义与测试策略详见[中文架构文档](docs/architecture.zh-CN.md)，同时提供[英文版本](docs/architecture.md)。
 
@@ -146,7 +141,7 @@ Compose 环境默认监听本机 `55432` 端口，并创建 `plume` 和 `plume_s
 npm run tauri build
 ```
 
-[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret 与产物验证流程。
+完整源码构建与测试说明见[构建指南](BUILDING.md)；[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret 与产物验证流程。
 
 ## 仓库结构
 
@@ -180,19 +175,13 @@ tests/postgres/            可重复运行的 PostgreSQL 集成测试数据
 - 密码不会写入普通配置文件。
 - 默认不采集 SQL、查询结果、连接地址或数据库元数据。
 - 日志和界面错误不得包含密码、私钥或带凭据的连接 URL。
-- 连接配置和活动会话目前只保存在内存中，退出 Plume 后即消失。
+- 连接配置、草稿、历史、设置与会话布局保存在本地，秘密值仍由操作系统凭据设施保存；活动数据库会话和结果集只存在于内存中。
 
-安全问题请通过 [GitHub Security Advisories](https://github.com/byteweap/plume/security/advisories/new) 提交，不要创建公开 Issue。
+支持版本与私密漏洞报告方式见[安全政策](SECURITY.md)。请勿在公开 Issue 中报告漏洞。
 
 ## 参与贡献
 
-Plume 仍处于架构形成阶段，小而聚焦的修改比大范围重写更容易审查。提交 Pull Request 前请：
-
-1. 查看[开发任务分解](docs/开发任务分解.md)与现有 [Issues](https://github.com/byteweap/plume/issues)。
-2. 遵守 React、Tauri 命令和 PostgreSQL 服务之间的模块边界。
-3. 为行为变化新增或更新测试。
-4. 运行上方列出的前端与 Rust 质量检查。
-5. 保持英文与简体中文用户文案同步。
+创建 Issue 或 Pull Request 前请阅读[贡献指南](CONTRIBUTING.md)；所有参与者均须遵守[行为准则](CODE_OF_CONDUCT.md)。
 
 ## 许可证
 

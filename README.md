@@ -6,7 +6,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-![Project status](https://img.shields.io/badge/status-early%20development-D97706)
+![Project status](https://img.shields.io/badge/status-pre--release-D97706)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-336791)
 ![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB)
 ![License](https://img.shields.io/badge/license-MIT-2F6D52)
@@ -16,7 +16,7 @@
 Plume is a local-first PostgreSQL management tool built for developers who want a focused alternative to large, general-purpose database clients. The desktop application connects directly to PostgreSQL. There is no Plume account, cloud relay, or remote application server between you and your database.
 
 > [!IMPORTANT]
-> Plume is in early development. Connection management and PostgreSQL object navigation are usable today; the SQL editor, data browser, and data editing workflows are still being built.
+> Plume is pre-release software. The 1.0 feature set is implemented and under release validation, but signed stable installers are not published yet.
 
 ## Why Plume
 
@@ -29,11 +29,9 @@ Plume is a local-first PostgreSQL management tool built for developers who want 
 
 ## Available Today
 
-- PostgreSQL connection form with validation and categorized errors.
-- PostgreSQL 14+ support, tested during development with PostgreSQL 18.
-- SSL modes: `disable`, `prefer`, `require`, `verify-ca`, and `verify-full`.
-- In-memory server sessions with independent, on-demand clients for each database.
-- pgAdmin-style server navigation:
+- Saved PostgreSQL connection profiles with Keychain/Credential Manager secrets, SSL modes, SSH tunnels, jump hosts, and categorized connection errors.
+- PostgreSQL 14, 16, and 18 integration coverage for connections, metadata, queries, cancellation, TLS, SSH, and transactional editing.
+- In-memory server sessions with independent, on-demand clients for each database and pgAdmin-style server navigation:
 
 ```text
 Server
@@ -58,23 +56,20 @@ Server
 └── Tablespaces
 ```
 
-- Loading, empty, error, retry, and object-count states throughout the tree.
-- English and Simplified Chinese UI catalogs.
-- Light and dark appearance foundations.
+- SQL editor with statement targeting, asynchronous completion, drafts, execution feedback, cancellation, diagnostics, history, and safety confirmations.
+- Virtualized and typed query results with limits, copying, cancellable CSV/JSON exports, and atomic file writes.
+- Table browsing with stable pagination, sorting and parameterized filters, plus staged inserts, edits, deletes, previews, transactional commits, rollback, and leave protection.
+- Versioned local settings, query history, drafts, session snapshots, retention, recovery, and selective data clearing.
+- English and Simplified Chinese UI catalogs, keyboard workflows, and light/dark themes.
 
 ## Roadmap
 
 | Area | Status |
 |---|---|
-| Direct connection and SSL | Available |
-| Multi-database object navigation | Available |
-| System credential storage | Available |
-| SSH Tunnel | Available |
-| SQL editor, execution, cancellation | Planned for MVP |
-| Query results and export | Planned for MVP |
-| Table data browsing and safe editing | Planned for MVP |
-| `EXPLAIN` visualization | Planned after the core workflow |
-| Cloud IAM authentication and Linux releases | Later candidates |
+| 1.0 core database workflow | Implemented; release validation in progress |
+| macOS and Windows signed installers | Configured; external signing credentials required |
+| `EXPLAIN` visualization | Post-1.0 candidate |
+| Cloud IAM authentication, automatic updates, and Linux releases | Later candidates |
 
 The detailed product scope is maintained in the [product requirements](docs/产品需求文档.md) and [development task breakdown](docs/开发任务分解.md), currently written in Chinese.
 
@@ -89,7 +84,7 @@ React UI
   → PostgreSQL
 ```
 
-React never connects to PostgreSQL directly. Rust owns database sessions, TLS, metadata queries, future query cancellation, credential access, and file-system capabilities. Stable, serializable command errors form the contract between both sides.
+React never connects to PostgreSQL directly. Rust owns database sessions, TLS/SSH, metadata and data queries, cancellation, transactional writes, credential access, local persistence, and export file-system capabilities. Stable, serializable command errors form the contract between both sides.
 
 See [Architecture](docs/architecture.md) for module boundaries, session lifecycle, SSL semantics, and testing strategy. A [Simplified Chinese version](docs/architecture.zh-CN.md) is also available.
 
@@ -151,7 +146,7 @@ Build a desktop bundle with:
 npm run tauri build
 ```
 
-The [macOS](docs/macos-release.md) and [Windows](docs/windows-release.md) release guides document signed builds, required repository secrets, and artifact verification.
+See [Building Plume](BUILDING.md) for complete source-build and test instructions. The [macOS](docs/macos-release.md) and [Windows](docs/windows-release.md) release guides cover signed builds, required repository secrets, and artifact verification.
 
 ## Repository Layout
 
@@ -185,19 +180,13 @@ tests/postgres/            Repeatable PostgreSQL integration fixtures
 - Passwords are not written to ordinary configuration files.
 - SQL, results, connection addresses, and database metadata are not collected by default.
 - Logs and UI errors must not contain passwords, private keys, or credential-bearing URLs.
-- Connection profiles and active sessions are currently memory-only and disappear when Plume exits.
+- Connection profiles, drafts, history, settings, and session layouts are stored locally; saved secrets remain in the operating-system credential store. Active database sessions and result sets are memory-only.
 
-Please report security issues through [GitHub Security Advisories](https://github.com/byteweap/plume/security/advisories/new) rather than a public issue.
+See the [security policy](SECURITY.md) for supported versions and private vulnerability reporting. Do not report vulnerabilities in public issues.
 
 ## Contributing
 
-Plume is at an early architectural stage, so focused changes are easier to review than broad rewrites. Before opening a pull request:
-
-1. Check the [development task breakdown](docs/开发任务分解.md) and existing [issues](https://github.com/byteweap/plume/issues).
-2. Keep React, Tauri commands, and PostgreSQL services within their documented boundaries.
-3. Add or update tests for behavior changes.
-4. Run the frontend and Rust quality checks shown above.
-5. Keep English and Simplified Chinese user-facing text in sync.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

@@ -71,6 +71,9 @@ jobs:
       - name: Check security boundaries
         run: npm run check:security
 
+      - name: Check open-source documentation
+        run: npm run check:docs
+
       - name: Check frontend
         run: npm run check
 

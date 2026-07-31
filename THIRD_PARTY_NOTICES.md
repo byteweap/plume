@@ -14,17 +14,21 @@ inventory for a particular source revision:
 | `@tauri-apps/api` | Desktop IPC and platform integration | Apache-2.0 OR MIT |
 | `react`, `react-dom` | User interface | MIT |
 | `react-data-grid` | Virtualized query-result grid, keyboard navigation, selection, and column resizing | MIT |
-| `codemirror`, `@codemirror/autocomplete`, `@codemirror/lang-sql` | SQL editing, asynchronous completion, and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
+| `codemirror`, `@codemirror/autocomplete`, `@codemirror/lang-sql`, `@codemirror/language`, `@codemirror/state` | SQL editing, asynchronous completion, and PostgreSQL language support; includes CodeMirror modules and Lezer parser packages | MIT |
 | `lucide-react` | Interface icons | ISC |
 | `zod` | Runtime validation | MIT |
-| `tauri` | Desktop application runtime | Apache-2.0 OR MIT |
+| `tauri`, `tauri-plugin-dialog` | Desktop application runtime and native file dialogs | Apache-2.0 OR MIT |
 | `serde`, `serde_json` | IPC serialization | Apache-2.0 OR MIT |
 | `thiserror` | Rust error definitions | Apache-2.0 OR MIT |
+| `regex` | Diagnostic redaction | Apache-2.0 OR MIT |
+| `futures-util` | Asynchronous stream utilities | Apache-2.0 OR MIT |
 | `tokio` | Asynchronous runtime | MIT |
 | `tokio-postgres` | PostgreSQL protocol driver | Apache-2.0 OR MIT |
 | `native-tls`, `postgres-native-tls` | TLS support for PostgreSQL | Apache-2.0 OR MIT |
+| `russh` | SSH tunnels and jump hosts | Apache-2.0 OR MIT |
 | `rusqlite` | Versioned local SQLite storage | MIT |
 | `keyring` | macOS Keychain and Windows Credential Manager integration | Apache-2.0 OR MIT |
+| `tempfile` | Atomic export files and test isolation | Apache-2.0 OR MIT |
 | `uuid` | Opaque session identifiers | Apache-2.0 OR MIT |
 
 ## Direct Development and Build Dependencies

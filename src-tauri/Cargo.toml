@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "A clean, lightweight PostgreSQL workspace"
 authors = ["Plume contributors"]
 license = "MIT"
+repository = "https://github.com/byteweap/plume"
+homepage = "https://github.com/byteweap/plume"
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

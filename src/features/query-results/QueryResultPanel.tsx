@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n/I18nContext";
 import {
   QueryResultGrid,
   type QueryResultGridEditing,
+  type QueryResultGridFocusTarget,
   type QueryResultSort,
 } from "./QueryResultGrid";
 import "./QueryResults.css";
@@ -14,6 +15,8 @@ export interface QueryResultPanelProps {
   sorts?: QueryResultSort[];
   onSortsChange?: (sorts: QueryResultSort[]) => void;
   editing?: QueryResultGridEditing;
+  focusTarget?: QueryResultGridFocusTarget;
+  onFocusTargetApplied?: (requestId: number) => void;
 }
 
 function getInitialStatementIndex(result: QueryExecutionResult) {
@@ -28,6 +31,8 @@ export function QueryResultPanel({
   sorts,
   onSortsChange,
   editing,
+  focusTarget,
+  onFocusTargetApplied,
 }: QueryResultPanelProps) {
   const { t } = useI18n();
   const [activeIndex, setActiveIndex] = useState(() =>
@@ -127,6 +132,8 @@ export function QueryResultPanel({
             sorts={sorts}
             onSortsChange={onSortsChange}
             editing={editing}
+            focusTarget={focusTarget}
+            onFocusTargetApplied={onFocusTargetApplied}
           />
         ) : (
           <div className="query-result-command" role="status">

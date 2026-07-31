@@ -7,7 +7,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DataGrid,
   type CellKeyDownArgs,
@@ -16,6 +16,7 @@ import {
   type CellMouseEvent,
   type Column,
   type ColumnWidths,
+  type DataGridHandle,
   type RenderEditCellProps,
   type SortColumn,
 } from "react-data-grid";
@@ -55,6 +56,15 @@ export interface QueryResultGridProps {
   sorts?: QueryResultSort[];
   onSortsChange?: (sorts: QueryResultSort[]) => void;
   editing?: QueryResultGridEditing;
+  focusTarget?: QueryResultGridFocusTarget;
+  onFocusTargetApplied?: (requestId: number) => void;
+}
+
+export interface QueryResultGridFocusTarget {
+  requestId: number;
+  rowIndex?: number;
+  insertedId?: string;
+  columnIndex: number;
 }
 
 export interface QueryResultGridEditing {
@@ -218,6 +228,8 @@ export function QueryResultGrid({
   sorts = [],
   onSortsChange,
   editing,
+  focusTarget,
+  onFocusTargetApplied,
 }: QueryResultGridProps) {
   const { t } = useI18n();
   const rows = useMemo(() => {
@@ -262,7 +274,34 @@ export function QueryResultGrid({
   const sortable = Boolean(onSortsChange);
   const extendingSelection = useRef(false);
   const selectingRows = useRef(false);
+  const gridRef = useRef<DataGridHandle>(null);
   const lastColumnIndex = statement.columns.length - 1;
+
+  useEffect(() => {
+    if (!focusTarget) return;
+    const rowIdx = rows.findIndex((row) =>
+      focusTarget.insertedId
+        ? row.insertedId === focusTarget.insertedId
+        : row.rowIndex === focusTarget.rowIndex,
+    );
+    if (
+      rowIdx < 0 ||
+      focusTarget.columnIndex < 0 ||
+      focusTarget.columnIndex >= statement.columns.length ||
+      !gridRef.current
+    ) {
+      return;
+    }
+
+    // React Data Grid includes the frozen row-number column at index zero.
+    const position = {
+      rowIdx,
+      idx: focusTarget.columnIndex + 1,
+    };
+    gridRef.current.scrollToCell(position);
+    gridRef.current.selectCell(position);
+    onFocusTargetApplied?.(focusTarget.requestId);
+  }, [focusTarget, onFocusTargetApplied, rows, statement.columns.length]);
 
   const columns = useMemo((): Column<QueryGridRow>[] => {
     const rowNumberColumn: Column<QueryGridRow> = {
@@ -544,6 +583,7 @@ export function QueryResultGrid({
           </IconButton>
         </div>
         <DataGrid
+          ref={gridRef}
           aria-label={label}
           className="query-result-grid"
           columns={columns}

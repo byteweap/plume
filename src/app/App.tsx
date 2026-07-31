@@ -76,9 +76,13 @@ import {
   type TableDataReference,
 } from "../features/table-data/tableData";
 import { tableDataApi } from "../features/table-data/tableDataApi";
-import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
-import { TableDataDeleteSummary } from "../features/table-data/TableDataDeleteSummary";
 import {
+  TableDataChangePreview,
+  type TableDataChangeTarget,
+} from "../features/table-data/TableDataChangePreview";
+import { TableDataFilterBar } from "../features/table-data/TableDataFilterBar";
+import {
+  hasPendingTableDataChanges,
   stageTableRowInsert,
   type TableDataChangeSet,
 } from "../features/table-data/tableDataChanges";
@@ -1332,6 +1336,10 @@ function TableDataWorkspace({
   onCancel: () => void;
 }) {
   const { t } = useI18n();
+  const [changeTarget, setChangeTarget] = useState<
+    (TableDataChangeTarget & { requestId: number }) | undefined
+  >();
+  const nextChangeTargetId = useRef(0);
   const execution = getQueryExecution(tab);
   const loading =
     execution.status === "idle" ||
@@ -1360,6 +1368,14 @@ function TableDataWorkspace({
         )
       : undefined;
 
+  function navigateToChange(target: TableDataChangeTarget) {
+    nextChangeTargetId.current += 1;
+    setChangeTarget({ ...target, requestId: nextChangeTargetId.current });
+    if (target.pageIndex !== tab.pageIndex) {
+      onPageChange(target.pageIndex, tab.pageSize);
+    }
+  }
+
   if (!connection) {
     return <UnavailableWorkspace state={state} onReconnect={onReconnect} />;
   }
@@ -1367,8 +1383,8 @@ function TableDataWorkspace({
   return (
     <section
       className={`table-data-workspace ${
-        tab.changes.deletedRows.length > 0
-          ? "table-data-workspace-with-delete-summary"
+        hasPendingTableDataChanges(tab.changes)
+          ? "table-data-workspace-with-change-preview"
           : ""
       }`}
       aria-label={t("tableData.workspace")}
@@ -1484,7 +1500,11 @@ function TableDataWorkspace({
         onApply={onFiltersChange}
       />
 
-      <TableDataDeleteSummary rows={tab.changes.deletedRows} />
+      <TableDataChangePreview
+        changes={tab.changes}
+        columns={tab.columns}
+        onNavigate={navigateToChange}
+      />
 
       <div className="table-data-content">
         {execution.status === "succeeded" ? (
@@ -1500,6 +1520,21 @@ function TableDataWorkspace({
               result={execution.result}
               sorts={tab.sorts}
               editing={editing}
+              focusTarget={
+                changeTarget?.pageIndex === tab.pageIndex
+                  ? {
+                      requestId: changeTarget.requestId,
+                      rowIndex: changeTarget.rowIndex,
+                      insertedId: changeTarget.localId,
+                      columnIndex: changeTarget.columnIndex,
+                    }
+                  : undefined
+              }
+              onFocusTargetApplied={(requestId) =>
+                setChangeTarget((current) =>
+                  current?.requestId === requestId ? undefined : current,
+                )
+              }
               onSortsChange={(sorts) => {
                 onSortsChange(
                   sorts.map((sort) => ({

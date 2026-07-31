@@ -520,57 +520,8 @@
   background: #ffffff;
 }
 
-.table-data-workspace-with-delete-summary {
+.table-data-workspace-with-change-preview {
   grid-template-rows: auto auto auto minmax(0, 1fr);
-}
-
-.table-data-delete-summary {
-  display: flex;
-  min-width: 0;
-  min-height: 34px;
-  align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid #ead8d0;
-  padding: 4px 14px;
-  overflow-x: auto;
-  color: #785142;
-  background: #fff8f5;
-  font-size: 10px;
-  scrollbar-width: thin;
-}
-
-.table-data-delete-summary strong,
-.table-data-delete-summary ol,
-.table-data-delete-summary li {
-  display: flex;
-  align-items: center;
-}
-
-.table-data-delete-summary strong {
-  flex: 0 0 auto;
-  gap: 5px;
-  font-weight: 650;
-}
-
-.table-data-delete-summary ol {
-  min-width: 0;
-  margin: 0;
-  gap: 5px;
-  padding: 0;
-  list-style: none;
-}
-
-.table-data-delete-summary li {
-  max-width: 260px;
-  flex: 0 0 auto;
-  border-left: 1px solid #ddc4b9;
-  padding-left: 7px;
-}
-
-.table-data-delete-summary code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .table-data-header {
@@ -1167,16 +1118,6 @@
   .table-data-header {
     border-color: #373e39;
     background: #202521;
-  }
-
-  .table-data-delete-summary {
-    border-color: #5a4339;
-    color: #e0af9b;
-    background: #2d2522;
-  }
-
-  .table-data-delete-summary li {
-    border-color: #684c40;
   }
 
   .table-data-header h1 {

@@ -227,10 +227,14 @@ tab change set.
 Existing rows expose a delete icon in the row-number column. Activating it
 stages a full original-row snapshot and its reliable locator, removes any
 earlier cell updates for that row, disables further editing, and renders the
-row with a deletion treatment; the same control restores it. A dedicated
-unframed summary band remains visible before commit, showing the total delete
-count and every ordered key name/value pair, including composite keys. No
-delete statement is issued by these interactions.
+row with a deletion treatment; the same control restores it. A unified,
+collapsible preview band remains visible before commit and summarizes inserted,
+updated, and deleted rows. It preserves `DEFAULT`, `NULL`, and text distinctions,
+shows original-to-staged cell values, and lists every ordered delete locator,
+including composite keys. Every preview item carries its origin page and cell;
+activating it changes pages when needed, waits for that page to load, then uses
+the grid handle to scroll to and select the target cell. No write statement is
+issued by these interactions.
 
 The table-data filter band composes multiple AND conditions for equality,
 inequality, literal substring containment, greater/less comparisons (including

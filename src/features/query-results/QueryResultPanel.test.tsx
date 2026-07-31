@@ -150,6 +150,26 @@ function renderInvisibleValuesPanel() {
 }
 
 describe("QueryResultPanel", () => {
+  it("selects a requested result cell and acknowledges the target", async () => {
+    const onFocusTargetApplied = vi.fn();
+    window.localStorage.setItem("plume.locale", "en-US");
+    render(
+      <I18nProvider>
+        <QueryResultPanel
+          result={result}
+          focusTarget={{ requestId: 7, rowIndex: 2, columnIndex: 1 }}
+          onFocusTargetApplied={onFocusTargetApplied}
+        />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => expect(onFocusTargetApplied).toHaveBeenCalledWith(7));
+    expect(screen.getByText("last").closest("[role='gridcell']")).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+  });
+
   it("renders row results and switches between statement tabs", () => {
     renderPanel();
 

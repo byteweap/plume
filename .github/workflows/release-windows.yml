@@ -86,13 +86,18 @@ jobs:
       - name: Build and sign MSI and NSIS installers
         shell: pwsh
         run: |
+          $msiVersion = (node scripts/windows-msi-version.mjs).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $releaseConfig = @{
             bundle = @{
               windows = @{
                 certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT
+                wix = @{
+                  version = $msiVersion
+                }
               }
             }
-          } | ConvertTo-Json -Compress -Depth 4
+          } | ConvertTo-Json -Compress -Depth 5
           $env:TAURI_CONFIG = $releaseConfig
           npm run tauri build -- --bundles msi,nsis --ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

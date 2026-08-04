@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,8 +35,9 @@ const cargoLock = normalizeLineEndings(read("src-tauri/Cargo.lock"));
 const catalog = read("src/i18n/catalog.ts");
 const version = packageJson.version;
 const expectedTag = `v${version}`;
+const candidateVersion = version.match(/^1\.0\.0-rc\.([1-9][0-9]*)$/);
 
-check(/^1\.0\.0-rc\.[1-9][0-9]*$/.test(version), "Candidate version must match 1.0.0-rc.N.");
+check(Boolean(candidateVersion), "Candidate version must match 1.0.0-rc.N.");
 check(packageLock.version === version, "package-lock.json top-level version must match package.json.");
 check(packageLock.packages?.[""]?.version === version, "package-lock.json root package version must match package.json.");
 check(tauriConfig.version === version, "tauri.conf.json version must match package.json.");
@@ -49,6 +51,14 @@ check(plumeLockEntry?.[1] === version, "Cargo.lock Plume package version must ma
 const catalogVersionCount = catalog.split(`"app.version": "Plume ${version}"`).length - 1;
 check(catalogVersionCount === 2, "Both locale catalogs must display the candidate version.");
 
+const windowsMsiVersion = spawnSync(process.execPath, [path.join(root, "scripts/windows-msi-version.mjs")], {
+  encoding: "utf8",
+});
+check(
+  windowsMsiVersion.status === 0 && windowsMsiVersion.stdout.trim() === `0.255.${candidateVersion?.[1]}`,
+  `Windows MSI version must be 0.255.${candidateVersion?.[1]}.`,
+);
+
 for (const requiredFile of ["RELEASE_NOTES.md", "docs/release-candidate.md"]) {
   const absolutePath = path.join(root, requiredFile);
   check(existsSync(absolutePath) && statSync(absolutePath).size > 0, `${requiredFile} is missing or empty.`);
@@ -59,6 +69,7 @@ for (const requiredFile of ["RELEASE_NOTES.md", "docs/release-candidate.md"]) {
 
 const macWorkflow = read(".github/workflows/release-macos.yml");
 const windowsWorkflow = read(".github/workflows/release-windows.yml");
+const ciWorkflow = read(".github/workflows/ci.yml");
 const candidateWorkflow = read(".github/workflows/release-candidate.yml");
 check(macWorkflow.includes("workflow_call:"), "macOS release workflow must be reusable.");
 check(windowsWorkflow.includes("workflow_call:"), "Windows release workflow must be reusable.");
@@ -68,6 +79,14 @@ check(macWorkflow.includes("verify:release:macos"), "macOS release workflow must
 check(windowsWorkflow.includes("npm run check:all"), "Windows release workflow must run the complete repository gate.");
 check(windowsWorkflow.includes("verify:release:windows"), "Windows release workflow must verify Authenticode signatures.");
 check(windowsWorkflow.includes("test-windows-installers.ps1"), "Windows release workflow must test install and uninstall.");
+check(
+  ciWorkflow.includes("scripts/windows-msi-version.mjs"),
+  "CI workflow must derive an MSI-compatible Windows version.",
+);
+check(
+  windowsWorkflow.includes("scripts/windows-msi-version.mjs"),
+  "Windows release workflow must derive an MSI-compatible Windows version.",
+);
 check(candidateWorkflow.includes('"v1.0.0-rc.*"'), "Candidate workflow must run only for 1.0 RC tags.");
 check(candidateWorkflow.includes("./.github/workflows/release-macos.yml"), "Candidate workflow must require the macOS signed build.");
 check(candidateWorkflow.includes("./.github/workflows/release-windows.yml"), "Candidate workflow must require the Windows signed build.");

@@ -96,6 +96,23 @@ jobs:
         if: matrix.platform == 'macOS'
         run: cargo test --manifest-path src-tauri/Cargo.toml system_store_supports_a_real_round_trip -- --ignored
 
+      - name: Configure Windows MSI version
+        if: matrix.platform == 'Windows'
+        shell: pwsh
+        run: |
+          $msiVersion = (node scripts/windows-msi-version.mjs).Trim()
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $tauriConfig = @{
+            bundle = @{
+              windows = @{
+                wix = @{
+                  version = $msiVersion
+                }
+              }
+            }
+          } | ConvertTo-Json -Compress -Depth 5
+          "TAURI_CONFIG=$tauriConfig" >> $env:GITHUB_ENV
+
       - name: Build unsigned desktop bundles
         run: npm run tauri build
 

@@ -4,12 +4,17 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogPath = path.join(root, "src/i18n/catalog.ts");
-const source = readFileSync(catalogPath, "utf8");
 const failures = [];
 
 function check(condition, message) {
   if (!condition) failures.push(message);
 }
+
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n?/g, "\n");
+}
+
+const source = normalizeLineEndings(readFileSync(catalogPath, "utf8"));
 
 function parseCatalog(locale) {
   const section = source.match(

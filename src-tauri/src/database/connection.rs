@@ -344,18 +344,25 @@ fn classify_tls_connection_error(error: tokio_postgres::Error, ssl_mode: SslMode
         return DatabaseError::Postgres(error);
     }
     let details = error_chain(&error);
-    let normalized = details.to_ascii_lowercase();
-    if matches!(ssl_mode, SslMode::VerifyFull)
-        && (normalized.contains("hostname")
-            || normalized.contains("host name mismatch")
-            || normalized.contains("not valid for name")
-            || normalized.contains("does not match")
-            || normalized.contains("doesn't match"))
-    {
+    if is_hostname_mismatch(&details, ssl_mode) {
         DatabaseError::HostnameMismatch(details)
     } else {
         DatabaseError::TlsHandshake(details)
     }
+}
+
+fn is_hostname_mismatch(details: &str, ssl_mode: SslMode) -> bool {
+    if !matches!(ssl_mode, SslMode::VerifyFull) {
+        return false;
+    }
+
+    let normalized = details.to_ascii_lowercase();
+    normalized.contains("hostname")
+        || normalized.contains("host name mismatch")
+        || normalized.contains("ip address mismatch")
+        || normalized.contains("not valid for name")
+        || normalized.contains("does not match")
+        || normalized.contains("doesn't match")
 }
 
 fn error_chain(error: &dyn Error) -> String {
@@ -380,7 +387,7 @@ fn prefer_tunnel_error(tunnel: &Option<SshTunnel>, fallback: DatabaseError) -> D
 mod tests {
     use serde_json::json;
 
-    use super::{ConnectionTestRequest, SslMode, Transport, test, validate};
+    use super::{ConnectionTestRequest, SslMode, Transport, is_hostname_mismatch, test, validate};
     use crate::{database::test_support, error::DatabaseError};
 
     fn request(ssl_mode: SslMode) -> ConnectionTestRequest {
@@ -447,6 +454,17 @@ mod tests {
         let error = validate(&value).expect_err("a certificate without its key should fail");
 
         assert!(error.to_string().contains("provided together"));
+    }
+
+    #[test]
+    fn recognizes_openssl_ip_address_mismatch_as_a_hostname_error() {
+        let details = concat!(
+            "error performing TLS handshake: ",
+            "certificate verify failed: (IP address mismatch)"
+        );
+
+        assert!(is_hostname_mismatch(details, SslMode::VerifyFull));
+        assert!(!is_hostname_mismatch(details, SslMode::VerifyCa));
     }
 
     #[test]

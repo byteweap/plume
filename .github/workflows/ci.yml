@@ -92,7 +92,8 @@ jobs:
       - name: Check Rust
         run: npm run check:rust
 
-      - name: Verify operating-system credential storage
+      - name: Verify macOS credential storage
+        if: matrix.platform == 'macOS'
         run: cargo test --manifest-path src-tauri/Cargo.toml system_store_supports_a_real_round_trip -- --ignored
 
       - name: Build unsigned desktop bundles

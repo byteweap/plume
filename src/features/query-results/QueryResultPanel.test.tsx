@@ -455,7 +455,7 @@ describe("QueryResultPanel", () => {
         "name\tdetail\none\tNULL\ntwo\tvalue\nthree\tlast",
       ),
     );
-    expect(screen.getByText("Copied selected results")).toBeVisible();
+    expect(await screen.findByText("Copied selected results")).toBeVisible();
     Reflect.deleteProperty(navigator, "clipboard");
   });
 

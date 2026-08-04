@@ -47,6 +47,7 @@ for (const requiredFile of requiredFiles) {
 const packageJson = JSON.parse(read("package.json"));
 const cargoManifest = read("src-tauri/Cargo.toml");
 const tauriConfig = JSON.parse(read("src-tauri/tauri.conf.json"));
+const normalizedCargoManifest = normalizeLineEndings(cargoManifest);
 const license = normalizeLineEndings(read("LICENSE"));
 const thirdPartyNotices = read("THIRD_PARTY_NOTICES.md");
 const englishReadme = read("README.md");
@@ -60,7 +61,7 @@ check(packageJson.repository?.url === "git+https://github.com/byteweap/plume.git
 check(tauriConfig.bundle?.homepage === "https://github.com/byteweap/plume", "Desktop bundle homepage metadata is missing.");
 
 const runtimeDependencies = new Set(Object.keys(packageJson.dependencies ?? {}));
-const cargoDependencySection = cargoManifest.match(/^\[dependencies\]\n([\s\S]*?)(?=^\[)/m)?.[1] ?? "";
+const cargoDependencySection = normalizedCargoManifest.match(/^\[dependencies\]\n([\s\S]*?)(?=^\[)/m)?.[1] ?? "";
 for (const match of cargoDependencySection.matchAll(/^([a-zA-Z0-9_-]+)\s*=/gm)) {
   runtimeDependencies.add(match[1]);
 }

@@ -84,8 +84,26 @@ check(
   "CI workflow must derive an MSI-compatible Windows version.",
 );
 check(
+  ciWorkflow.includes("tauri.windows.msi.conf.json") &&
+    ciWorkflow.includes("npm run tauri -- build --config $tauriConfigPath --ci"),
+  "CI workflow must pass the MSI-compatible Windows version through tauri build --config.",
+);
+check(
+  !ciWorkflow.includes("TAURI_CONFIG"),
+  "CI workflow must not rely on TAURI_CONFIG for the MSI-compatible Windows version.",
+);
+check(
   windowsWorkflow.includes("scripts/windows-msi-version.mjs"),
   "Windows release workflow must derive an MSI-compatible Windows version.",
+);
+check(
+  windowsWorkflow.includes("tauri.windows.msi.conf.json") &&
+    windowsWorkflow.includes("npm run tauri -- build --config $releaseConfigPath --bundles msi,nsis --ci"),
+  "Windows release workflow must pass the MSI-compatible Windows version through tauri build --config.",
+);
+check(
+  !windowsWorkflow.includes("TAURI_CONFIG"),
+  "Windows release workflow must not rely on TAURI_CONFIG for the MSI-compatible Windows version.",
 );
 check(candidateWorkflow.includes('"v1.0.0-rc.*"'), "Candidate workflow must run only for 1.0 RC tags.");
 check(candidateWorkflow.includes("./.github/workflows/release-macos.yml"), "Candidate workflow must require the macOS signed build.");

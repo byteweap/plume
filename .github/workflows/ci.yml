@@ -96,13 +96,18 @@ jobs:
         if: matrix.platform == 'macOS'
         run: cargo test --manifest-path src-tauri/Cargo.toml system_store_supports_a_real_round_trip -- --ignored
 
-      - name: Configure Windows MSI version
+      - name: Build unsigned desktop bundles
+        if: matrix.platform == 'macOS'
+        run: npm run tauri build
+
+      - name: Build unsigned Windows desktop bundles
         if: matrix.platform == 'Windows'
         shell: pwsh
         run: |
           $msiVersion = (node scripts/windows-msi-version.mjs).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $tauriConfig = @{
+          $tauriConfigPath = Join-Path $env:RUNNER_TEMP "tauri.windows.msi.conf.json"
+          @{
             bundle = @{
               windows = @{
                 wix = @{
@@ -110,11 +115,9 @@ jobs:
                 }
               }
             }
-          } | ConvertTo-Json -Compress -Depth 5
-          "TAURI_CONFIG=$tauriConfig" >> $env:GITHUB_ENV
-
-      - name: Build unsigned desktop bundles
-        run: npm run tauri build
+          } | ConvertTo-Json -Compress -Depth 5 | Set-Content -Encoding utf8NoBOM -NoNewline -Path $tauriConfigPath
+          npm run tauri -- build --config $tauriConfigPath --ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload unsigned desktop bundles
         uses: actions/upload-artifact@v7

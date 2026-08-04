@@ -88,7 +88,8 @@ jobs:
         run: |
           $msiVersion = (node scripts/windows-msi-version.mjs).Trim()
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $releaseConfig = @{
+          $releaseConfigPath = Join-Path $env:RUNNER_TEMP "tauri.windows.msi.conf.json"
+          @{
             bundle = @{
               windows = @{
                 certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT
@@ -97,9 +98,8 @@ jobs:
                 }
               }
             }
-          } | ConvertTo-Json -Compress -Depth 5
-          $env:TAURI_CONFIG = $releaseConfig
-          npm run tauri build -- --bundles msi,nsis --ci
+          } | ConvertTo-Json -Compress -Depth 5 | Set-Content -Encoding utf8NoBOM -NoNewline -Path $releaseConfigPath
+          npm run tauri -- build --config $releaseConfigPath --bundles msi,nsis --ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify Authenticode signatures and timestamps

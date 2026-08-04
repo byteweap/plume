@@ -24,6 +24,10 @@ function read(relativePath) {
   return readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 function markdownFiles(directory = root) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
@@ -43,7 +47,7 @@ for (const requiredFile of requiredFiles) {
 const packageJson = JSON.parse(read("package.json"));
 const cargoManifest = read("src-tauri/Cargo.toml");
 const tauriConfig = JSON.parse(read("src-tauri/tauri.conf.json"));
-const license = read("LICENSE");
+const license = normalizeLineEndings(read("LICENSE"));
 const thirdPartyNotices = read("THIRD_PARTY_NOTICES.md");
 const englishReadme = read("README.md");
 const chineseReadme = read("README.zh-CN.md");

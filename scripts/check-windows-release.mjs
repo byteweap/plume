@@ -6,6 +6,7 @@ import path from "node:path";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argumentsList = process.argv.slice(2);
 const configOnly = argumentsList.includes("--config-only");
+const allowUnsigned = argumentsList.includes("--allow-unsigned");
 
 function argumentValue(name) {
   const index = argumentsList.indexOf(name);
@@ -95,12 +96,12 @@ if (configOnly) {
   process.exit(0);
 }
 
-if (process.platform !== "win32") fail("Signed Windows bundles can only be verified on Windows.");
+if (process.platform !== "win32") fail("Windows bundles can only be verified on Windows.");
 
 const bundleRootValue = argumentValue("--bundle-root");
 const executableValue = argumentValue("--executable");
 if (!bundleRootValue || !executableValue) {
-  fail("Pass --bundle-root and --executable for the signed Windows build.");
+  fail("Pass --bundle-root and --executable for the Windows build.");
 }
 
 const bundleRoot = path.resolve(repositoryRoot, bundleRootValue);
@@ -113,6 +114,13 @@ const nsisInstallers = findFiles(bundleRoot, ".exe");
 const msiInstallers = findFiles(bundleRoot, ".msi");
 if (nsisInstallers.length !== 1 || msiInstallers.length !== 1) {
   fail(`Expected one NSIS and one MSI installer, found ${nsisInstallers.length} EXE and ${msiInstallers.length} MSI.`);
+}
+
+if (allowUnsigned) {
+  console.log(
+    `Verified unsigned Windows candidate bundle inventory:\n- ${nsisInstallers[0]}\n- ${msiInstallers[0]}`,
+  );
+  process.exit(0);
 }
 
 for (const artifact of [executablePath, ...nsisInstallers, ...msiInstallers]) {

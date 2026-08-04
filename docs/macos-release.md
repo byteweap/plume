@@ -4,7 +4,7 @@ Plume ships a universal macOS application for Apple Silicon and Intel Macs. The 
 
 ## Signing Inputs
 
-The `macOS Signed Release` workflow is manual so an unsigned branch build cannot accidentally publish a release. Configure these encrypted repository secrets before running it:
+The `macOS Signed Release` workflow is manual and optional. Configure these encrypted repository secrets before running it if a signed, notarized macOS artifact is required:
 
 | Secret | Value |
 |---|---|
@@ -39,7 +39,7 @@ Verification rejects a release unless all of these conditions hold:
 - Apple notarization tickets are stapled to both the app and DMG.
 - The DMG passes `hdiutil verify` and code-signature verification.
 
-The workflow uploads the verified `.app` and `.dmg` as a 14-day artifact. For a 1.0 candidate tag, the coordinated workflow waits for this artifact and the verified Windows installers before creating a GitHub pre-release.
+The workflow uploads the verified `.app` and `.dmg` as a 14-day artifact. The default 1.0 candidate tag workflow does not require these secrets; it publishes an unsigned GitHub pre-release candidate instead.
 
 ## Local Unsigned Build
 
@@ -49,8 +49,8 @@ A local package can validate compilation, metadata, icons, and DMG generation wi
 CI=true npm run tauri build -- --bundles app,dmg --no-sign
 ```
 
-The `CI` environment flag skips Finder-based DMG decoration, which makes this command repeatable in headless terminals. An unsigned build is for engineering checks only. It cannot satisfy the release gate, and the signed verification command intentionally rejects ad-hoc or unsigned artifacts.
+The `CI` environment flag skips Finder-based DMG decoration, which makes this command repeatable in headless terminals. The 1.0 candidate workflow uses this unsigned path for GitHub pre-releases until Developer ID signing is available. Unsigned artifacts may require users to bypass Gatekeeper warnings manually.
 
 ## External Gate
 
-Repository-side release configuration is complete when the local configuration and unsigned packaging checks pass. P0-J06 is fully verified only after a maintainer supplies valid Apple credentials, runs `macOS Signed Release`, and obtains a passing signed/notarized artifact. P0-J10 additionally requires the [release candidate runbook](release-candidate.md). Certificate issuance, Apple service availability, and account agreements are external prerequisites.
+Repository-side unsigned release configuration is complete when the local configuration and unsigned packaging checks pass. P0-J06 is fully signed only after a maintainer supplies valid Apple credentials, runs `macOS Signed Release`, and obtains a passing signed/notarized artifact. P0-J10 additionally requires the [release candidate runbook](release-candidate.md). Certificate issuance, Apple service availability, and account agreements remain external prerequisites for signed releases only.

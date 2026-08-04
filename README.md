@@ -16,7 +16,7 @@
 Plume is a local-first PostgreSQL management tool built for developers who want a focused alternative to large, general-purpose database clients. The desktop application connects directly to PostgreSQL. There is no Plume account, cloud relay, or remote application server between you and your database.
 
 > [!IMPORTANT]
-> Plume 1.0.0-rc.1 is prepared as a source release candidate. Signed pre-release installers are published only after the external macOS and Windows gates pass; stable installers are not published yet. See the [candidate notes](RELEASE_NOTES.md) and [release runbook](docs/release-candidate.md).
+> Plume 1.0.0-rc.1 is prepared as an unsigned GitHub pre-release candidate. The downloadable macOS and Windows installers are not code-signed, so operating systems may show trust warnings; stable signed installers are not published yet. See the [candidate notes](RELEASE_NOTES.md) and [release runbook](docs/release-candidate.md).
 
 ## Why Plume
 
@@ -66,8 +66,8 @@ Server
 
 | Area | Status |
 |---|---|
-| 1.0 release candidate | Source candidate 1.0.0-rc.1 prepared; signed validation pending |
-| macOS and Windows signed installers | Configured; external signing credentials required |
+| 1.0 release candidate | Unsigned 1.0.0-rc.1 GitHub pre-release path prepared |
+| macOS and Windows signed installers | Optional manual workflows are configured; external signing credentials required |
 | `EXPLAIN` visualization | Post-1.0 candidate |
 | Cloud IAM authentication, automatic updates, and Linux releases | Later candidates |
 
@@ -146,7 +146,7 @@ Build a desktop bundle with:
 npm run tauri build
 ```
 
-See [Building Plume](BUILDING.md) for complete source-build and test instructions. The [release candidate runbook](docs/release-candidate.md), [macOS](docs/macos-release.md), and [Windows](docs/windows-release.md) guides cover signed builds, required repository secrets, artifact verification, and promotion criteria.
+See [Building Plume](BUILDING.md) for complete source-build and test instructions. The [release candidate runbook](docs/release-candidate.md), [macOS](docs/macos-release.md), and [Windows](docs/windows-release.md) guides cover unsigned candidate builds, optional signed builds, artifact verification, and promotion criteria.
 
 ## Repository Layout
 

@@ -6,6 +6,7 @@ import path from "node:path";
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const argumentsList = process.argv.slice(2);
 const configOnly = argumentsList.includes("--config-only");
+const allowUnsigned = argumentsList.includes("--allow-unsigned");
 const bundleRootIndex = argumentsList.indexOf("--bundle-root");
 const bundleRoot =
   bundleRootIndex === -1
@@ -73,9 +74,9 @@ if (configOnly) {
   process.exit(0);
 }
 
-if (process.platform !== "darwin") fail("Signed macOS bundles can only be verified on macOS.");
+if (process.platform !== "darwin") fail("macOS bundles can only be verified on macOS.");
 if (!bundleRoot || !existsSync(bundleRoot)) {
-  fail("Pass an existing release bundle directory with --bundle-root.");
+  fail("Pass an existing macOS bundle directory with --bundle-root.");
 }
 
 const appPath = path.join(bundleRoot, "macos", `${tauriConfig.productName}.app`);
@@ -103,6 +104,12 @@ const executablePath = path.join(appPath, "Contents", "MacOS", executableName);
 const architectures = new Set(run("lipo", ["-archs", executablePath]).split(/\s+/));
 for (const architecture of ["arm64", "x86_64"]) {
   if (!architectures.has(architecture)) fail(`Universal app is missing ${architecture}.`);
+}
+
+if (allowUnsigned) {
+  run("hdiutil", ["verify", diskImagePath]);
+  console.log(`Verified unsigned universal macOS candidate:\n- ${appPath}\n- ${diskImagePath}`);
+  process.exit(0);
 }
 
 run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath]);

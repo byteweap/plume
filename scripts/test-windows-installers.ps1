@@ -1,6 +1,8 @@
 param(
   [Parameter(Mandatory = $true)]
-  [string]$BundleRoot
+  [string]$BundleRoot,
+
+  [switch]$AllowUnsigned
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,9 +38,11 @@ if (!(Test-Path $installedExecutable) -or !(Test-Path $uninstaller)) {
   throw "The NSIS installer did not create the expected application and uninstaller."
 }
 
-$installedSignature = Get-AuthenticodeSignature -LiteralPath $installedExecutable
-if ($installedSignature.Status -ne "Valid") {
-  throw "The installed Plume executable has an invalid Authenticode signature."
+if (!$AllowUnsigned) {
+  $installedSignature = Get-AuthenticodeSignature -LiteralPath $installedExecutable
+  if ($installedSignature.Status -ne "Valid") {
+    throw "The installed Plume executable has an invalid Authenticode signature."
+  }
 }
 
 Invoke-InstallerProcess -FilePath $uninstaller -ArgumentList @("/S")

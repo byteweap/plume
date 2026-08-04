@@ -75,10 +75,10 @@ check(macWorkflow.includes("workflow_call:"), "macOS release workflow must be re
 check(windowsWorkflow.includes("workflow_call:"), "Windows release workflow must be reusable.");
 check(macWorkflow.includes("npm run check:all"), "macOS release workflow must run the complete repository gate.");
 check(macWorkflow.includes("universal-apple-darwin"), "macOS release workflow must build a universal candidate.");
-check(macWorkflow.includes("verify:release:macos"), "macOS release workflow must verify signing and notarization.");
+check(macWorkflow.includes("verify:release:macos"), "macOS signed release workflow must verify signing and notarization.");
 check(windowsWorkflow.includes("npm run check:all"), "Windows release workflow must run the complete repository gate.");
-check(windowsWorkflow.includes("verify:release:windows"), "Windows release workflow must verify Authenticode signatures.");
-check(windowsWorkflow.includes("test-windows-installers.ps1"), "Windows release workflow must test install and uninstall.");
+check(windowsWorkflow.includes("verify:release:windows"), "Windows signed release workflow must verify Authenticode signatures.");
+check(windowsWorkflow.includes("test-windows-installers.ps1"), "Windows signed release workflow must test install and uninstall.");
 check(
   ciWorkflow.includes("scripts/windows-msi-version.mjs"),
   "CI workflow must derive an MSI-compatible Windows version.",
@@ -106,12 +106,54 @@ check(
   "Windows release workflow must not rely on TAURI_CONFIG for the MSI-compatible Windows version.",
 );
 check(candidateWorkflow.includes('"v1.0.0-rc.*"'), "Candidate workflow must run only for 1.0 RC tags.");
-check(candidateWorkflow.includes("./.github/workflows/release-macos.yml"), "Candidate workflow must require the macOS signed build.");
-check(candidateWorkflow.includes("./.github/workflows/release-windows.yml"), "Candidate workflow must require the Windows signed build.");
+check(
+  !candidateWorkflow.includes("secrets: inherit"),
+  "Candidate workflow must not require signing secrets for unsigned pre-releases.",
+);
+check(
+  !candidateWorkflow.includes("./.github/workflows/release-macos.yml") &&
+    !candidateWorkflow.includes("./.github/workflows/release-windows.yml"),
+  "Candidate workflow must build unsigned installers directly instead of invoking signed release workflows.",
+);
+check(candidateWorkflow.includes("macOS unsigned candidate"), "Candidate workflow must build an unsigned macOS candidate.");
+check(
+  candidateWorkflow.includes("Windows unsigned installer candidate"),
+  "Candidate workflow must build unsigned Windows installers.",
+);
+check(
+  candidateWorkflow.includes("npm run check:all"),
+  "Candidate workflow platform jobs must run the complete repository gate.",
+);
+check(
+  candidateWorkflow.includes("--target universal-apple-darwin") && candidateWorkflow.includes("--bundles app,dmg"),
+  "Candidate workflow must build a universal macOS app and DMG.",
+);
+check(
+  candidateWorkflow.includes("scripts/windows-msi-version.mjs") &&
+    candidateWorkflow.includes("npm run tauri -- build --config $releaseConfigPath --bundles msi,nsis --ci --no-sign"),
+  "Candidate workflow must build unsigned Windows MSI and NSIS installers with an MSI-compatible version.",
+);
+check(
+  candidateWorkflow.split("--no-sign").length - 1 >= 2,
+  "Candidate workflow must disable signing for both macOS and Windows unsigned artifacts.",
+);
+check(
+  candidateWorkflow.includes("verify:release:macos") && candidateWorkflow.includes("--allow-unsigned"),
+  "Candidate workflow must verify unsigned macOS artifacts explicitly.",
+);
+check(
+  candidateWorkflow.includes("verify:release:windows") &&
+    candidateWorkflow.includes("--allow-unsigned") &&
+    candidateWorkflow.includes("test-windows-installers.ps1") &&
+    candidateWorkflow.includes("-AllowUnsigned"),
+  "Candidate workflow must verify and install-test unsigned Windows artifacts explicitly.",
+);
 check(candidateWorkflow.includes("SHA256SUMS"), "Candidate workflow must publish artifact checksums.");
-check(candidateWorkflow.includes("needs: [macos, windows]"), "Publishing must wait for both signed platform jobs.");
+check(candidateWorkflow.includes("pattern: plume-*-unsigned*"), "Candidate workflow must download unsigned artifacts.");
+check(candidateWorkflow.includes("needs: [macos, windows]"), "Publishing must wait for both unsigned platform jobs.");
 check(candidateWorkflow.includes("--prerelease"), "Candidate workflow must mark the GitHub release as a pre-release.");
 check(candidateWorkflow.includes("--verify-tag"), "Candidate workflow must verify the release tag.");
+check(candidateWorkflow.includes('unsigned"'), "Candidate workflow release title must identify unsigned builds.");
 
 const configuredTag = argumentValue("--tag");
 if (configuredTag !== undefined) {

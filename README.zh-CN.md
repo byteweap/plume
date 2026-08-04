@@ -16,7 +16,7 @@
 Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大型通用数据库客户端复杂性的开发者。桌面应用直接连接 PostgreSQL；你与数据库之间没有 Plume 账号、云端中转或远程应用服务。
 
 > [!IMPORTANT]
-> Plume 1.0.0-rc.1 已准备为源码候选版。只有外部 macOS 与 Windows 门禁通过后才会发布签名预发布安装包，目前尚未发布稳定安装包。详见[候选版说明](RELEASE_NOTES.md)与[发布验收手册](docs/release-candidate.md)。
+> Plume 1.0.0-rc.1 已准备为无签名 GitHub 预发布候选版。可下载的 macOS 与 Windows 安装包不会进行代码签名，系统可能显示信任警告；目前尚未发布稳定签名安装包。详见[候选版说明](RELEASE_NOTES.md)与[发布验收手册](docs/release-candidate.md)。
 
 ## 为什么选择 Plume
 
@@ -66,8 +66,8 @@ Plume 是一款本地优先的 PostgreSQL 管理工具，面向希望摆脱大�
 
 | 能力 | 状态 |
 |---|---|
-| 1.0 发布候选版 | 源码候选版 1.0.0-rc.1 已准备，等待签名验证 |
-| macOS 与 Windows 签名安装包 | 已配置，需要外部签名凭据 |
+| 1.0 发布候选版 | 无签名 1.0.0-rc.1 GitHub 预发布路径已准备 |
+| macOS 与 Windows 签名安装包 | 可选手动 workflow 已配置，需要外部签名凭据 |
 | `EXPLAIN` 可视化 | 1.0 后候选 |
 | 云 IAM、自动更新与 Linux 发布 | 后续候选 |
 
@@ -141,7 +141,7 @@ Compose 环境默认监听本机 `55432` 端口，并创建 `plume` 和 `plume_s
 npm run tauri build
 ```
 
-完整源码构建与测试说明见[构建指南](BUILDING.md)；[候选版验收手册](docs/release-candidate.md)、[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了签名构建、所需仓库 Secret、产物验证与提升标准。
+完整源码构建与测试说明见[构建指南](BUILDING.md)；[候选版验收手册](docs/release-candidate.md)、[macOS](docs/macos-release.md) 与 [Windows](docs/windows-release.md) 发布指南记录了无签名候选构建、可选签名构建、产物验证与提升标准。
 
 ## 仓库结构
 

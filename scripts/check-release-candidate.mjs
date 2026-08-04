@@ -13,6 +13,10 @@ function read(relativePath) {
   return readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n?/g, "\n");
+}
+
 function readJson(relativePath) {
   return JSON.parse(read(relativePath));
 }
@@ -25,8 +29,8 @@ function argumentValue(name) {
 const packageJson = readJson("package.json");
 const packageLock = readJson("package-lock.json");
 const tauriConfig = readJson("src-tauri/tauri.conf.json");
-const cargoManifest = read("src-tauri/Cargo.toml");
-const cargoLock = read("src-tauri/Cargo.lock");
+const cargoManifest = normalizeLineEndings(read("src-tauri/Cargo.toml"));
+const cargoLock = normalizeLineEndings(read("src-tauri/Cargo.lock"));
 const catalog = read("src/i18n/catalog.ts");
 const version = packageJson.version;
 const expectedTag = `v${version}`;

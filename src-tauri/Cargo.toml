@@ -32,7 +32,7 @@ tokio-postgres = "0.7"
 postgres-native-tls = "0.5"
 native-tls = "0.2"
 russh = { version = "0.62", default-features = false, features = ["ring", "rsa"] }
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 uuid = { version = "1", features = ["v4"] }
 tauri-plugin-dialog = "2"
 tempfile = "3"
